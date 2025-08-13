@@ -343,3 +343,36 @@ h2 {
 .number-btn.decrement {
     margin-right: 0;
 }
+
+/* Gesture Presets Styles */
+.gesture-presets {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #3a3a3a;
+}
+
+.gesture-header {
+    color: #cccccc;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    padding: 0;
+    border: none;
+    text-transform: none;
+    letter-spacing: 0.5px;
+}
+
+.gesture-controls {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.gesture-controls > * {
+    flex: 1;
+    width: calc(50% - 5px);
+}
+
+.gesture-controls .main-button {
+    margin-bottom: 0;
+}

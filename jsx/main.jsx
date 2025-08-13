@@ -125,6 +125,164 @@ function createDeviceComposition(deviceType, multiplier) {
     }
 }
 
+// Gesture Templates functionality
+function addGestureFromPanel(gestureType, multiplier) {
+    app.beginUndoGroup("Add Gesture");
+    
+    try {
+        // Check if we have an active comp
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            app.endUndoGroup();
+            return "error";
+        }
+        
+        // Define gesture compositions and layers
+        var gestureData = {
+            tap: {
+                compName: "Gesture - Tap",
+                layerName: "Hover > Tap"
+            },
+            longpress: {
+                compName: "Gesture - Long Press", 
+                layerName: "Hover > Tap"
+            }
+        };
+        
+        var data = gestureData[gestureType];
+        if (!data) {
+            alert("Invalid gesture type");
+            app.endUndoGroup();
+            return "error";
+        }
+        
+        // Import template if not already present
+        var templatePath = extensionRoot + "/assets/templates/AirBoard Templates.aep";
+        var templateFile = new File(templatePath);
+        
+        if (!templateFile.exists) {
+            templatePath = extensionRoot + "\\assets\\templates\\AirBoard Templates.aep";
+            templateFile = new File(templatePath);
+        }
+        
+        if (!templateFile.exists) {
+            alert("Cannot find AirBoard Templates.aep file.");
+            app.endUndoGroup();
+            return "error";
+        }
+        
+        // Find the gesture composition
+        var gestureComp = null;
+        for (var i = 1; i <= app.project.items.length; i++) {
+            var item = app.project.items[i];
+            if (item instanceof CompItem && item.name === data.compName) {
+                gestureComp = item;
+                break;
+            }
+        }
+        
+        // Import if not found
+        if (!gestureComp) {
+            var importOptions = new ImportOptions(templateFile);
+            app.project.importFile(importOptions);
+            
+            // Find after import
+            for (var j = 1; j <= app.project.items.length; j++) {
+                var item = app.project.items[j];
+                if (item instanceof CompItem && item.name === data.compName) {
+                    gestureComp = item;
+                    break;
+                }
+            }
+        }
+        
+        if (!gestureComp) {
+            alert("Cannot find " + data.compName + " composition in template.");
+            app.endUndoGroup();
+            return "error";
+        }
+        
+        // Find the specific layer in the gesture comp
+        var sourceLayer = null;
+        for (var k = 1; k <= gestureComp.layers.length; k++) {
+            var layer = gestureComp.layers[k];
+            if (layer.name === data.layerName) {
+                sourceLayer = layer;
+                break;
+            }
+        }
+        
+        if (!sourceLayer) {
+            alert("Cannot find layer '" + data.layerName + "' in " + data.compName);
+            app.endUndoGroup();
+            return "error";
+        }
+        
+        // Copy the source layer to the current comp
+        sourceLayer.copyToComp(comp);
+        
+        // The newly copied layer will be at the top (index 1)
+        var gestureLayer = comp.layers[1];
+        
+        // Keep the original name "Hover > Tap" so expressions work properly
+        // Don't rename the layer since expressions depend on the original name
+        
+        // Calculate scale based on multiplier (2x = 100%, 3x = 150%, etc.)
+        var scalePercent = ((multiplier / 2) * 100);
+        
+        // Handle scaling - check if property has keyframes
+        try {
+            if (gestureLayer.transform.scale.numKeys > 0) {
+                // If there are keyframes, scale all keyframe values
+                for (var s = 1; s <= gestureLayer.transform.scale.numKeys; s++) {
+                    var keyTime = gestureLayer.transform.scale.keyTime(s);
+                    var keyValue = gestureLayer.transform.scale.keyValue(s);
+                    var scaledValue = [keyValue[0] * (scalePercent/100), keyValue[1] * (scalePercent/100)];
+                    gestureLayer.transform.scale.setValueAtTime(keyTime, scaledValue);
+                }
+            } else {
+                // No keyframes, just set the value
+                gestureLayer.transform.scale.setValue([scalePercent, scalePercent]);
+            }
+        } catch(scaleError) {
+            // If scaling fails, continue without scaling
+            $.writeln("Scale adjustment failed: " + scaleError.toString());
+        }
+        
+        // Handle positioning - check if property has keyframes  
+        try {
+            if (gestureLayer.transform.position.numKeys > 0) {
+                // If there are keyframes, offset all keyframe values to center
+                var currentPos = gestureLayer.transform.position.value;
+                var offsetX = (comp.width/2) - currentPos[0];
+                var offsetY = (comp.height/2) - currentPos[1];
+                
+                for (var p = 1; p <= gestureLayer.transform.position.numKeys; p++) {
+                    var keyTime = gestureLayer.transform.position.keyTime(p);
+                    var keyValue = gestureLayer.transform.position.keyValue(p);
+                    var centeredValue = [keyValue[0] + offsetX, keyValue[1] + offsetY];
+                    gestureLayer.transform.position.setValueAtTime(keyTime, centeredValue);
+                }
+            } else {
+                // No keyframes, just set the value
+                gestureLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+            }
+        } catch(posError) {
+            // If positioning fails, continue without repositioning
+            $.writeln("Position adjustment failed: " + posError.toString());
+        }
+        
+        app.endUndoGroup();
+        return "success";
+        
+    } catch(e) {
+        alert("Error adding gesture: " + e.toString());
+        app.endUndoGroup();
+        return "error";
+    }
+}
+
 // Main function called from the panel
 function createSquircleFromPanel() {
     try {

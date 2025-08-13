@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var createButton = document.getElementById('createSquircle');
     var replaceButton = document.getElementById('replaceRectangle');
     var addDeviceButton = document.getElementById('addDevice');
+    var addGestureButton = document.getElementById('addGesture');
     var incrementBtn = document.querySelector('.number-btn.increment');
     var decrementBtn = document.querySelector('.number-btn.decrement');
     var resolutionInput = document.getElementById('resolutionMultiplier');
@@ -106,6 +107,36 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Replace result:', result);
             // Re-enable button
             replaceButton.classList.remove('loading');
+        });
+    });
+    
+    // Add Gesture button handler
+    addGestureButton.addEventListener('click', function() {
+        console.log('Add Gesture clicked');
+        
+        // Get selected gesture type and resolution multiplier
+        var gestureType = document.getElementById('gestureType').value;
+        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value);
+        
+        console.log('Gesture Type:', gestureType, 'Resolution Multiplier:', resolutionMultiplier);
+        
+        // Disable button while working
+        addGestureButton.disabled = true;
+        addGestureButton.textContent = 'Adding...';
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script to add gesture
+        var script = 'addGestureFromPanel("' + gestureType + '", ' + resolutionMultiplier + ')';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('Gesture result:', result);
+            // Re-enable button
+            addGestureButton.disabled = false;
+            addGestureButton.textContent = 'Add Gesture';
         });
     });
     
