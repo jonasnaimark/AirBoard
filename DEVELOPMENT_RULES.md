@@ -179,6 +179,41 @@ When working with AI assistants, provide:
 3. **Files that need modification**
 4. **Any constraints or requirements**
 
+### Collaborative Git Workflow with AI
+
+#### AI Git Responsibilities
+- ✅ **Ask before major commits** - "Should I commit these changes?"
+- ✅ **Commit logical chunks** - Each feature/fix as separate commits
+- ✅ **Use descriptive commit messages** with progress details
+- ✅ **Work on main branch** for single-developer projects
+- ✅ **Push regularly** to maintain GitHub backup
+
+#### User Control Points
+- 🎯 **Tell AI when to commit** - "Let's commit this feature"
+- 🎯 **Request specific commit messages** - "Commit this as 'Fixed button alignment'"
+- 🎯 **Ask for status checks** - "What changes haven't been committed?"
+- 🎯 **Request GitHub pushes** - "Push everything to GitHub"
+
+#### Commit Triggers
+**AI should suggest committing after:**
+1. **Completing features** - UI improvements, new functionality
+2. **Before major changes** - "Commit current work before trying new approach"
+3. **Reaching stable milestones** - Working ZXP packages
+4. **Multiple related fixes** - Series of bug fixes or refinements
+
+#### Commit Message Format for AI
+```
+<action>: <brief description>
+
+- Specific change 1
+- Specific change 2
+- Result/impact
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
 ### AI Must Never
 - Refactor working code without permission
 - Modify protected files without approval
