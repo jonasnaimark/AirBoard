@@ -1,0 +1,114 @@
+// This file connects the HTML panel to After Effects
+
+// Wait for the page to load
+document.addEventListener('DOMContentLoaded', function() {
+    // Create connection to After Effects
+    var csInterface = new CSInterface();
+    
+    // Get the buttons
+    var createButton = document.getElementById('createSquircle');
+    var replaceButton = document.getElementById('replaceRectangle');
+    var addDeviceButton = document.getElementById('addDevice');
+    var incrementBtn = document.querySelector('.number-btn.increment');
+    var decrementBtn = document.querySelector('.number-btn.decrement');
+    var resolutionInput = document.getElementById('resolutionMultiplier');
+    
+    // Get the current extension path
+    var extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
+    
+    // Number input controls
+    incrementBtn.addEventListener('click', function() {
+        var currentValue = parseInt(resolutionInput.value);
+        var maxValue = parseInt(resolutionInput.max);
+        if (currentValue < maxValue) {
+            resolutionInput.value = currentValue + 1;
+        }
+    });
+    
+    decrementBtn.addEventListener('click', function() {
+        var currentValue = parseInt(resolutionInput.value);
+        var minValue = parseInt(resolutionInput.min);
+        if (currentValue > minValue) {
+            resolutionInput.value = currentValue - 1;
+        }
+    });
+    
+    // Add Device button handler
+    addDeviceButton.addEventListener('click', function() {
+        console.log('Add Device clicked');
+        
+        // Get selected device type and resolution multiplier
+        var deviceType = document.getElementById('deviceType').value;
+        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value);
+        
+        // Validate input
+        if (isNaN(resolutionMultiplier) || resolutionMultiplier < 1 || resolutionMultiplier > 6) {
+            alert('Please enter a resolution multiplier between 1 and 6');
+            addDeviceButton.disabled = false;
+            addDeviceButton.textContent = 'Add Device';
+            return;
+        }
+        
+        console.log('Device Type:', deviceType, 'Resolution Multiplier:', resolutionMultiplier);
+        
+        // Disable button while working
+        addDeviceButton.disabled = true;
+        addDeviceButton.textContent = 'Creating...';
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script to create device composition
+        var script = 'createDeviceComposition("' + deviceType + '", ' + resolutionMultiplier + ')';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('Device creation result:', result);
+            // Re-enable button
+            addDeviceButton.disabled = false;
+            addDeviceButton.textContent = 'Add Device';
+        });
+    });
+    
+    // Create Squircle button handler
+    createButton.addEventListener('click', function() {
+        console.log('Create Squircle clicked');
+        
+        // Disable button while working
+        createButton.classList.add('loading');
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script
+        csInterface.evalScript('createSquircleFromPanel()', function(result) {
+            console.log('Squircle result:', result);
+            // Re-enable button
+            createButton.classList.remove('loading');
+        });
+    });
+    
+    // Replace Rectangle button handler
+    replaceButton.addEventListener('click', function() {
+        console.log('Replace Rectangle clicked');
+        
+        // Disable button while working
+        replaceButton.classList.add('loading');
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the replace function
+        csInterface.evalScript('replaceRectangleFromPanel()', function(result) {
+            console.log('Replace result:', result);
+            // Re-enable button
+            replaceButton.classList.remove('loading');
+        });
+    });
+    
+    // Set up the panel theme to match After Effects
+    csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
+});

@@ -1,0 +1,65 @@
+cat > .claude-code-context.md << 'EOF'
+# AirBoard Plugin - After Effects Extension
+
+## Project Type
+After Effects CEP Extension for motion design automation
+
+## Current Status
+- Initial setup phase
+- No code written yet
+- Planning to implement device artboards, gestures, effects, and templates
+
+## Development Rules
+Please read and follow:
+- DEVELOPMENT_RULES.md
+- VERSION_GUIDE.md  
+- PROJECT_GUIDELINES.md
+
+## Protected Files
+Never modify without explicit permission:
+- CSXS/manifest.xml (once created)
+- build/build.sh (once created)
+- .gitignore
+
+## Tech Stack
+- ExtendScript (.jsx) for After Effects scripting
+- HTML/CSS/JavaScript for panel UI
+- CEP (Common Extensibility Platform)
+- Target: After Effects CC 2020+
+
+## Current Task
+Setting up initial project structure and core files
+EOF
+cat > .claude-code-context.md << 'EOF'
+# AirBoard Plugin - After Effects Extension
+
+## Project Type
+After Effects CEP Extension for motion design automation
+
+## Current Status
+- Initial setup phase
+- No code written yet
+- Planning to implement device artboards, gestures, effects, and templates
+
+## Development Rules
+Please read and follow:
+- DEVELOPMENT_RULES.md
+- VERSION_GUIDE.md  
+- PROJECT_GUIDELINES.md
+
+## Protected Files
+Never modify without explicit permission:
+- CSXS/manifest.xml (once created)
+- build/build.sh (once created)
+- .gitignore
+
+## Tech Stack
+- ExtendScript (.jsx) for After Effects scripting
+- HTML/CSS/JavaScript for panel UI
+- CEP (Common Extensibility Platform)
+- Target: After Effects CC 2020+
+
+## Current Task
+Setting up initial project structure and core files
+EOF
+

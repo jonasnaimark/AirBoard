@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AirBoard Panel</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Device Templates Section -->
+        <div class="section device-templates">
+            <h2 class="section-header">Device Templates</h2>
+            <div class="device-controls">
+                <select id="deviceType" class="device-dropdown">
+                    <option value="iphone">iPhone</option>
+                    <option value="desktop">Desktop</option>
+                </select>
+                <button id="addDevice" class="main-button">Make Comp</button>
+            </div>
+            <div class="resolution-input">
+                <label for="resolutionMultiplier" class="resolution-label">Resolution @</label>
+                <div class="number-input-container">
+                    <input type="number" id="resolutionMultiplier" class="resolution-input-field" 
+                           value="2" min="1" max="6" step="1">
+                    <div class="number-controls">
+                        <button class="number-btn decrement" type="button">-</button>
+                        <button class="number-btn increment" type="button">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Effect Presets Section -->      
+        <div class="section effect-presets">
+            <h2 class="section-header">Effect Presets</h2>
+            <div class="button-group">
+                <button id="createSquircle" class="main-button">
+                    <span class="full-text">Create Squircle</span>
+                    <span class="short-text">Squircle</span>
+                </button>
+                <button id="replaceRectangle" class="main-button">
+                    Replace Rectangle
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load Adobe's CEP JavaScript library -->
+    <script src="js/CSInterface.js"></script>
+    <!-- Load our custom JavaScript -->
+    <script src="js/main.js"></script>
+</body>
+</html>

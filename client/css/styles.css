@@ -1,0 +1,345 @@
+/* Dark theme to match After Effects */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #262626;
+    color: #cccccc;
+    font-family: 'Adobe Clean', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 12px;
+    user-select: none;
+    overflow: hidden;
+}
+
+.container {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+.section {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.section:last-child {
+    border-bottom: none;
+}
+
+h2 {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #3a3a3a;
+}
+
+.section-header {
+    color: #cccccc;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    padding: 0;
+    border: none;
+    text-transform: none;
+    letter-spacing: 0.5px;
+}
+
+.button-group {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.button-group > * {
+    flex: 1;
+    width: calc(50% - 5px);
+}
+
+.main-button {
+    height: 44px;
+    padding: 12px 20px;
+    background: linear-gradient(to bottom, #666666, #4a4a4a);
+    color: #cccccc;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    margin-bottom: 10px;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.main-button:hover {
+    background: linear-gradient(to bottom, #777777, #5a5a5a);
+    color: #ffffff;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+}
+
+.main-button:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+}
+
+.info-section {
+    flex-grow: 1;
+    margin-top: 10px;
+}
+
+.info-text {
+    color: #999999;
+    line-height: 1.5;
+    margin-bottom: 15px;
+}
+
+.hint {
+    background-color: #1a1a1a;
+    border-left: 3px solid #4a90e2;
+    padding: 10px;
+    border-radius: 3px;
+    color: #cccccc;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.footer {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid #3a3a3a;
+    text-align: center;
+}
+
+.footer p {
+    color: #666666;
+    font-size: 10px;
+    margin: 5px 0;
+}
+
+.main-button:focus {
+    outline: none;
+}
+
+/* Responsive text for Create Squircle button */
+.main-button .short-text {
+    display: none;
+}
+
+@media (max-width: 237px) {
+    .main-button .full-text {
+        display: none;
+    }
+    
+    .main-button .short-text {
+        display: inline;
+    }
+}
+
+
+/* Device Templates Styles */
+.device-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: stretch;
+}
+
+.device-controls > * {
+    flex: 1;
+    width: calc(50% - 5px);
+}
+
+.device-dropdown {
+    height: 44px;
+    background-color: #3a3a3a;
+    border: 1px solid #555555;
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0 32px 0 12px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23cccccc' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+}
+
+.device-controls .main-button {
+    margin-bottom: 0;
+}
+
+.device-dropdown:hover {
+    border-color: #666666;
+}
+
+.device-dropdown:focus {
+    border-color: #4a90e2;
+}
+
+.device-dropdown option {
+    background-color: #2a2a2a !important;
+    background: #2a2a2a !important;
+    color: #cccccc !important;
+    padding: 12px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    border: none !important;
+    font-family: 'Adobe Clean', 'Segoe UI', sans-serif !important;
+}
+
+.device-dropdown option:hover {
+    background-color: #3a3a3a !important;
+    background: #3a3a3a !important;
+    color: #ffffff !important;
+}
+
+.device-dropdown option:checked,
+.device-dropdown option:focus,
+.device-dropdown option[selected] {
+    background-color: #4a90e2 !important;
+    background: #4a90e2 !important;
+    color: #ffffff !important;
+}
+
+/* Additional styling for WebKit browsers */
+.device-dropdown:focus option:checked {
+    background: linear-gradient(#4a90e2, #4a90e2) !important;
+    color: #ffffff !important;
+}
+
+/* For Firefox */
+@-moz-document url-prefix() {
+    .device-dropdown option {
+        background-color: #2a2a2a;
+        color: #cccccc;
+    }
+    .device-dropdown option:hover {
+        background-color: #3a3a3a;
+        color: #ffffff;
+    }
+    .device-dropdown option:checked {
+        background-color: #4a90e2;
+        color: #ffffff;
+    }
+}
+
+.resolution-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.resolution-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #cccccc;
+    white-space: nowrap;
+    flex: 1;
+    padding-left: 12px;
+}
+
+.number-input-container {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.resolution-input-field {
+    width: 100%;
+    height: 44px;
+    background-color: #3a3a3a;
+    border: 1px solid #555555;
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    padding: 0 55px 0 12px;
+    outline: none;
+    transition: border-color 0.2s ease;
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+}
+
+
+.resolution-input-field:hover {
+    border-color: #666666;
+}
+
+.resolution-input-field:focus {
+    border-color: #4a90e2;
+}
+
+.resolution-input-field::-webkit-outer-spin-button,
+.resolution-input-field::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.number-controls {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.number-btn {
+    width: 24px;
+    height: 27px;
+    background-color: #555555;
+    border: none;
+    border-radius: 3px;
+    color: #cccccc;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.number-btn:focus {
+    outline: none;
+}
+
+.number-btn:hover {
+    background-color: #666666;
+    color: #ffffff;
+}
+
+.number-btn:active {
+    background-color: #4a90e2;
+    color: #ffffff;
+}
+
+.number-btn.increment {
+    margin-left: 0;
+}
+
+.number-btn.decrement {
+    margin-right: 0;
+}
