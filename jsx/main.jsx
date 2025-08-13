@@ -142,11 +142,11 @@ function addGestureFromPanel(gestureType, multiplier) {
         var gestureData = {
             tap: {
                 compName: "Gesture - Tap",
-                layerName: "Hover > Tap"
+                layerName: "Gesture - Tap"
             },
             longpress: {
                 compName: "Gesture - Long Press", 
-                layerName: "Hover > Tap"
+                layerName: "Gesture - Long Press"
             }
         };
         
