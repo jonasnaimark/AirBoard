@@ -18,7 +18,7 @@
                 <button id="addDevice" class="main-button">Make Comp</button>
             </div>
             <div class="resolution-input">
-                <label for="resolutionMultiplier" class="resolution-label">Resolution @</label>
+                <label for="resolutionMultiplier" class="resolution-label" id="resolutionLabel">Resolution @2x</label>
                 <div class="number-input-container">
                     <input type="number" id="resolutionMultiplier" class="resolution-input-field" 
                            value="2" min="1" max="6" step="1">
@@ -31,7 +31,7 @@
             
             <!-- Gesture Presets Section -->
             <div class="gesture-presets">
-                <h3 class="gesture-header">Gesture Presets</h3>
+                <h2 class="section-header">Gesture Presets</h2>
                 <div class="gesture-controls">
                     <select id="gestureType" class="device-dropdown">
                         <option value="tap">Tap</option>
@@ -51,7 +51,7 @@
                     <span class="short-text">Squircle</span>
                 </button>
                 <button id="replaceRectangle" class="main-button">
-                    Replace Rectangle
+                    Replace Rect
                 </button>
             </div>
         </div>

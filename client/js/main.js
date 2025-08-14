@@ -13,9 +13,20 @@ document.addEventListener('DOMContentLoaded', function() {
     var incrementBtn = document.querySelector('.number-btn.increment');
     var decrementBtn = document.querySelector('.number-btn.decrement');
     var resolutionInput = document.getElementById('resolutionMultiplier');
+    var resolutionLabel = document.getElementById('resolutionLabel');
     
     // Get the current extension path
     var extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
+    
+    // Function to update resolution label dynamically
+    function updateResolutionLabel() {
+        var currentValue = resolutionInput.value;
+        resolutionLabel.textContent = 'Resolution @' + currentValue + 'x';
+    }
+    
+    // Update label when input changes
+    resolutionInput.addEventListener('input', updateResolutionLabel);
+    resolutionInput.addEventListener('change', updateResolutionLabel);
     
     // Number input controls
     incrementBtn.addEventListener('click', function() {
@@ -23,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var maxValue = parseInt(resolutionInput.max);
         if (currentValue < maxValue) {
             resolutionInput.value = currentValue + 1;
+            updateResolutionLabel();
         }
     });
     
@@ -31,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var minValue = parseInt(resolutionInput.min);
         if (currentValue > minValue) {
             resolutionInput.value = currentValue - 1;
+            updateResolutionLabel();
         }
     });
     
