@@ -3,7 +3,7 @@ var extensionRoot = "";
 
 // Device Templates functionality
 function createDeviceComposition(deviceType, multiplier) {
-    app.beginUndoGroup("Create Device Composition");
+    // app.beginUndoGroup("Create Device Composition");
     
     try {
         // Base device specifications (1x scale)
@@ -16,7 +16,7 @@ function createDeviceComposition(deviceType, multiplier) {
         var baseDimensions = baseSpecs[deviceType];
         if (!baseDimensions) {
             alert("Invalid device type");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return "error";
         }
         
@@ -115,26 +115,26 @@ function createDeviceComposition(deviceType, multiplier) {
         // Open the composition in the viewer
         comp.openInViewer();
         
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return "success";
         
     } catch(e) {
         alert("Error creating device composition: " + e.toString());
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return "error";
     }
 }
 
 // Gesture Templates functionality
 function addGestureFromPanel(gestureType, multiplier) {
-    app.beginUndoGroup("Add Gesture");
+    // app.beginUndoGroup("Add Gesture");
     
     try {
         // Check if we have an active comp
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             alert("Please select a composition first.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return "error";
         }
         
@@ -153,7 +153,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         var data = gestureData[gestureType];
         if (!data) {
             alert("Invalid gesture type");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return "error";
         }
         
@@ -168,7 +168,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         if (!templateFile.exists) {
             alert("Cannot find AirBoard Templates.aep file.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return "error";
         }
         
@@ -199,7 +199,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         if (!gestureComp) {
             alert("Cannot find " + data.compName + " composition in template.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return "error";
         }
         
@@ -215,7 +215,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         if (!sourceLayer) {
             alert("Cannot find layer '" + data.layerName + "' in " + data.compName);
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return "error";
         }
         
@@ -225,30 +225,10 @@ function addGestureFromPanel(gestureType, multiplier) {
         // The newly copied layer will be at the top (index 1)
         var gestureLayer = comp.layers[1];
         
-        // Keep the original name "Hover > Tap" so expressions work properly
+        // Keep the original layer names so expressions work properly
         // Don't rename the layer since expressions depend on the original name
         
-        // Calculate scale based on multiplier (2x = 100%, 3x = 150%, etc.)
-        var scalePercent = ((multiplier / 2) * 100);
-        
-        // Handle scaling - check if property has keyframes
-        try {
-            if (gestureLayer.transform.scale.numKeys > 0) {
-                // If there are keyframes, scale all keyframe values
-                for (var s = 1; s <= gestureLayer.transform.scale.numKeys; s++) {
-                    var keyTime = gestureLayer.transform.scale.keyTime(s);
-                    var keyValue = gestureLayer.transform.scale.keyValue(s);
-                    var scaledValue = [keyValue[0] * (scalePercent/100), keyValue[1] * (scalePercent/100)];
-                    gestureLayer.transform.scale.setValueAtTime(keyTime, scaledValue);
-                }
-            } else {
-                // No keyframes, just set the value
-                gestureLayer.transform.scale.setValue([scalePercent, scalePercent]);
-            }
-        } catch(scaleError) {
-            // If scaling fails, continue without scaling
-            $.writeln("Scale adjustment failed: " + scaleError.toString());
-        }
+        // TODO: Add scaling logic here tomorrow
         
         // Handle positioning - check if property has keyframes  
         try {
@@ -273,12 +253,12 @@ function addGestureFromPanel(gestureType, multiplier) {
             $.writeln("Position adjustment failed: " + posError.toString());
         }
         
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return "success";
         
     } catch(e) {
         alert("Error adding gesture: " + e.toString());
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return "error";
     }
 }
@@ -306,13 +286,13 @@ function replaceRectangleFromPanel() {
 
 // Apply the complete preset
 function applySquircle() {
-    app.beginUndoGroup("Create Squircle");
+    // app.beginUndoGroup("Create Squircle");
     
     // Check if we have an active comp
     var comp = app.project.activeItem;
     if (!comp || !(comp instanceof CompItem)) {
         alert("Please select a composition first.");
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return;
     }
 
@@ -343,7 +323,7 @@ function applySquircle() {
     if (!ffxFile.exists) {
         alert("Cannot find SquircleComplete.ffx preset file.");
         layer.remove();
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return;
     }
     
@@ -353,7 +333,7 @@ function applySquircle() {
     } catch (e) {
         alert("applyPreset failed: " + e.toString());
         layer.remove();
-        app.endUndoGroup();
+        // app.endUndoGroup();
         return;
     }
     
@@ -426,26 +406,26 @@ function applySquircle() {
     // Center the layer in the comp
     layer.transform.position.setValue([comp.width/2, comp.height/2]);
     
-    app.endUndoGroup();
+    // app.endUndoGroup();
 }
 
 // Replace selected rectangle with squircle
 function replaceRectangle() {
-    app.beginUndoGroup("Replace Rectangle with Squircle");
+    // app.beginUndoGroup("Replace Rectangle with Squircle");
     
     try {
         // Check if we have an active comp
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             alert("Please select a composition first.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return;
         }
         
         // Check if a layer is selected
         if (comp.selectedLayers.length === 0) {
             alert("Please select a shape layer with a rectangle.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return;
         }
         
@@ -454,7 +434,7 @@ function replaceRectangle() {
         // Check if it's a shape layer
         if (!(selectedLayer instanceof ShapeLayer)) {
             alert("Please select a shape layer with a rectangle.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return;
         }
         
@@ -462,7 +442,7 @@ function replaceRectangle() {
         var rectangleData = findRectangleData(selectedLayer);
         if (!rectangleData) {
             alert("Could not find a rectangle path in the selected layer.\nMake sure the layer contains a Rectangle Path.");
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return;
         }
         
@@ -505,7 +485,7 @@ function replaceRectangle() {
         if (!ffxFile.exists) {
             alert("Cannot find SquircleComplete.ffx preset file.");
             newLayer.remove();
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return;
         }
         
@@ -515,7 +495,7 @@ function replaceRectangle() {
         } catch (e) {
             alert("applyPreset failed: " + e.toString());
             newLayer.remove();
-            app.endUndoGroup();
+            // app.endUndoGroup();
             return;
         }
         
@@ -795,7 +775,7 @@ function replaceRectangle() {
         alert("Error replacing rectangle: " + e.toString());
     }
     
-    app.endUndoGroup();
+    // app.endUndoGroup();
 }
 
 // Helper function to find rectangle data in a shape layer
