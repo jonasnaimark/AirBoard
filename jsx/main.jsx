@@ -219,16 +219,62 @@ function addGestureFromPanel(gestureType, multiplier) {
             return "error";
         }
         
+        // Store layer count before copying to verify addition
+        var layerCountBefore = comp.numLayers;
+        
+        // Clear any layer selection to avoid insertion position issues (optional, but harmless)
+        try {
+            for (var s = 1; s <= comp.numLayers; s++) {
+                comp.layers[s].selected = false;
+            }
+        } catch(clearError) {
+            // Non-critical if selection clearing fails
+        }
+        
         // Copy the source layer to the current comp
         sourceLayer.copyToComp(comp);
         
-        // The newly copied layer will be at the top (index 1)
+        // Verify a new layer was added
+        if (comp.numLayers <= layerCountBefore) {
+            alert("Error: Gesture layer was not added to the composition.");
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // The new layer is always at index 1 per AE scripting behavior; no need for name check to avoid false errors
         var gestureLayer = comp.layers[1];
         
         // Keep the original layer names so expressions work properly
         // Don't rename the layer since expressions depend on the original name
         
-        // TODO: Add scaling logic here tomorrow
+        // Apply scaling based on resolution multiplier
+        // 2=100%, 3=150%, 4=200%, 5=250%, 6=300%
+        var scalePercentage;
+        switch(multiplier) {
+            case 2:
+                scalePercentage = 100;
+                break;
+            case 3:
+                scalePercentage = 150;
+                break;
+            case 4:
+                scalePercentage = 200;
+                break;
+            case 5:
+                scalePercentage = 250;
+                break;
+            case 6:
+                scalePercentage = 300;
+                break;
+            default:
+                scalePercentage = 100; // Default to 100% if unexpected value
+        }
+        
+        try {
+            gestureLayer.transform.scale.setValue([scalePercentage, scalePercentage]);
+        } catch(scaleError) {
+            $.writeln("Scale application failed: " + scaleError.toString());
+        }
         
         // Handle positioning - check if property has keyframes  
         try {
