@@ -214,6 +214,61 @@ When working with AI assistants, provide:
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
+## Release Management Protocol
+
+### Mandatory Release Steps
+Every time a version is pushed to GitHub, the AI MUST complete both:
+
+#### 1. Update CHANGELOG.md
+- **Format**: Follow [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format
+- **Content**: Include version, date, and categorized changes
+- **Categories**: Added ✨, Fixed 🔧, Changed 🎯, Removed ❌, Technical Details
+- **Emojis**: Use consistent emoji system for visual clarity
+- **Milestones**: Mark major versions with 🏆 for easy reference
+
+#### 2. Create GitHub Release
+- **Tag**: Use semantic versioning (e.g., v2.1.2)
+- **Title**: "Version X.X.X - [Main Feature]"
+- **Description**: Copy formatted changelog content for that version
+- **Assets**: Attach corresponding ZXP file for easy downloads
+- **Timing**: Create release immediately after git push
+
+### Release Content Template
+```markdown
+## [X.X.X] - YYYY-MM-DD
+### Added
+- ✨ **Major Feature**: Description of main addition
+- 🎯 Enhancement: Specific improvement details
+
+### Fixed
+- 🔧 Bug Fix: What was broken and how it was fixed
+
+### Technical Details
+- Implementation specifics
+- Integration notes
+- Breaking changes (if any)
+
+### Notes
+- 🔖 Reference information for future development
+- 🔄 Reusable patterns or solutions
+```
+
+### Version Significance Markers
+- 🏆 **Major Milestone**: Versions that solve significant problems
+- 🎯 **Feature Addition**: New functionality
+- 🔧 **Bug Fix**: Problem resolution
+- 📚 **Documentation**: Major doc updates
+- 🔖 **Reference Version**: Important for future development
+
+### Example Release Process
+1. **Code Changes**: Complete feature development
+2. **Version Bump**: Update manifest.xml version
+3. **Package ZXP**: Create new distribution file
+4. **Update CHANGELOG.md**: Add new version entry
+5. **Git Commit**: Commit with descriptive message
+6. **Git Push**: Push to GitHub
+7. **GitHub Release**: Create release with ZXP attachment
+
 ### AI Must Never
 - Refactor working code without permission
 - Modify protected files without approval
@@ -229,6 +284,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Follow naming conventions
 - Document complex logic
 - State which files are being modified
+- **Update CHANGELOG.md and create GitHub Release for every version push**
 
 ## Error Prevention
 
