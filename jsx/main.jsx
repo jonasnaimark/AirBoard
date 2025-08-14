@@ -147,6 +147,10 @@ function addGestureFromPanel(gestureType, multiplier) {
             longpress: {
                 compName: "Gesture - Long Press", 
                 layerName: "Gesture - Long Press"
+            },
+            doubletap: {
+                compName: "Gesture - Double Tap",
+                layerName: "Gesture - Double Tap"
             }
         };
         

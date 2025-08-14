@@ -60,9 +60,9 @@ body {
 .main-button {
     height: 40px;
     padding: 12px 20px;
-    background-color: #404040;
+    background-color: #2f2f2f;
     color: #cccccc;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
@@ -78,7 +78,7 @@ body {
 }
 
 .main-button:hover {
-    background-color: #666666;
+    background-color: #3c3c3c;
     color: #ffffff;
     box-shadow: 0 4px 8px rgba(0,0,0,0.4);
 }
@@ -105,7 +105,7 @@ body {
 /* Dropdown styles */
 .dropdown {
     height: 40px;
-    background-color: #3a3a3a;
+    background-color: #2f2f2f;
     border: 1px solid #555555;
     border-radius: 6px;
     color: #cccccc;
@@ -212,10 +212,10 @@ body {
     border: 1px solid #555555;
     border-radius: 6px;
     color: #cccccc;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
     text-align: center;
-    padding: 0 55px 0 12px;
+    padding: 0 55px 0 0px;
     outline: none;
     transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
     -webkit-appearance: none;
