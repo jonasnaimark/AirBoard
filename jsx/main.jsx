@@ -276,6 +276,14 @@ function addGestureFromPanel(gestureType, multiplier) {
             $.writeln("Scale application failed: " + scaleError.toString());
         }
         
+        // Set layer start time to current playhead position
+        try {
+            var playheadTime = comp.time;
+            gestureLayer.startTime = playheadTime;
+        } catch(timeError) {
+            $.writeln("Playhead positioning failed: " + timeError.toString());
+        }
+        
         // Handle positioning - check if property has keyframes  
         try {
             if (gestureLayer.transform.position.numKeys > 0) {
