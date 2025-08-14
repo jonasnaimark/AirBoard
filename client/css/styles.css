@@ -20,7 +20,7 @@ body {
 
 .section {
     margin-bottom: 20px;
-    padding-bottom: 20px;
+    padding-bottom: 10px;
     border-bottom: 1px solid #3a3a3a;
 }
 
@@ -28,37 +28,37 @@ body {
     border-bottom: none;
 }
 
-h2 {
+.section-header {
     color: #ffffff;
     font-size: 12px;
     font-weight: 500;
-    margin: 0 0 20px 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #3a3a3a;
-}
-
-.section-header {
-    margin: 0 0 12px 0;
+    margin: 0 0 10px 0;
     padding: 0;
     border: none;
     text-transform: none;
     letter-spacing: 0.5px;
 }
 
-.button-group {
-    margin-bottom: 20px;
+/* Shared flex layout for controls */
+.control-row {
     display: flex;
     gap: 10px;
+    margin-bottom: 12px;
     align-items: stretch;
 }
 
-.button-group > * {
+.control-row > * {
     flex: 1;
     width: calc(50% - 5px);
 }
 
+.control-row .main-button {
+    margin-bottom: 0;
+}
+
+/* Main button styles */
 .main-button {
-    height: 44px;
+    height: 40px;
     padding: 12px 20px;
     background-color: #404040;
     color: #cccccc;
@@ -74,6 +74,7 @@ h2 {
     display: flex;
     align-items: center;
     justify-content: center;
+    outline: none;
 }
 
 .main-button:hover {
@@ -84,44 +85,6 @@ h2 {
 
 .main-button:active {
     transform: scale(0.98);
-}
-
-.info-section {
-    flex-grow: 1;
-    margin-top: 10px;
-}
-
-.info-text {
-    color: #999999;
-    line-height: 1.5;
-    margin-bottom: 15px;
-}
-
-.hint {
-    background-color: #1a1a1a;
-    border-left: 3px solid #4a90e2;
-    padding: 10px;
-    border-radius: 3px;
-    color: #cccccc;
-    font-size: 11px;
-    line-height: 1.4;
-}
-
-.footer {
-    margin-top: auto;
-    padding-top: 10px;
-    border-top: 1px solid #3a3a3a;
-    text-align: center;
-}
-
-.footer p {
-    color: #666666;
-    font-size: 10px;
-    margin: 5px 0;
-}
-
-.main-button:focus {
-    outline: none;
 }
 
 /* Responsive text for Create Squircle button */
@@ -139,22 +102,9 @@ h2 {
     }
 }
 
-
-/* Device Templates Styles */
-.device-controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
-    align-items: stretch;
-}
-
-.device-controls > * {
-    flex: 1;
-    width: calc(50% - 5px);
-}
-
-.device-dropdown {
-    height: 44px;
+/* Dropdown styles */
+.dropdown {
+    height: 40px;
     background-color: #3a3a3a;
     border: 1px solid #555555;
     border-radius: 6px;
@@ -177,19 +127,15 @@ h2 {
     background-size: 16px;
 }
 
-.device-controls .main-button {
-    margin-bottom: 0;
-}
-
-.device-dropdown:hover {
+.dropdown:hover {
     border-color: #666666;
 }
 
-.device-dropdown:focus {
+.dropdown:focus {
     border-color: #4a90e2;
 }
 
-.device-dropdown option {
+.dropdown option {
     background-color: #2a2a2a !important;
     background: #2a2a2a !important;
     color: #cccccc !important;
@@ -200,42 +146,43 @@ h2 {
     font-family: 'Adobe Clean', 'Segoe UI', sans-serif !important;
 }
 
-.device-dropdown option:hover {
+.dropdown option:hover {
     background-color: #3a3a3a !important;
     background: #3a3a3a !important;
     color: #ffffff !important;
 }
 
-.device-dropdown option:checked,
-.device-dropdown option:focus,
-.device-dropdown option[selected] {
+.dropdown option:checked,
+.dropdown option:focus,
+.dropdown option[selected] {
     background-color: #4a90e2 !important;
     background: #4a90e2 !important;
     color: #ffffff !important;
 }
 
 /* Additional styling for WebKit browsers */
-.device-dropdown:focus option:checked {
+.dropdown:focus option:checked {
     background: linear-gradient(#4a90e2, #4a90e2) !important;
     color: #ffffff !important;
 }
 
 /* For Firefox */
 @-moz-document url-prefix() {
-    .device-dropdown option {
+    .dropdown option {
         background-color: #2a2a2a;
         color: #cccccc;
     }
-    .device-dropdown option:hover {
+    .dropdown option:hover {
         background-color: #3a3a3a;
         color: #ffffff;
     }
-    .device-dropdown option:checked {
+    .dropdown option:checked {
         background-color: #4a90e2;
         color: #ffffff;
     }
 }
 
+/* Resolution input section */
 .resolution-input {
     display: flex;
     align-items: center;
@@ -260,7 +207,7 @@ h2 {
 
 .resolution-input-field {
     width: 100%;
-    height: 44px;
+    height: 40px;
     background-color: #3a3a3a;
     border: 1px solid #555555;
     border-radius: 6px;
@@ -274,7 +221,6 @@ h2 {
     -webkit-appearance: none;
     -moz-appearance: textfield;
 }
-
 
 .resolution-input-field:hover {
     border-color: #666666;
@@ -292,8 +238,8 @@ h2 {
 
 .number-controls {
     position: absolute;
-    right: 8px;
-    top: 50%;
+    right: 9px;
+    top: 49%;
     transform: translateY(-50%);
     display: flex;
     flex-direction: row;
@@ -301,13 +247,13 @@ h2 {
 }
 
 .number-btn {
-    width: 24px;
-    height: 27px;
+    width: 28px;
+    height: 26px;
     background-color: #555555;
     border: none;
-    border-radius: 3px;
+    border-radius: 4px;
     color: #cccccc;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
     line-height: 1;
     cursor: pointer;
@@ -315,10 +261,6 @@ h2 {
     align-items: center;
     justify-content: center;
     transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
-    outline: none;
-}
-
-.number-btn:focus {
     outline: none;
 }
 
@@ -332,32 +274,9 @@ h2 {
     color: #ffffff;
 }
 
-.number-btn.increment {
-    margin-left: 0;
-}
-
-.number-btn.decrement {
-    margin-right: 0;
-}
-
-/* Gesture Presets Styles */
+/* Gesture Presets Section */
 .gesture-presets {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid #3a3a3a;
-}
-
-.gesture-controls {
-    display: flex;
-    gap: 10px;
-    align-items: stretch;
-}
-
-.gesture-controls > * {
-    flex: 1;
-    width: calc(50% - 5px);
-}
-
-.gesture-controls .main-button {
-    margin-bottom: 0;
 }

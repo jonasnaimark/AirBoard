@@ -5,6 +5,20 @@ All notable changes to AirBoard Plugin will be documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-08-14
+### 🧹 Refactored
+- Consolidated duplicate CSS classes for cleaner codebase
+- Created unified `.control-row` class replacing `.device-controls`, `.gesture-controls`, `.button-group`
+- Renamed `.device-dropdown` to generic `.dropdown` class
+- Removed unused CSS rules (`.info-section`, `.hint`, `.footer`)
+- Reduced CSS from 363 to 282 lines (~22% reduction)
+
+### 🔧 Technical Details
+- Unified flex layout patterns across all control sections
+- Simplified HTML structure with consistent class naming
+- Maintained all existing functionality and styling
+- Improved maintainability for future development
+
 ## [2.1.9] - 2025-08-14
 ### 🎨 Improved
 - Enhanced button hover animations with smooth 0.2s fade transitions

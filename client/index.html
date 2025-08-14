@@ -10,8 +10,8 @@
         <!-- Device Templates Section -->
         <div class="section device-templates">
             <h2 class="section-header">Device Templates</h2>
-            <div class="device-controls">
-                <select id="deviceType" class="device-dropdown">
+            <div class="control-row">
+                <select id="deviceType" class="dropdown">
                     <option value="iphone">iPhone</option>
                     <option value="desktop">Desktop</option>
                 </select>
@@ -23,7 +23,7 @@
                     <input type="number" id="resolutionMultiplier" class="resolution-input-field" 
                            value="2" min="1" max="6" step="1">
                     <div class="number-controls">
-                        <button class="number-btn decrement" type="button">-</button>
+                        <button class="number-btn decrement" type="button">–</button>
                         <button class="number-btn increment" type="button">+</button>
                     </div>
                 </div>
@@ -32,8 +32,8 @@
             <!-- Gesture Presets Section -->
             <div class="gesture-presets">
                 <h2 class="section-header">Gesture Presets</h2>
-                <div class="gesture-controls">
-                    <select id="gestureType" class="device-dropdown">
+                <div class="control-row">
+                    <select id="gestureType" class="dropdown">
                         <option value="tap">Tap</option>
                         <option value="longpress">Long Press</option>
                     </select>
@@ -45,7 +45,7 @@
         <!-- Effect Presets Section -->      
         <div class="section effect-presets">
             <h2 class="section-header">Effect Presets</h2>
-            <div class="button-group">
+            <div class="control-row">
                 <button id="createSquircle" class="main-button">
                     <span class="full-text">Create Squircle</span>
                     <span class="short-text">Squircle</span>
