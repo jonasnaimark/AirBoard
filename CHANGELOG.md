@@ -11,7 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.5] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.6] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🎨 UI Update
+- **Elevation Dropdown**: Changed to "Elevation 1-4" (removed Elevation 0, kept 4 options)
+
+### 🔧 Technical Details
+- Updated elevation dropdown to show Elevation 1, 2, 3, 4 only
+- Removed Elevation 0 option as requested
+- Associated with AirBoard_v3.2.6.zxp
+
+## [3.2.5] - 2025-08-15
 ### 🎨 UI Update
 - **Elevation Dropdown**: Changed from "Elevation 1-5" to "Elevation 0-4" for better indexing
 
