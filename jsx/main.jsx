@@ -325,6 +325,202 @@ function addGestureFromPanel(gestureType, multiplier) {
     }
 }
 
+// Add Component functionality (follows exact same pattern as gestures)
+function addComponentFromPanel(componentType, multiplier) {
+    try {
+        // app.beginUndoGroup("Add Component");
+        
+        // Get active composition
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // Component data mapping
+        var componentData = {
+            "timer": {
+                compName: "Millisecond Counter",
+                layerName: "Time Counter"
+            },
+            "dot-loader": {
+                compName: "Dot Loader",
+                layerName: "Dot Loader"
+            }
+        };
+        
+        var data = componentData[componentType];
+        if (!data) {
+            alert("Unknown component type: " + componentType);
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // Template file path
+        var templatePath = extensionRoot + "/assets/templates/AirBoard Templates.aep";
+        var templateFile = new File(templatePath);
+        
+        // Check alternate path separator
+        if (!templateFile.exists) {
+            templatePath = extensionRoot + "\\assets\\templates\\AirBoard Templates.aep";
+            templateFile = new File(templatePath);
+        }
+        
+        if (!templateFile.exists) {
+            alert("Cannot find template file at: " + templatePath);
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // Find the component composition
+        var componentComp = null;
+        for (var i = 1; i <= app.project.items.length; i++) {
+            var item = app.project.items[i];
+            if (item instanceof CompItem && item.name === data.compName) {
+                componentComp = item;
+                break;
+            }
+        }
+        
+        // Import if not found
+        if (!componentComp) {
+            var importOptions = new ImportOptions(templateFile);
+            app.project.importFile(importOptions);
+            
+            // Find after import
+            for (var j = 1; j <= app.project.items.length; j++) {
+                var item = app.project.items[j];
+                if (item instanceof CompItem && item.name === data.compName) {
+                    componentComp = item;
+                    break;
+                }
+            }
+        }
+        
+        if (!componentComp) {
+            alert("Cannot find " + data.compName + " composition in template.");
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // Find the specific layer in the component comp
+        var sourceLayer = null;
+        for (var k = 1; k <= componentComp.layers.length; k++) {
+            var layer = componentComp.layers[k];
+            if (layer.name === data.layerName) {
+                sourceLayer = layer;
+                break;
+            }
+        }
+        
+        if (!sourceLayer) {
+            alert("Cannot find layer '" + data.layerName + "' in " + data.compName);
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // Store layer count before copying to verify addition
+        var layerCountBefore = comp.numLayers;
+        
+        // Clear any layer selection to avoid insertion position issues (optional, but harmless)
+        try {
+            for (var s = 1; s <= comp.numLayers; s++) {
+                comp.layers[s].selected = false;
+            }
+        } catch(clearError) {
+            // Non-critical if selection clearing fails
+        }
+        
+        // Copy the source layer to the current comp
+        sourceLayer.copyToComp(comp);
+        
+        // Verify a new layer was added
+        if (comp.numLayers <= layerCountBefore) {
+            alert("Error: Component layer was not added to the composition.");
+            // app.endUndoGroup();
+            return "error";
+        }
+        
+        // The new layer is always at index 1 per AE scripting behavior; no need for name check to avoid false errors
+        var componentLayer = comp.layers[1];
+        
+        // Keep the original layer names so expressions work properly
+        // Don't rename the layer since expressions depend on the original name
+        
+        // Apply scaling based on resolution multiplier
+        // 1=50%, 2=100%, 3=150%, 4=200%, 5=250%, 6=300%
+        var scalePercentage;
+        switch(multiplier) {
+            case 1:
+                scalePercentage = 50;
+                break;
+            case 2:
+                scalePercentage = 100;
+                break;
+            case 3:
+                scalePercentage = 150;
+                break;
+            case 4:
+                scalePercentage = 200;
+                break;
+            case 5:
+                scalePercentage = 250;
+                break;
+            case 6:
+                scalePercentage = 300;
+                break;
+            default:
+                scalePercentage = 100; // Default to 100% if unexpected value
+        }
+        
+        try {
+            componentLayer.transform.scale.setValue([scalePercentage, scalePercentage]);
+        } catch(scaleError) {
+            $.writeln("Scale application failed: " + scaleError.toString());
+        }
+        
+        // Set layer start time to current playhead position
+        try {
+            var playheadTime = comp.time;
+            componentLayer.startTime = playheadTime;
+        } catch(timeError) {
+            $.writeln("Playhead positioning failed: " + timeError.toString());
+        }
+        
+        // Handle positioning - check if property has keyframes  
+        try {
+            if (componentLayer.transform.position.numKeys > 0) {
+                // If there are keyframes, offset all keyframe values to center
+                var currentPos = componentLayer.transform.position.value;
+                var centerX = comp.width / 2;
+                var centerY = comp.height / 2;
+                var offsetX = centerX - currentPos[0];
+                var offsetY = centerY - currentPos[1];
+                
+                for (var p = 1; p <= componentLayer.transform.position.numKeys; p++) {
+                    var keyTime = componentLayer.transform.position.keyTime(p);
+                    var keyValue = componentLayer.transform.position.keyValue(p);
+                    var newValue = [keyValue[0] + offsetX, keyValue[1] + offsetY];
+                    componentLayer.transform.position.setValueAtTime(keyTime, newValue);
+                }
+            } else {
+                // No keyframes, just set static position to center
+                componentLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+            }
+        } catch(posError) {
+            $.writeln("Position centering failed: " + posError.toString());
+        }
+        
+        // app.endUndoGroup();
+        return "success";
+    } catch(e) {
+        alert("Error adding component: " + e.toString());
+        // app.endUndoGroup();
+        return "error";
+    }
+}
+
 // Main function called from the panel
 function createSquircleFromPanel() {
     try {

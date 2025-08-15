@@ -21,7 +21,7 @@ body {
 
 .section {
     margin-bottom: 20px;
-    padding-bottom: 10px;
+    padding-bottom: 0px;
     border-bottom: 1px solid #3a3a3a;
 }
 
@@ -280,6 +280,17 @@ body {
     margin-top: 16px;
     padding-top: 16px;
     border-top: 1px solid #3a3a3a;
+}
+
+/* Effect Presets Section - reduce spacing to match gesture presets */
+.effect-presets {
+    margin-top: 0px;
+    padding-top: 0px;
+}
+
+.effect-presets .section-header {
+    margin-top: 0px;
+    margin-bottom: 10px;
 }
 
 /* Spacing for grouped subsections within the same section */

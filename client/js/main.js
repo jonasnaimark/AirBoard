@@ -153,6 +153,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Add Component button handler
+    var addComponentButton = document.getElementById('addComponent');
+    addComponentButton.addEventListener('click', function() {
+        console.log('Add Component clicked');
+        
+        // Get selected component type and resolution multiplier
+        var componentType = document.getElementById('componentType').value;
+        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value);
+        
+        console.log('Component Type:', componentType, 'Resolution Multiplier:', resolutionMultiplier);
+        
+        // Disable button while working
+        addComponentButton.disabled = true;
+        addComponentButton.textContent = 'Adding...';
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script to add component
+        var script = 'addComponentFromPanel("' + componentType + '", ' + resolutionMultiplier + ')';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('Component result:', result);
+            // Re-enable button
+            addComponentButton.disabled = false;
+            addComponentButton.textContent = 'Add Component';
+        });
+    });
+    
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
 });
