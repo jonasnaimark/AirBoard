@@ -11,7 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.1.8] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.1.9] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🎨 Improved
+- **Component Positioning**: Ms Counter and components now place in top-left corner (60px padding) instead of center
+- **Better Layout**: More intuitive positioning for timer displays and UI components
+
+### 🔧 Technical Details
+- Modified component positioning logic from center ([comp.width/2, comp.height/2]) to top-left ([60, 60])
+- Handles both keyframed and static position properties
+- 60px padding from edges for clean placement
+- Associated with AirBoard_v3.1.9.zxp
+
+## [3.1.8] - 2025-08-15
 ### 🔧 Fixed
 - **Removed Finder Auto-Open**: Removed automatic Finder reveal that was causing unwanted dialog warnings
 - **Fixed Double .aep Extension**: Save dialog now shows clean filename without duplicate .aep extensions

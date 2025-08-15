@@ -538,12 +538,12 @@ function addComponentFromPanel(componentType, multiplier) {
         // Handle positioning - check if property has keyframes  
         try {
             if (componentLayer.transform.position.numKeys > 0) {
-                // If there are keyframes, offset all keyframe values to center
+                // If there are keyframes, offset all keyframe values to top-left with padding
                 var currentPos = componentLayer.transform.position.value;
-                var centerX = comp.width / 2;
-                var centerY = comp.height / 2;
-                var offsetX = centerX - currentPos[0];
-                var offsetY = centerY - currentPos[1];
+                var topLeftX = 60; // 60px padding from left edge
+                var topLeftY = 60; // 60px padding from top edge
+                var offsetX = topLeftX - currentPos[0];
+                var offsetY = topLeftY - currentPos[1];
                 
                 for (var p = 1; p <= componentLayer.transform.position.numKeys; p++) {
                     var keyTime = componentLayer.transform.position.keyTime(p);
@@ -552,11 +552,11 @@ function addComponentFromPanel(componentType, multiplier) {
                     componentLayer.transform.position.setValueAtTime(keyTime, newValue);
                 }
             } else {
-                // No keyframes, just set static position to center
-                componentLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+                // No keyframes, just set static position to top-left with padding
+                componentLayer.transform.position.setValue([60, 60]);
             }
         } catch(posError) {
-            $.writeln("Position centering failed: " + posError.toString());
+            $.writeln("Position placement failed: " + posError.toString());
         }
         
         // app.endUndoGroup();
