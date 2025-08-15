@@ -8,7 +8,7 @@
 <body>
     <div class="container">
         <!-- Device Templates Section -->
-        <div class="section device-templates">
+        <section class="section">
             <h2 class="section-header">Device Templates</h2>
             <div class="control-row">
                 <select id="deviceType" class="dropdown">
@@ -17,7 +17,7 @@
                 </select>
                 <button id="addDevice" class="main-button">Make Comp</button>
             </div>
-            <div class="resolution-input">
+            <div class="control-row">
                 <label for="resolutionMultiplier" class="resolution-label" id="resolutionLabel">Resolution @2x</label>
                 <div class="number-input-container">
                     <input type="number" id="resolutionMultiplier" class="resolution-input-field" 
@@ -28,34 +28,36 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- Gesture Presets Section -->
-            <div class="gesture-presets">
-                <h2 class="section-header">Gesture Presets</h2>
-                <div class="control-row">
-                    <select id="gestureType" class="dropdown">
-                        <option value="tap">Tap</option>
-                        <option value="longpress">Long Press</option>
-                        <option value="doubletap">Double Tap</option>
-                        <option value="mouseclick">Mouse Click</option>
-                    </select>
-                    <button id="addGesture" class="main-button">Add Gesture</button>
-                </div>
-                
-                <!-- Components Section -->
-                <h2 class="section-header subsection">Components</h2>
-                <div class="control-row">
-                    <select id="componentType" class="dropdown">
-                        <option value="timer">Ms Counter</option>
-                        <option value="dot-loader">Dot Loader</option>
-                    </select>
-                    <button id="addComponent" class="main-button">Add Component</button>
-                </div>
+        </section>
+        
+        <!-- Gesture Presets Section -->
+        <section class="section">
+            <h2 class="section-header">Gesture Presets</h2>
+            <div class="control-row">
+                <select id="gestureType" class="dropdown">
+                    <option value="tap">Tap</option>
+                    <option value="longpress">Long Press</option>
+                    <option value="doubletap">Double Tap</option>
+                    <option value="mouseclick">Mouse Click</option>
+                </select>
+                <button id="addGesture" class="main-button">Add Gesture</button>
             </div>
-        </div>
+        </section>
+        
+        <!-- Components Section -->
+        <section class="section">
+            <h2 class="section-header">Components</h2>
+            <div class="control-row">
+                <select id="componentType" class="dropdown">
+                    <option value="timer">Ms Counter</option>
+                    <option value="dot-loader">Dot Loader</option>
+                </select>
+                <button id="addComponent" class="main-button">Add Component</button>
+            </div>
+        </section>
         
         <!-- Effect Presets Section -->      
-        <div class="section effect-presets">
+        <section class="section">
             <h2 class="section-header">Effect Presets</h2>
             <div class="control-row">
                 <button id="createSquircle" class="main-button">
@@ -66,9 +68,11 @@
                     Replace Rect
                 </button>
             </div>
-            
-            <!-- Elevation Section -->
-            <h2 class="section-header subsection">Elevation</h2>
+        </section>
+        
+        <!-- Elevation Section -->
+        <section class="section">
+            <h2 class="section-header">Elevation</h2>
             <div class="control-row">
                 <select id="elevationType" class="dropdown">
                     <option value="1">1</option>
@@ -79,7 +83,7 @@
                 </select>
                 <button id="addShadow" class="main-button">Add Shadow</button>
             </div>
-        </div>
+        </section>
     </div>
     
     <!-- Load Adobe's CEP JavaScript library -->

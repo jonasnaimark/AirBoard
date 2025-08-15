@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.airboard.panel" ExtensionBundleVersion="2.7.2"
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.airboard.panel" ExtensionBundleVersion="2.8.5"
                    ExtensionBundleName="AirBoard" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <ExtensionList>
         <Extension Id="com.airboard.panel" Version="1.0.0" />

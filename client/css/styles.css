@@ -12,16 +12,17 @@ body {
 }
 
 .container {
-    padding: 10px 16px 16px 16px;
+    padding: 6px 16px 16px 16px;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
     box-sizing: border-box;
 }
 
+/* Main section styling - consistent for all sections */
 .section {
-    margin-bottom: 20px;
-    padding-bottom: 8px;
+    margin-bottom: 16px; 
+    padding-bottom: 2px;
     border-bottom: 1px solid #3a3a3a;
 }
 
@@ -44,7 +45,7 @@ body {
 .control-row {
     display: flex;
     gap: 10px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     align-items: stretch;
 }
 
@@ -183,19 +184,15 @@ body {
     }
 }
 
-/* Resolution input section */
-.resolution-input {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
+/* Removed .resolution-input - now uses .control-row for consistency */
 
 .resolution-label {
     font-size: 12.5px;
     font-weight: 500;
     color: #cccccc;
     white-space: nowrap;
-    flex: 1;
+    display: flex;
+    align-items: center;
     padding-left: 12px;
 }
 
@@ -275,28 +272,7 @@ body {
     color: #ffffff;
 }
 
-/* Gesture Presets Section */
-.gesture-presets {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #3a3a3a;
-}
-
-/* Effect Presets Section - reduce spacing to match gesture presets */
-.effect-presets {
-    margin-top: 0px;
-    padding-top: 0px;
-}
-
-.effect-presets .section-header {
-    margin-top: 0px;
-    margin-bottom: 10px;
-}
-
-/* Spacing for grouped subsections within the same section */
-.section-header.subsection {
-    margin-top: 16px;
-}
+/* Removed specific section classes - now using unified .section class */
 
 /* Custom scrollbar styling */
 ::-webkit-scrollbar {
