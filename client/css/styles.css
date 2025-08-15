@@ -21,7 +21,7 @@ body {
 
 .section {
     margin-bottom: 20px;
-    padding-bottom: 0px;
+    padding-bottom: 8px;
     border-bottom: 1px solid #3a3a3a;
 }
 
@@ -65,11 +65,11 @@ body {
     color: #cccccc;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 12.5px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     margin-bottom: 10px;
     flex-grow: 1;
     display: flex;
@@ -106,11 +106,11 @@ body {
 /* Dropdown styles */
 .dropdown {
     height: 40px;
-    background-color: #2f2f2f;
-    border: 1px solid #555555;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     color: #cccccc;
-    font-size: 14px;
+    font-size: 12.5px;
     font-weight: 500;
     padding: 0 32px 0 12px;
     outline: none;
@@ -191,7 +191,7 @@ body {
 }
 
 .resolution-label {
-    font-size: 14px;
+    font-size: 12.5px;
     font-weight: 500;
     color: #cccccc;
     white-space: nowrap;
@@ -209,11 +209,11 @@ body {
 .resolution-input-field {
     width: 100%;
     height: 40px;
-    background-color: #3a3a3a;
-    border: 1px solid #555555;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
     color: #cccccc;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     text-align: center;
     padding: 0 55px 0 0px;
