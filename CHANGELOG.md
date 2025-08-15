@@ -11,7 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.1.9] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.0] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🔧 Updated
+- **User Changes Incorporated**: Includes latest user modifications and improvements
+- **Fresh Build**: Clean rebuild with all recent updates
+
+### 🔧 Technical Details
+- Associated with AirBoard_v3.2.0.zxp
+
+## [3.1.9] - 2025-08-15
 ### 🎨 Improved
 - **Component Positioning**: Ms Counter and components now place in top-left corner (60px padding) instead of center
 - **Better Layout**: More intuitive positioning for timer displays and UI components
