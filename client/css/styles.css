@@ -12,7 +12,7 @@ body {
 }
 
 .container {
-    padding: 16px;
+    padding: 10px 16px 16px 16px;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
@@ -213,7 +213,7 @@ body {
     border: 1px solid #555555;
     border-radius: 6px;
     color: #cccccc;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     text-align: center;
     padding: 0 55px 0 0px;
@@ -277,9 +277,14 @@ body {
 
 /* Gesture Presets Section */
 .gesture-presets {
-    margin-top: 20px;
-    padding-top: 20px;
+    margin-top: 16px;
+    padding-top: 16px;
     border-top: 1px solid #3a3a3a;
+}
+
+/* Spacing for grouped subsections within the same section */
+.section-header.subsection {
+    margin-top: 16px;
 }
 
 /* Custom scrollbar styling */
