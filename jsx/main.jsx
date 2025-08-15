@@ -1236,9 +1236,8 @@ function createFinderFoldersFromPanel() {
         // Save current AE project to 03 - AE folder with custom filename
         var aeFolder = new Folder(rootFolder.fsName + "/03 - AE");
         if (aeFolder.exists) {
-            // Create File object with path to AE subfolder + default filename
-            var defaultFileName = projectName + ".aep";
-            var defaultFile = new File(aeFolder.fsName + "/" + defaultFileName);
+            // Create File object with path to AE subfolder + default filename (no extension yet)
+            var defaultFile = new File(aeFolder.fsName + "/" + projectName);
             
             // Open save dialog defaulting to the AE subfolder using saveDlg()
             var saveFile = defaultFile.saveDlg("Save After Effects project as:", "After Effects Project:*.aep");
@@ -1254,32 +1253,11 @@ function createFinderFoldersFromPanel() {
                 try {
                     app.project.save(saveFile);
                     alert("Project folder structure created successfully!\nProject saved to: " + saveFile.fsName);
-                    
-                    // Open Finder to reveal the project folder structure
-                    try {
-                        rootFolder.execute();
-                    } catch(finderError) {
-                        $.writeln("Could not open Finder: " + finderError.toString());
-                    }
                 } catch(saveError) {
                     alert("Folder structure created, but could not save project: " + saveError.toString());
-                    
-                    // Still try to open Finder even if save failed
-                    try {
-                        rootFolder.execute();
-                    } catch(finderError) {
-                        $.writeln("Could not open Finder: " + finderError.toString());
-                    }
                 }
             } else {
                 alert("Project folder structure created successfully!\nProject save was cancelled.");
-                
-                // Still open Finder to show the created folder structure
-                try {
-                    rootFolder.execute();
-                } catch(finderError) {
-                    $.writeln("Could not open Finder: " + finderError.toString());
-                }
             }
         }
         

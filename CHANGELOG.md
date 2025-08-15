@@ -11,7 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.1.7] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.1.8] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🔧 Fixed
+- **Removed Finder Auto-Open**: Removed automatic Finder reveal that was causing unwanted dialog warnings
+- **Fixed Double .aep Extension**: Save dialog now shows clean filename without duplicate .aep extensions
+
+### 🔧 Technical Details
+- Removed `rootFolder.execute()` calls to eliminate warning dialogs
+- Changed default filename creation to exclude .aep extension (added by save dialog automatically)
+- Cleaner save dialog experience with proper filename display
+- Associated with AirBoard_v3.1.8.zxp
+
+## [3.1.7] - 2025-08-15
 ### ✨ Added
 - **Automatic Finder Reveal**: Finder Folders now automatically opens Finder window to show the newly created project structure
 - **Enhanced UX**: No need to manually navigate to find your new folders - they open automatically
