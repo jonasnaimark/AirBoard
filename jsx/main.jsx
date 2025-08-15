@@ -1,6 +1,72 @@
 // Global variable to store extension path (set by the panel)
 var extensionRoot = "";
 
+// Helper function to move composition to appropriate folder based on device type
+function moveCompositionToFolder(comp, deviceType) {
+    try {
+        // Define folder structure mapping
+        var folderMapping = {
+            "iphone": "01 - Compositions > Native",
+            "desktop": "01 - Compositions > Desktop"
+        };
+        
+        var targetFolderPath = folderMapping[deviceType];
+        if (!targetFolderPath) {
+            $.writeln("Unknown device type for folder organization: " + deviceType);
+            return;
+        }
+        
+        // Split the path to get folder hierarchy
+        var folderNames = targetFolderPath.split(" > ");
+        var currentFolder = null;
+        
+        // Find or create the folder hierarchy
+        for (var i = 0; i < folderNames.length; i++) {
+            var folderName = folderNames[i];
+            var foundFolder = null;
+            
+            if (currentFolder === null) {
+                // Look in root level
+                for (var j = 1; j <= app.project.items.length; j++) {
+                    var item = app.project.items[j];
+                    if (item instanceof FolderItem && item.name === folderName) {
+                        foundFolder = item;
+                        break;
+                    }
+                }
+            } else {
+                // Look in current folder
+                for (var k = 1; k <= currentFolder.items.length; k++) {
+                    var item = currentFolder.items[k];
+                    if (item instanceof FolderItem && item.name === folderName) {
+                        foundFolder = item;
+                        break;
+                    }
+                }
+            }
+            
+            // Create folder if not found
+            if (!foundFolder) {
+                if (currentFolder === null) {
+                    foundFolder = app.project.items.addFolder(folderName);
+                } else {
+                    foundFolder = currentFolder.items.addFolder(folderName);
+                }
+            }
+            
+            currentFolder = foundFolder;
+        }
+        
+        // Move the composition to the target folder
+        if (currentFolder) {
+            comp.parentFolder = currentFolder;
+        }
+        
+    } catch(e) {
+        $.writeln("Error in moveCompositionToFolder: " + e.toString());
+    }
+}
+
 // Helper function to find or create the zImported_projects folder
 function getOrCreateImportedProjectsFolder() {
     try {
@@ -156,6 +222,13 @@ function createDeviceComposition(deviceType, multiplier) {
         
         // Open the composition in the viewer
         comp.openInViewer();
+        
+        // Move composition to appropriate folder
+        try {
+            moveCompositionToFolder(comp, deviceType);
+        } catch(orgError) {
+            $.writeln("Composition organization failed: " + orgError.toString());
+        }
         
         // app.endUndoGroup();
         return "success";

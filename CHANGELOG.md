@@ -11,7 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.3] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.4] - 2025-08-15 ✨ **CURRENT RELEASE**
+### ✨ Added
+- **Automatic Composition Organization**: New compositions now automatically move to organized folders
+- **iPhone Compositions**: Go to "01 - Compositions > Native" folder
+- **Desktop Compositions**: Go to "01 - Compositions > Desktop" folder  
+- **Smart Folder Creation**: Creates folder hierarchy if it doesn't exist
+
+### 🔧 Technical Details
+- Added `moveCompositionToFolder()` function with device type mapping
+- Handles hierarchical folder creation ("01 - Compositions" > "Native"/"Desktop")
+- Automatic folder organization after composition creation and opening
+- Graceful error handling for organization failures
+- Associated with AirBoard_v3.2.4.zxp
+
+## [3.2.3] - 2025-08-15
 ### 🎯 Fixed
 - **Selective Component Positioning**: Only Ms Counter places in top-left corner, Dot Loader and other components return to center positioning
 - **Better UX**: Timer in top-left, animations/loaders centered as expected
