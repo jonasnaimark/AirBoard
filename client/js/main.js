@@ -184,6 +184,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // AE Folders button handler
+    var aeFoldersButton = document.getElementById('aeFolders');
+    aeFoldersButton.addEventListener('click', function() {
+        console.log('AE Folders clicked');
+        
+        // Disable button while working
+        aeFoldersButton.disabled = true;
+        aeFoldersButton.textContent = 'Creating...';
+        
+        // Call the After Effects script to create folder structure
+        var script = 'createAEFoldersFromPanel()';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('AE Folders result:', result);
+            // Re-enable button
+            aeFoldersButton.disabled = false;
+            aeFoldersButton.textContent = 'AE Folders';
+        });
+    });
+    
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background

@@ -1,6 +1,49 @@
 // Global variable to store extension path (set by the panel)
 var extensionRoot = "";
 
+// Helper function to find or create the zImported_projects folder
+function getOrCreateImportedProjectsFolder() {
+    try {
+        // Look for 03 - Assets folder first
+        var assetsFolder = null;
+        for (var i = 1; i <= app.project.items.length; i++) {
+            var item = app.project.items[i];
+            if (item instanceof FolderItem && item.name === "03 - Assets") {
+                assetsFolder = item;
+                break;
+            }
+        }
+        
+        // If no Assets folder exists, create it
+        if (!assetsFolder) {
+            assetsFolder = app.project.items.addFolder("03 - Assets");
+        }
+        
+        // Look for zImported_projects folder inside Assets
+        var importedFolder = null;
+        for (var j = 1; j <= assetsFolder.items.length; j++) {
+            var item = assetsFolder.items[j];
+            if (item instanceof FolderItem && item.name === "zImported_projects") {
+                importedFolder = item;
+                break;
+            }
+        }
+        
+        // If no zImported_projects folder exists, create it
+        if (!importedFolder) {
+            importedFolder = assetsFolder.items.addFolder("zImported_projects");
+        }
+        
+        return importedFolder;
+    } catch(e) {
+        // If we can't create the folder structure, return null (import will go to root)
+        $.writeln("Could not create zImported_projects folder: " + e.toString());
+        return null;
+    }
+}
+
+
+
 // Device Templates functionality
 function createDeviceComposition(deviceType, multiplier) {
     // app.beginUndoGroup("Create Device Composition");
@@ -71,7 +114,7 @@ function createDeviceComposition(deviceType, multiplier) {
                         var importOptions = new ImportOptions(templateFile);
                         var importedItems = app.project.importFile(importOptions);
                         
-                        // Find the imported composition
+                        // Find the imported composition first
                         for (var j = 1; j <= app.project.items.length; j++) {
                             var item = app.project.items[j];
                             if (item instanceof CompItem && item.name === "iPhone 14 UI") {
@@ -79,6 +122,7 @@ function createDeviceComposition(deviceType, multiplier) {
                                 break;
                             }
                         }
+                        
                     }
                     
                     if (templateComp) {
@@ -108,6 +152,7 @@ function createDeviceComposition(deviceType, multiplier) {
                 $.writeln("Template import error: " + templateError.toString());
             }
         }
+        
         
         // Open the composition in the viewer
         comp.openInViewer();
@@ -190,7 +235,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         // Import if not found
         if (!gestureComp) {
             var importOptions = new ImportOptions(templateFile);
-            app.project.importFile(importOptions);
+            var importedItems = app.project.importFile(importOptions);
             
             // Find after import
             for (var j = 1; j <= app.project.items.length; j++) {
@@ -201,6 +246,7 @@ function addGestureFromPanel(gestureType, multiplier) {
                 }
             }
         }
+        
         
         if (!gestureComp) {
             alert("Cannot find " + data.compName + " composition in template.");
@@ -386,7 +432,7 @@ function addComponentFromPanel(componentType, multiplier) {
         // Import if not found
         if (!componentComp) {
             var importOptions = new ImportOptions(templateFile);
-            app.project.importFile(importOptions);
+            var importedItems = app.project.importFile(importOptions);
             
             // Find after import
             for (var j = 1; j <= app.project.items.length; j++) {
@@ -397,6 +443,7 @@ function addComponentFromPanel(componentType, multiplier) {
                 }
             }
         }
+        
         
         if (!componentComp) {
             alert("Cannot find " + data.compName + " composition in template.");
@@ -1036,6 +1083,90 @@ function replaceRectangle() {
     // app.endUndoGroup();
 }
 
+
+// AE Folders functionality - Create standard project folder structure
+function createAEFoldersFromPanel() {
+    try {
+        // Check if we have a project
+        if (!app.project) {
+            alert("Please open a project first.");
+            return "error";
+        }
+        
+        // Define the folder structure
+        var folderStructure = [
+            {
+                name: "01 - Compositions",
+                subfolders: [
+                    {
+                        name: "Desktop",
+                        subfolders: [
+                            { name: "01_Specs" },
+                            { name: "02_Lottie" }
+                        ]
+                    },
+                    {
+                        name: "Native", 
+                        subfolders: [
+                            { name: "01_Specs" },
+                            { name: "02_Lottie" }
+                        ]
+                    },
+                    { name: "zArchive" }
+                ]
+            },
+            { name: "02 - Precomps" },
+            {
+                name: "03 - Assets",
+                subfolders: [
+                    { name: "Images" },
+                    { name: "Reference" },
+                    { name: "Renders" },
+                    { name: "Vector" },
+                    { name: "Video" },
+                    { name: "zImported_projects" }
+                ]
+            }
+        ];
+        
+        // Create the folder structure recursively
+        createFolderStructure(app.project, folderStructure);
+        
+        return "success";
+        
+    } catch(e) {
+        alert("Error creating AE folder structure: " + e.toString());
+        return "error";
+    }
+}
+
+// Recursive helper function to create folder structure
+function createFolderStructure(parent, folders) {
+    for (var i = 0; i < folders.length; i++) {
+        var folderDef = folders[i];
+        
+        // Check if folder already exists
+        var existingFolder = null;
+        for (var j = 1; j <= parent.items.length; j++) {
+            var item = parent.items[j];
+            if (item instanceof FolderItem && item.name === folderDef.name) {
+                existingFolder = item;
+                break;
+            }
+        }
+        
+        // Create folder if it doesn't exist
+        var folder = existingFolder;
+        if (!folder) {
+            folder = parent.items.addFolder(folderDef.name);
+        }
+        
+        // Create subfolders if they exist
+        if (folderDef.subfolders && folderDef.subfolders.length > 0) {
+            createFolderStructure(folder, folderDef.subfolders);
+        }
+    }
+}
 
 // Helper function to find rectangle data in a shape layer
 function findRectangleData(layer) {

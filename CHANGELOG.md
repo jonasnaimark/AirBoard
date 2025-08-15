@@ -11,7 +11,142 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [2.8.9] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.0.0] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🔄 Rolled Back to Stable Version
+- **Removed All Automatic Organization**: Removed all automatic .aep and composition organization code that wasn't working
+- **Clean AE Folders Only**: Back to the stable version with working "AE Folders" button functionality
+- **Simplified Codebase**: Removed complex folder detection and organization functions
+
+### ✅ Working Features
+- **AE Folders Button**: Creates complete project folder structure when clicked
+- **Device Templates**: iPhone and Desktop composition creation with scaling
+- **Gesture Presets**: All gesture animations with scaling and positioning
+- **Components**: Ms Counter and Dot Loader with scaling and positioning  
+- **Effect Presets**: Squircle creation and rectangle replacement
+
+### 🔧 Technical Details
+- Removed `organizeImportedFolder()` function and all calls
+- Removed `getOrCreateCompositionFolder()` function
+- Removed automatic composition organization
+- Clean, stable codebase ready for future organization features
+- Associated with AirBoard_v3.0.0.zxp
+
+## [2.9.8] - 2025-08-15
+### 🔧 Fixed
+- **User-Modified Folder Organization**: Includes custom fixes to folder organization logic
+- **Enhanced organizeImportedFolder() Calls**: Both conditional and unconditional calls for maximum coverage
+
+### 🔧 Technical Details
+- Incorporates user modifications to jsx/main.jsx for improved folder organization
+- Maintains both conditional (inside import blocks) and unconditional (outside import blocks) calls to organizeImportedFolder()
+- Associated with AirBoard_v2.9.8.zxp
+
+## [2.9.7] - 2025-08-15
+### 🔧 Fixed - UNCONDITIONAL ORGANIZATION
+- **Made organizeImportedFolder() Unconditional**: Now calls folder organization AFTER import blocks, not inside them
+- **Handles Pre-existing Templates**: Organizes folder even when templates already exist (no import needed)
+- **Idempotent & Safe**: Function only moves folder if found in root, safe to call multiple times
+
+### 🔧 Technical Details
+- Moved `organizeImportedFolder()` outside the `if (!gestureComp)` and `if (!componentComp)` blocks
+- Now runs regardless of whether import happened or templates already existed
+- Covers cases where templates were imported previously but folder never got organized
+- Function is idempotent - safe to call repeatedly
+- Associated with AirBoard_v2.9.7.zxp
+
+## [2.9.6] - 2025-08-15
+### 🔧 Fixed - CRITICAL BUG FIX
+- **Fixed Root Folder Detection**: Changed `item.parentFolder === app.project` to `item.parentFolder === null` (root-level items have null parent, not app.project)
+- **Universal Import Organization**: Added folder organization to ALL import locations (Device, Gesture, Component)
+- **Reusable Function**: Created `organizeImportedFolder()` function used consistently across all imports
+
+### 🔧 Technical Details
+- Root-level items in After Effects have `parentFolder === null`, not `app.project`
+- This was preventing the "AirBoard Templates.aep" folder from being detected and moved
+- Now calls `organizeImportedFolder()` after every `app.project.importFile()` call
+- Should finally work correctly for folder organization
+- Associated with AirBoard_v2.9.6.zxp
+
+## [2.9.5] - 2025-08-15
+### 🔧 Fixed  
+- **Completely Simplified Folder Organization**: Removed complex detection system and used same simple approach as composition organization (which works)
+- **Same Timing as Composition Move**: Folder organization now happens right after composition organization using identical pattern
+- **Direct Folder Detection**: Simple search for exact "AirBoard Templates.aep" folder name in root
+- **Removed Debugging Overhead**: Eliminated complex logging and detection functions
+
+### 🔧 Technical Details
+- Completely removed complex `moveImportedItemsToFolder()` function
+- Added simple folder organization directly in device creation function using same timing as composition move
+- Uses exact same pattern: find folder in root by name, move to target folder
+- Removed all complex detection patterns and timing issues
+- Associated with AirBoard_v2.9.5.zxp
+
+## [2.9.4] - 2025-08-15
+### 🔧 Fixed
+- **Improved Import Timing**: Changed order of operations to ensure folder detection happens after import is fully complete
+- **Enhanced Debugging**: Added comprehensive logging to track exactly what's happening during import organization
+- **Better Folder Detection**: More specific matching for "AirBoard Templates.aep" folder name
+- **Forced Project Refresh**: Added consolidateFootage() call to ensure AE has finished organizing imports
+
+### 🔧 Technical Details
+- Moved `moveImportedItemsToFolder()` call to after template composition finding
+- Added detailed logging to track every item in the project during organization
+- Enhanced folder detection with exact name matching and better type checking
+- Added project consolidation step to ensure import is fully processed
+- Associated with AirBoard_v2.9.4.zxp
+
+## [2.9.3] - 2025-08-15
+### 🔧 Fixed
+- **AirBoard Templates.aep Folder Organization**: The entire "AirBoard Templates.aep" folder now properly moves to "03 - Assets > zImported_projects" instead of staying in root
+- **Enhanced Folder Detection**: Improved detection to specifically target imported .aep folder structures
+- **Better Debugging**: Added comprehensive logging to track folder movement process
+
+### 🔧 Technical Details
+- Updated `moveImportedItemsToFolder()` to specifically detect and move "AirBoard Templates.aep" folders
+- Enhanced detection patterns to identify FolderItem instances containing "AirBoard" or "Templates"
+- Added detailed logging for debugging import organization process
+- Associated with AirBoard_v2.9.3.zxp
+
+## [2.9.2] - 2025-08-15
+### 🔧 Fixed
+- **Import Organization Now Actually Works**: Fixed .aep files to properly go into "03 - Assets > zImported_projects" folder
+- **Composition Organization**: Device compositions now automatically go into correct folders (iPhone → "01 - Compositions > Native", Desktop → "01 - Compositions > Desktop")
+- **Improved Template Detection**: Enhanced detection patterns for imported template items
+- **Better Error Handling**: More robust folder creation and item organization
+
+### 🔧 Technical Details
+- Rewrote `moveImportedItemsToFolder()` function to properly scan and move template items
+- Added `getOrCreateCompositionFolder()` function for device-specific composition organization
+- Enhanced template item detection patterns (AirBoard, Templates, iPhone, Gesture, Component, etc.)
+- Added comprehensive logging for debugging organization process
+- Associated with AirBoard_v2.9.2.zxp
+
+## [2.9.1] - 2025-08-15
+### ✨ Added
+- **Automatic .aep Import Organization**: All imported .aep files (like AirBoard Templates.aep) now automatically go into "03 - Assets > zImported_projects" folder
+- **Smart Folder Creation**: Creates the folder structure if it doesn't exist when importing templates
+- **Universal Template Organization**: Works for Device Templates, Gesture Presets, Components, and any future .aep imports
+
+### 🔧 Technical Details
+- Implemented `getOrCreateImportedProjectsFolder()` helper function for folder management
+- Added `moveImportedItemsToFolder()` function with fallback detection for imported items
+- Modified all three template import locations (Device, Gesture, Component) to use automatic organization
+- Robust error handling ensures imports work even if organization fails
+- Associated with AirBoard_v2.9.1.zxp
+
+## [2.9.0] - 2025-08-15
+### ✨ Added
+- **AE Folders Functionality**: Clicking "AE Folders" button now creates a complete project folder structure
+- **Standard Project Organization**: Creates organized folders for Compositions (Desktop/Native with Specs/Lottie subfolders), Precomps, and Assets (Images, Reference, Renders, Vector, Video, zImported_projects)
+- **Smart Folder Creation**: Only creates folders that don't already exist to avoid duplicates
+
+### 🔧 Technical Details
+- Implemented `createAEFoldersFromPanel()` ExtendScript function following proven patterns
+- Added recursive `createFolderStructure()` helper function for nested folder creation
+- Follows established button interaction patterns with proper UI feedback
+- Associated with AirBoard_v2.9.0.zxp
+
+## [2.8.9] - 2025-08-15
 ### 📝 Documentation
 - **Main Branch Push Requirements**: Added comprehensive checklist and workflow documentation
 - **CHANGELOG.md Integration**: Documented requirement to update changelog with every main branch push
