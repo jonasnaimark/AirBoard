@@ -11,7 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [2.8.6] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [2.8.9] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 📝 Documentation
+- **Main Branch Push Requirements**: Added comprehensive checklist and workflow documentation
+- **CHANGELOG.md Integration**: Documented requirement to update changelog with every main branch push
+- **Version Management Process**: Enhanced VERSION_GUIDE.md with detailed push checklist and troubleshooting
+
+### 🔧 Technical Details
+- Updated CLAUDE_CONTEXT.md with main branch push requirements
+- Added standardized CHANGELOG.md format template
+- Enhanced development workflow documentation for consistency
+- Associated with AirBoard_v2.8.9.zxp
+
+## [2.8.8] - 2025-08-15
+### ✨ Added
+- **Project Setup Section**: New section with "AE Folders" and "Finder Folders" buttons (layout ready for future functionality)
+- **Material Effects Row**: Added Material 1-5 dropdown with "Add Blur" button to Effect Presets section
+
+### 🎨 UI Improvements  
+- **Refined Component Heights**: Reduced all buttons and dropdowns from 40px to 38px for more compact interface
+- **Tighter Section Spacing**: Reduced padding above section headers for cleaner layout
+- **Reorganized Effect Presets**: Now contains 3 rows - Squircle/Replace, Elevation, and Material effects
+
+### 📝 Documentation
+- **Enhanced ZXP Build Guide**: Added comprehensive build documentation to VERSION_GUIDE.md
+- **ZXP Naming Convention**: Documented proper versioning and file placement process
+- **Common Build Issues**: Added troubleshooting section for build problems
+
+### 🔧 Technical Details
+- Updated dropdown options: "1" → "Elevation 1", "2" → "Elevation 2", etc.
+- Maintained all existing functionality while adding new UI elements
+- Associated with AirBoard_v2.8.8.zxp
+
+## [2.8.6] - 2025-08-15
 ### 🎨 Improved
 - Enhanced scrollbar styling for better dark theme integration
 - Refined button hover states and animations

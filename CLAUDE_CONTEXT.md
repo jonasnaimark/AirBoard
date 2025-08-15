@@ -83,12 +83,25 @@ AirBoard/
 3. **ExtendScript**: Follow proven scaling pattern from above
 4. **Template**: Add to AirBoard Templates.aep if needed
 
-### Version Management
+### Version Management & Main Branch Push
 ```bash
-# Update CSXS/manifest.xml: ExtensionBundleVersion="X.X.X"
+# CRITICAL: Always do ALL steps before pushing to main
+# 1. Update CSXS/manifest.xml: ExtensionBundleVersion="X.X.X"
+# 2. Update CHANGELOG.md with new version entry and detailed changes
+# 3. Build ZXP
 ./ZXPSignCmd -sign temp-package dist/AirBoard_vX.X.X.zxp new-cert.p12 mypassword
+# 4. Commit with version number
 git commit -m "vX.X.X: Description with ZXP association"
+# 5. Push to main
+git push origin main
 ```
+
+### 🚨 Main Branch Push Requirements
+**NEVER push to main without:**
+- Version increment in manifest.xml
+- CHANGELOG.md entry for new version  
+- Associated ZXP file build
+- Version number in commit message
 
 ## 📚 Essential Documentation Files
 - **DEVELOPMENT_GUIDE.md**: Complete technical patterns and scaling logic

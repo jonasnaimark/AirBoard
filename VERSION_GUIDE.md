@@ -275,10 +275,13 @@ mkdir -p dist
 # 1. Update version in manifest
 # Edit CSXS/manifest.xml: ExtensionBundleVersion="2.8.7"
 
-# 2. Build ZXP
+# 2. Update CHANGELOG.md
+# Add new version entry with detailed changes
+
+# 3. Build ZXP
 ./ZXPSignCmd -sign temp-package dist/AirBoard_v2.8.7.zxp new-cert.p12 mypassword
 
-# 3. Commit with descriptive message
+# 4. Commit with descriptive message
 git add .
 git commit -m "v2.8.7: Brief description of changes
 
@@ -287,9 +290,41 @@ Detailed technical changes and improvements...
 🤖 Generated with Claude Code
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
-# 4. Push to GitHub
+# 5. Push to GitHub
 git push origin main
 ```
+
+## 📋 **REQUIRED: Main Branch Push Checklist**
+
+**CRITICAL: Always complete ALL steps before pushing to main branch:**
+
+### ✅ Pre-Push Requirements
+1. **Update manifest.xml version** (increment MAJOR.MINOR.PATCH)
+2. **Update CHANGELOG.md** with new version entry and detailed changes
+3. **Build new ZXP** with incremented version number
+4. **Test functionality** (if applicable)
+5. **Commit with version number** in commit message
+6. **Push to main branch**
+
+### 📝 CHANGELOG.md Update Format
+```markdown
+## [X.X.X] - YYYY-MM-DD ✨ **CURRENT RELEASE**
+### ✨ Added
+- New features and functionality
+
+### 🎨 UI Improvements  
+- Interface and design changes
+
+### 🔧 Technical Details
+- Implementation details and technical changes
+- Associated with AirBoard_vX.X.X.zxp
+```
+
+### 🚨 Never Push to Main Without:
+- [ ] Version number increment in manifest.xml
+- [ ] CHANGELOG.md entry for the new version
+- [ ] Associated ZXP file build
+- [ ] Version number in commit message
 
 ### Version Numbering Strategy
 
