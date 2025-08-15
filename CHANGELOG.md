@@ -5,6 +5,28 @@ All notable changes to AirBoard Plugin will be documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2025-08-14
+### ✨ Added
+- Double Tap gesture option in dropdown menu
+- Mouse Click gesture option in dropdown menu
+- Automatic scrollbar when content overflows window height
+
+### 🔧 Fixed
+- iPhone UI layer no longer locked when added to compositions
+- Desktop compositions now create at proper 2x dimensions (2880×2056)
+- Gesture layers scale correctly at 1x resolution (50% scale)
+
+### 🎨 Improved
+- Custom scrollbar styling to match dark theme
+- Enhanced gesture scaling logic for all resolution multipliers
+- Better content overflow handling for smaller windows
+
+### 🔧 Technical Details
+- Updated gesture data mapping for new gesture types
+- Modified desktop base dimensions from 720×514 to 1440×1028
+- Added 1x=50% case to gesture scaling switch statement
+- Changed container from fixed height to min-height for scroll support
+
 ## [2.2.0] - 2025-08-14
 ### 🧹 Refactored
 - Consolidated duplicate CSS classes for cleaner codebase

@@ -7,14 +7,15 @@ body {
     font-family: 'Adobe Clean', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     font-size: 12px;
     user-select: none;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .container {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100vh;
     box-sizing: border-box;
 }
 
@@ -279,4 +280,22 @@ body {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid #3a3a3a;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #262626;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #555555;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #666666;
 }

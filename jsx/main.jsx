@@ -9,7 +9,7 @@ function createDeviceComposition(deviceType, multiplier) {
         // Base device specifications (1x scale)
         var baseSpecs = {
             iphone: { width: 393, height: 852 },
-            desktop: { width: 720, height: 514 }
+            desktop: { width: 1440, height: 1028 }
         };
         
         // Get base dimensions for selected device
@@ -253,9 +253,12 @@ function addGestureFromPanel(gestureType, multiplier) {
         // Don't rename the layer since expressions depend on the original name
         
         // Apply scaling based on resolution multiplier
-        // 2=100%, 3=150%, 4=200%, 5=250%, 6=300%
+        // 1=50%, 2=100%, 3=150%, 4=200%, 5=250%, 6=300%
         var scalePercentage;
         switch(multiplier) {
+            case 1:
+                scalePercentage = 50;
+                break;
             case 2:
                 scalePercentage = 100;
                 break;
