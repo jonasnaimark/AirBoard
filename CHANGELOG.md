@@ -11,7 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.4] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.5] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🎨 UI Update
+- **Elevation Dropdown**: Changed from "Elevation 1-5" to "Elevation 0-4" for better indexing
+
+### 🔧 Technical Details
+- Updated elevation dropdown options in index.html
+- Values now range from 0-4 instead of 1-5
+- Associated with AirBoard_v3.2.5.zxp
+
+## [3.2.4] - 2025-08-15
 ### ✨ Added
 - **Automatic Composition Organization**: New compositions now automatically move to organized folders
 - **iPhone Compositions**: Go to "01 - Compositions > Native" folder
