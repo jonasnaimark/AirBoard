@@ -7,15 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### 🚧 In Development
+- **Material Blur Feature**: Add Blur button functionality for Material 1-5 presets
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.8] - 2025-08-15 ✨ **CURRENT RELEASE**
-### ✨ Added
-- **Add Shadow Functionality**: Add Shadow button now applies resolution-based elevation shadow presets
+## [3.2.8] - 2025-08-15 ✨ **CURRENT RELEASE** - ELEVATION SHADOWS IMPLEMENTED
+### ✨ Added - MAJOR FEATURE MILESTONE
+- **🎯 ELEVATION SHADOWS FEATURE COMPLETE**: Add Shadow button now fully functional with resolution-based elevation shadow presets
 - **Smart Preset Selection**: Automatically selects correct .ffx file based on resolution multiplier and elevation level
 - **Dynamic Path Building**: Creates paths like "assets/presets/Shadows/2x/2x - Elevation 1.ffx"
 - **Layer Target Detection**: Applies shadow to currently selected layer in active composition
+- **Complete Preset Library**: All 30 elevation shadow presets included (0-4 elevations × 1x-6x resolutions)
 
 ### 🔧 Technical Details
 - Added `addShadowFromPanel()` ExtendScript function with resolution and elevation mapping
