@@ -1,180 +1,193 @@
-# AirBoard
+# AirBoard After Effects Plugin
 
 **Professional device mockup and gesture animation tools for Adobe After Effects**
 
 [![GitHub release](https://img.shields.io/github/v/release/jonasnaimark/AirBoard?include_prereleases)](https://github.com/jonasnaimark/AirBoard/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
 
-> Streamline your motion design workflow with automated device compositions, gesture animations, and professional effects.
+> Streamline your motion design workflow with automated device compositions, gesture animations, components, and professional effects.
 
 ## ✨ Features
 
 ### 📱 Device Templates
 - **Automated Composition Creation**: Generate iPhone and Desktop compositions with precise dimensions
-- **Resolution Scaling**: 2x to 6x multiplier support for high-resolution projects  
+- **Resolution Scaling**: 1x-6x multiplier support (1x=50%, 2x=100%, 3x=150%, 4x=200%, 5x=250%, 6x=300%)
 - **Template Integration**: Automatic iPhone UI template import with smart scaling
 - **Mathematical Precision**: Accurate scaling calculations for different resolution multipliers
 
 ### 🎯 Gesture Presets
-- **Tap & Long Press Animations**: Pre-built gesture animations ready to use
-- **Smart Scaling**: Automatic resolution-based scaling (2x=100%, 3x=150%, 4x=200%, 5x=250%, 6x=300%)
+- **Complete Animation Library**: Tap, Long Press, Double Tap, Mouse Click animations
+- **Smart Scaling**: Automatic resolution-based scaling matching device templates
 - **Playhead Positioning**: Layers start exactly where your playhead is positioned
 - **Expression-Ready**: Maintains proper layer names for After Effects expressions
 
-### 🎨 Effect Presets  
-- **Squircle Creation**: Generate perfect rounded-rectangle shapes with customizable parameters
+### 🧩 Component Library
+- **Ms Counter**: Millisecond timer component for precise timing displays
+- **Dot Loader**: Animated loading indicator component
+- **Smart Positioning**: Automatic centering with keyframe support
+- **Scalable System**: Ready for additional components
+
+### 🎨 Effect Presets
+- **Squircle Creation**: Generate perfect rounded-rectangle shapes
 - **Rectangle Replacement**: Transform existing shapes into squircles
 - **Professional Quality**: Industry-standard effects for motion graphics
+
+### 🏔️ Elevation System (Ready for Implementation)
+- **Shadow Levels**: 1-5 elevation options for depth hierarchy
+- **UI Complete**: Dropdown and button ready for shadow functionality
 
 ## 🚀 Quick Start
 
 ### Installation
 
-1. **Download** the latest `AirBoard_v[x.x.x].zxp` from [Releases](https://github.com/jonasnaimark/AirBoard/releases)
+1. **Download** the latest `AirBoard_v2.8.6.zxp` from [Releases](https://github.com/jonasnaimark/AirBoard/releases)
 2. **Install** using ZXP Installer or Adobe Extension Manager
 3. **Access** via `Window > Extensions > AirBoard` in After Effects
 
-### Basic Usage
+### Basic Workflow
 
 #### Creating Device Compositions
 1. Select device type (iPhone/Desktop)
-2. Set resolution multiplier (2-6x)
+2. Set resolution multiplier (1x-6x, 2x recommended)
 3. Click "Make Comp"
 4. Composition created with proper dimensions and imported templates
 
 #### Adding Gesture Animations
 1. Open your device composition
 2. Position playhead where you want the gesture to start
-3. Select gesture type (Tap/Long Press) 
-4. Click "Add Gesture"
-5. Gesture layer appears with correct scaling and timing
+3. Select gesture type (Tap/Long Press/Double Tap/Mouse Click)
+4. Set resolution multiplier to match your composition
+5. Click "Add Gesture" - gesture appears with perfect scaling and timing
 
-#### Using Effects
+#### Using Components
+1. Position playhead where you want the component
+2. Select component (Ms Counter/Dot Loader)  
+3. Set resolution multiplier to match your composition
+4. Click "Add Component" - component appears centered and scaled
+
+#### Applying Effects
 1. Select layer in timeline
-2. Choose effect from AirBoard panel
-3. Adjust parameters as needed
-4. Apply effect to layer
+2. Choose effect from AirBoard panel (Add Squircle/Replace Rect)
+3. Effect applied with professional results
 
-## 📋 What's New
+## 📋 Current Version: v2.8.6
 
-### v2.1.2 - Latest Release
-- ✨ **Playhead Positioning**: Gesture layers now start at current playhead position
-- 🎯 **Enhanced Workflow**: Move playhead to desired frame, click "Add Gesture", layer appears exactly there
-- 🔧 **Template Updates**: Improved gesture animations in template file
+### Major Features ✅
+- **Device Templates**: iPhone & Desktop with resolution scaling
+- **Gesture Presets**: Complete animation library with playhead positioning
+- **Components**: Ms Counter & Dot Loader with smart positioning
+- **Effect Presets**: Squircle and Rectangle replacement tools
+- **Unified UI**: Consistent spacing and dark theme
+- **Performance Optimized**: Template caching and efficient layer targeting
 
-### v2.0.5 - Scaling Solution 🏆
-- 🎯 **Major Fix**: Gesture layer scaling now works correctly regardless of quantity added
-- ✅ **Bulletproof Scaling**: 2x=100%, 3x=150%, 4x=200%, 5x=250%, 6x=300%
-- ✅ **Unlimited Gestures**: Add any number of gesture layers without scaling issues
+### In Development 🚧
+- **Elevation Shadows**: UI ready, functionality coming soon
 
-[View Full Changelog](CHANGELOG.md)
+## 🛠️ Technical Architecture
 
-## 🎬 Demo
+### Frontend (HTML/CSS/JavaScript)
+- **Panel Interface**: Modern dark theme matching After Effects
+- **Unified CSS System**: Single `.section` and `.control-row` classes for consistency
+- **Event Handling**: Button clicks trigger ExtendScript functions via CSInterface
 
-```
-Coming Soon: Video demonstrations of AirBoard workflows
-```
+### Backend (ExtendScript .jsx)
+- **Template Management**: Centralized AirBoard Templates.aep import system
+- **Layer Targeting**: Proven index-1 approach for reliable layer placement
+- **Scaling Engine**: Resolution-based transform calculations
+- **Playhead Integration**: Timeline-aware layer positioning
 
-## 📊 Device Support
+### Build System
+- **ZXP Packaging**: Digital signing with certificate authentication
+- **Version Management**: Semantic versioning in manifest.xml
+- **Git Workflow**: Feature branches merged to main with comprehensive commit messages
 
-| Device | Base Resolution | Scaling | Template |
-|--------|----------------|---------|----------|
-| iPhone | 393 × 852 | 2x - 6x | iPhone 14 UI |
-| Desktop | 720 × 514 | 2x - 6x | Custom |
+## 📚 Documentation
 
-## 🛠️ Technical Details
+### For Developers
+- **[DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)**: Technical patterns, scaling logic, and implementation details
+- **[UI_PATTERNS.md](UI_PATTERNS.md)**: Adding new sections and maintaining UI consistency
+- **[VERSION_GUIDE.md](VERSION_GUIDE.md)**: Version management and release process
 
-### System Requirements
-- **Adobe After Effects** 2020 or later
+### For Users
+- **[CHANGELOG.md](CHANGELOG.md)**: Detailed version history and feature updates
+
+## 📊 Resolution Scaling Reference
+
+| Multiplier | Scale % | Use Case |
+|------------|---------|----------|
+| 1x | 50% | Low-density screens, thumbnails |
+| 2x | 100% | Standard density, baseline scaling |
+| 3x | 150% | High-density mobile screens |
+| 4x | 200% | Ultra-high density displays |
+| 5x | 250% | Large format, presentation |
+| 6x | 300% | Maximum density, detailed work |
+
+## 🎯 Key Breakthrough: v2.0.5 Scaling Solution
+
+The most critical technical achievement was solving the gesture layer scaling issue:
+
+- **Problem**: Layers would scale incorrectly when multiple gestures were added
+- **Solution**: Index-1 targeting with layer count verification
+- **Result**: Bulletproof scaling that works with unlimited gesture additions
+- **Pattern**: Now used for all new features (Components, future additions)
+
+## 🧩 System Requirements
+
+- **Adobe After Effects**: 2020 or later (2020-2025 supported)
 - **Operating System**: macOS or Windows
 - **Memory**: 4GB RAM minimum (8GB recommended)
 
-### Tech Stack
-- **Frontend**: HTML5, CSS3, JavaScript
-- **Backend**: Adobe ExtendScript (.jsx)
-- **Framework**: CEP (Common Extensibility Platform)
-- **Build**: ZXP packaging with digital signing
+## 🔧 Development
+
+### Contributing Guidelines
+
+1. **UI Changes**: Use unified `.section` and `.control-row` classes
+2. **New Features**: Follow gesture/component implementation patterns
+3. **Scaling Logic**: Always implement resolution-based transform scaling
+4. **Version Management**: Update manifest.xml and follow semantic versioning
+5. **Documentation**: Update relevant .md files with new patterns
 
 ### Project Structure
 ```
 AirBoard/
 ├── CSXS/                   # Extension configuration
-│   └── manifest.xml        # CEP manifest
+│   └── manifest.xml        # CEP manifest with version
 ├── client/                 # Frontend UI
-│   ├── css/styles.css     # Dark theme styling
-│   ├── index.html         # Main panel interface
-│   └── js/main.js         # UI interaction logic
-├── jsx/                   # After Effects scripts
-│   └── main.jsx          # Core functionality
-├── assets/               # Resources
+│   ├── css/styles.css     # Unified dark theme styling
+│   ├── index.html         # Semantic section-based layout
+│   └── js/main.js         # UI interaction and event handling
+├── jsx/                   # After Effects automation
+│   └── main.jsx          # Core scaling and positioning logic
+├── assets/               # Resources and templates
+│   ├── templates/        # AirBoard Templates.aep
 │   ├── presets/         # Effect presets
-│   └── templates/       # Device templates
-└── dist/                # Built ZXP files
+│   └── [devices/gestures/] # Organized asset folders
+└── dist/                # Built ZXP releases
 ```
-
-## 🔧 Development
-
-### Building from Source
-
-```bash
-# Clone repository
-git clone https://github.com/jonasnaimark/AirBoard.git
-cd AirBoard
-
-# Build ZXP package
-./ZXPSignCmd -sign . "AirBoard_v2.1.2.zxp" certificate.p12 password
-```
-
-### Contributing
-
-1. Read [DEVELOPMENT_RULES.md](DEVELOPMENT_RULES.md)
-2. Fork the repository
-3. Create a feature branch
-4. Make your changes
-5. Submit a pull request
-
-### Development Guidelines
-- Follow atomic commit practices
-- Test in multiple AE versions
-- Maintain backward compatibility
-- Document new features
-- Update CHANGELOG.md for releases
-
-## 🎨 UI Features
-
-- **Dark Theme**: Matches After Effects interface perfectly
-- **Responsive Design**: Adapts to panel resizing
-- **Professional Controls**: Custom dropdowns, buttons, and inputs
-- **Accessibility**: Keyboard navigation and focus management
-
-## 🐛 Known Issues
-
-- None currently reported for v2.1.2
 
 ## 🗺️ Roadmap
 
-- [ ] Additional device presets (Android, iPad)
-- [ ] More gesture animation types
-- [ ] Advanced scaling options
-- [ ] Custom template support
+### Planned Features
+- **Elevation Shadows**: Complete shadow system implementation
+- **Additional Components**: Progress bars, buttons, icons
+- **Advanced Gestures**: Pinch, swipe, multi-touch animations
+- **Custom Templates**: User-defined device templates
+
+### Technical Improvements
+- **Performance**: Further template caching optimizations
+- **UI**: Additional accessibility features
+- **Documentation**: Video tutorials and advanced guides
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Proprietary - All rights reserved
 
 ## 🙏 Acknowledgments
 
 - Built with [Adobe CEP](https://github.com/Adobe-CEP) framework
 - Developed collaboratively with [Claude Code](https://claude.ai/code)
-- Special thanks to the After Effects community
-
-## 💬 Support
-
-- **Issues**: [GitHub Issues](https://github.com/jonasnaimark/AirBoard/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/jonasnaimark/AirBoard/discussions)
-- **Documentation**: [Wiki](https://github.com/jonasnaimark/AirBoard/wiki)
+- Thanks to the After Effects community for feedback and testing
 
 ---
 
-**Made with ❤️ for the After Effects community**
+**Made with ❤️ for the After Effects community | Current Version: v2.8.6**

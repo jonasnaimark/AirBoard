@@ -168,10 +168,154 @@ git push origin v1.0.0
 
 ### 4. Build Distribution
 ```bash
-# Build ZXP file
-./build/build.sh v1.0.0
+# Current ZXP build process
+rm -rf temp-package && mkdir temp-package
+cp -r CSXS client jsx assets temp-package/
+./ZXPSignCmd -sign temp-package dist/AirBoard_v2.8.6.zxp new-cert.p12 mypassword
+rm -rf temp-package
 
-# Output: dist/AirBoard_v1.0.0.zxp
+# Verify build
+ls -la dist/AirBoard_v2.8.6.zxp
+
+# Output: dist/AirBoard_v[VERSION].zxp
+```
+
+## 🚀 Quick ZXP Build Guide
+
+### Complete ZXP Build Process
+
+**IMPORTANT: Always increment version number before building!**
+
+#### Step 1: Update Version in Manifest
+```bash
+# Edit CSXS/manifest.xml
+# Change: ExtensionBundleVersion="2.8.6" 
+# To:     ExtensionBundleVersion="2.8.7"
+```
+
+#### Step 2: Build ZXP with Incremented Version
+```bash
+# Create clean build environment
+rm -rf temp-package && mkdir temp-package
+
+# Copy all plugin files
+cp -r CSXS client jsx assets temp-package/
+
+# Build ZXP with NEW version number
+./ZXPSignCmd -sign temp-package dist/AirBoard_v2.8.7.zxp new-cert.p12 mypassword
+
+# Clean up
+rm -rf temp-package
+```
+
+#### Step 3: Verify Build
+```bash
+# Check the new ZXP exists in dist folder
+ls -la dist/AirBoard_v2.8.7.zxp
+
+# Should show file with current timestamp
+```
+
+### ZXP Naming Convention
+
+**Format**: `AirBoard_v[MAJOR].[MINOR].[PATCH].zxp`
+
+**Examples**:
+- `AirBoard_v2.8.6.zxp` → `AirBoard_v2.8.7.zxp` (patch increment)
+- `AirBoard_v2.8.9.zxp` → `AirBoard_v2.9.0.zxp` (minor increment)
+- `AirBoard_v2.9.9.zxp` → `AirBoard_v3.0.0.zxp` (major increment)
+
+### ZXP Storage Location
+
+**Location**: `dist/` folder in project root
+
+**Structure**:
+```
+AirBoard/
+├── dist/
+│   ├── AirBoard_v2.8.5.zxp  ← Previous versions
+│   ├── AirBoard_v2.8.6.zxp
+│   ├── AirBoard_v2.8.7.zxp  ← Latest version
+│   └── _Archive/            ← Old versions (optional)
+├── CSXS/
+├── client/
+└── jsx/
+```
+
+### Common Build Issues
+
+#### Issue: ZXP not appearing in dist/
+**Solution**: Make sure you're using the correct path:
+```bash
+# Correct: Uses dist/ folder
+./ZXPSignCmd -sign temp-package dist/AirBoard_v2.8.7.zxp new-cert.p12 mypassword
+
+# Wrong: Missing dist/ folder
+./ZXPSignCmd -sign temp-package AirBoard_v2.8.7.zxp new-cert.p12 mypassword
+```
+
+#### Issue: Version number confusion
+**Solution**: Always check manifest.xml version matches ZXP filename:
+```bash
+# Manifest shows: ExtensionBundleVersion="2.8.7"
+# ZXP should be: AirBoard_v2.8.7.zxp
+```
+
+#### Issue: "Signed successfully" but no file
+**Solution**: Check if dist/ folder exists:
+```bash
+# Create dist folder if missing
+mkdir -p dist
+```
+
+## Current Versioning Practices (v2.8.6)
+
+### Quick Version Update Workflow
+```bash
+# 1. Update version in manifest
+# Edit CSXS/manifest.xml: ExtensionBundleVersion="2.8.7"
+
+# 2. Build ZXP
+./ZXPSignCmd -sign temp-package dist/AirBoard_v2.8.7.zxp new-cert.p12 mypassword
+
+# 3. Commit with descriptive message
+git add .
+git commit -m "v2.8.7: Brief description of changes
+
+Detailed technical changes and improvements...
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 4. Push to GitHub
+git push origin main
+```
+
+### Version Numbering Strategy
+
+**Current Major Versions:**
+- **v2.x.x**: Modern CEP-based plugin with unified UI system
+- **v3.x.x**: Reserved for future major architectural changes
+
+**Minor Version Increments:**
+- **v2.1.x** → **v2.2.x**: New major features (Components system)
+- **v2.8.x** → **v2.9.x**: UI refactoring and new sections
+
+**Patch Version Increments:**
+- **v2.8.1** → **v2.8.2**: Bug fixes, small improvements
+- Performance optimizations, styling tweaks
+
+### ZXP Association Pattern
+
+Every commit should associate the ZXP file:
+```markdown
+v2.8.6: Update scrollbar color to darker theme
+
+- Technical changes listed here
+- Associated with AirBoard_v2.8.6.zxp
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
 ## Version History Tracking

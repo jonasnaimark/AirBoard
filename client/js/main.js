@@ -184,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
 });
