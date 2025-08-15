@@ -1509,3 +1509,53 @@ function findRectangleData(layer) {
         return null;
     }
 }
+
+// Add Shadow functionality - Apply elevation shadow presets based on resolution and elevation
+function addShadowFromPanel(elevationType, resolutionMultiplier) {
+    try {
+        // Check if we have a selected layer
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            return "error";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (!selectedLayers || selectedLayers.length === 0) {
+            alert("Please select a layer to apply shadow to.");
+            return "error";
+        }
+        
+        var targetLayer = selectedLayers[0]; // Apply to first selected layer
+        
+        // Build the preset file path based on resolution and elevation
+        var resolutionFolder = resolutionMultiplier + "x";
+        var presetFileName = resolutionMultiplier + "x - Elevation " + elevationType + ".ffx";
+        var presetPath = extensionRoot + "/assets/presets/Shadows/" + resolutionFolder + "/" + presetFileName;
+        var presetFile = new File(presetPath);
+        
+        // Check alternate path separator for Windows compatibility
+        if (!presetFile.exists) {
+            presetPath = extensionRoot + "\\assets\\presets\\Shadows\\" + resolutionFolder + "\\" + presetFileName;
+            presetFile = new File(presetPath);
+        }
+        
+        if (!presetFile.exists) {
+            alert("Cannot find shadow preset file:\n" + presetFileName + "\n\nExpected location:\n" + presetPath);
+            return "error";
+        }
+        
+        // Apply the preset to the selected layer
+        try {
+            targetLayer.applyPreset(presetFile);
+            return "success";
+        } catch(applyError) {
+            alert("Error applying shadow preset: " + applyError.toString());
+            return "error";
+        }
+        
+    } catch(e) {
+        alert("Error adding shadow: " + e.toString());
+        return "error";
+    }
+}

@@ -226,6 +226,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Add Shadow button handler
+    var addShadowButton = document.getElementById('addShadow');
+    addShadowButton.addEventListener('click', function() {
+        console.log('Add Shadow clicked');
+        
+        // Get elevation type and resolution multiplier
+        var elevationType = document.getElementById('elevationType').value;
+        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value);
+        
+        console.log('Elevation Type:', elevationType, 'Resolution Multiplier:', resolutionMultiplier);
+        
+        // Disable button while working
+        addShadowButton.disabled = true;
+        addShadowButton.textContent = 'Adding...';
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script
+        var script = 'addShadowFromPanel("' + elevationType + '", ' + resolutionMultiplier + ')';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('Shadow result:', result);
+            // Re-enable button
+            addShadowButton.disabled = false;
+            addShadowButton.textContent = 'Add Shadow';
+        });
+    });
+    
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background

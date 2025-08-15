@@ -7,11 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### 🚧 In Development
-- **Elevation Shadows**: UI complete, functionality implementation pending
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.6] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.8] - 2025-08-15 ✨ **CURRENT RELEASE**
+### ✨ Added
+- **Add Shadow Functionality**: Add Shadow button now applies resolution-based elevation shadow presets
+- **Smart Preset Selection**: Automatically selects correct .ffx file based on resolution multiplier and elevation level
+- **Dynamic Path Building**: Creates paths like "assets/presets/Shadows/2x/2x - Elevation 1.ffx"
+- **Layer Target Detection**: Applies shadow to currently selected layer in active composition
+
+### 🔧 Technical Details
+- Added `addShadowFromPanel()` ExtendScript function with resolution and elevation mapping
+- Added JavaScript event handler for Add Shadow button with elevation and resolution detection
+- Path format: `assets/presets/Shadows/{resolution}x/{resolution}x - Elevation {elevation}.ffx`
+- Supports all elevation levels (0-4) and resolution multipliers (1x-6x)
+- Full error handling for missing presets and layer selection
+- Associated with AirBoard_v3.2.8.zxp
+
+## [3.2.6] - 2025-08-15
 ### 🎨 UI Update
 - **Elevation Dropdown**: Changed to "Elevation 1-4" (removed Elevation 0, kept 4 options)
 
