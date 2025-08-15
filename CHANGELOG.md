@@ -11,7 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.0] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.1] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🔧 Updated
+- **Additional User Changes**: Latest user modifications included
+- **Updated Build**: Fresh build with recent improvements
+
+### 🔧 Technical Details
+- Associated with AirBoard_v3.2.1.zxp
+
+## [3.2.0] - 2025-08-15
 ### 🔧 Updated
 - **User Changes Incorporated**: Includes latest user modifications and improvements
 - **Fresh Build**: Clean rebuild with all recent updates
