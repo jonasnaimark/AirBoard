@@ -537,13 +537,26 @@ function addComponentFromPanel(componentType, multiplier) {
         
         // Handle positioning - check if property has keyframes  
         try {
+            // Only place Ms Counter (timer) in top-left, others go to center
+            var isTimer = (componentType === "timer");
+            
             if (componentLayer.transform.position.numKeys > 0) {
-                // If there are keyframes, offset all keyframe values to top-left with padding
+                // If there are keyframes, offset all keyframe values
                 var currentPos = componentLayer.transform.position.value;
-                var topLeftX = 60; // 60px padding from left edge
-                var topLeftY = 60; // 60px padding from top edge
-                var offsetX = topLeftX - currentPos[0];
-                var offsetY = topLeftY - currentPos[1];
+                var targetX, targetY, offsetX, offsetY;
+                
+                if (isTimer) {
+                    // Top-left for timer
+                    targetX = 60; // 60px padding from left edge
+                    targetY = 60; // 60px padding from top edge
+                } else {
+                    // Center for other components
+                    targetX = comp.width / 2;
+                    targetY = comp.height / 2;
+                }
+                
+                offsetX = targetX - currentPos[0];
+                offsetY = targetY - currentPos[1];
                 
                 for (var p = 1; p <= componentLayer.transform.position.numKeys; p++) {
                     var keyTime = componentLayer.transform.position.keyTime(p);
@@ -552,8 +565,14 @@ function addComponentFromPanel(componentType, multiplier) {
                     componentLayer.transform.position.setValueAtTime(keyTime, newValue);
                 }
             } else {
-                // No keyframes, just set static position to top-left with padding
-                componentLayer.transform.position.setValue([60, 60]);
+                // No keyframes, set static position
+                if (isTimer) {
+                    // Top-left for timer
+                    componentLayer.transform.position.setValue([60, 60]);
+                } else {
+                    // Center for other components
+                    componentLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+                }
             }
         } catch(posError) {
             $.writeln("Position placement failed: " + posError.toString());

@@ -11,7 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.1] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.2.3] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🎯 Fixed
+- **Selective Component Positioning**: Only Ms Counter places in top-left corner, Dot Loader and other components return to center positioning
+- **Better UX**: Timer in top-left, animations/loaders centered as expected
+
+### 🔧 Technical Details
+- Added component type check: `var isTimer = (componentType === "timer")`
+- Ms Counter (timer): Top-left position [60, 60]
+- All other components: Center position [comp.width/2, comp.height/2]
+- Handles both keyframed and static positioning properly
+- Associated with AirBoard_v3.2.3.zxp
+
+## [3.2.1] - 2025-08-15
 ### 🔧 Updated
 - **Additional User Changes**: Latest user modifications included
 - **Updated Build**: Fresh build with recent improvements
