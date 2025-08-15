@@ -99,9 +99,6 @@ function createDeviceComposition(deviceType, multiplier) {
                         // Enable collapse transformations for crisp rendering
                         templateLayer.collapseTransformation = true;
                         
-                        // Lock the layer
-                        templateLayer.locked = true;
-                        
                         // Move to bottom of layer stack
                         templateLayer.moveToEnd();
                     }
@@ -151,6 +148,10 @@ function addGestureFromPanel(gestureType, multiplier) {
             doubletap: {
                 compName: "Gesture - Double Tap",
                 layerName: "Gesture - Double Tap"
+            },
+            mouseclick: {
+                compName: "Mouse - Click",
+                layerName: "Mouse - Click"
             }
         };
         
