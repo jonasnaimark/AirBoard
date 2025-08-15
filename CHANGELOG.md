@@ -11,7 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.1.6] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.1.7] - 2025-08-15 ✨ **CURRENT RELEASE**
+### ✨ Added
+- **Automatic Finder Reveal**: Finder Folders now automatically opens Finder window to show the newly created project structure
+- **Enhanced UX**: No need to manually navigate to find your new folders - they open automatically
+
+### 🔧 Technical Details
+- Added `rootFolder.execute()` calls after successful folder creation and project saving
+- Finder opens even if project save is cancelled (folders still created successfully)
+- Graceful error handling for Finder opening failures
+- Associated with AirBoard_v3.1.7.zxp
+
+## [3.1.6] - 2025-08-15
 ### 🔧 Fixed
 - **Correct Save Dialog Method**: Using `saveDlg()` method on File object instead of `File.saveDialog()`
 - **Proper Folder Targeting**: File object approach should correctly open dialog in "03 - AE" subfolder

@@ -1254,11 +1254,32 @@ function createFinderFoldersFromPanel() {
                 try {
                     app.project.save(saveFile);
                     alert("Project folder structure created successfully!\nProject saved to: " + saveFile.fsName);
+                    
+                    // Open Finder to reveal the project folder structure
+                    try {
+                        rootFolder.execute();
+                    } catch(finderError) {
+                        $.writeln("Could not open Finder: " + finderError.toString());
+                    }
                 } catch(saveError) {
                     alert("Folder structure created, but could not save project: " + saveError.toString());
+                    
+                    // Still try to open Finder even if save failed
+                    try {
+                        rootFolder.execute();
+                    } catch(finderError) {
+                        $.writeln("Could not open Finder: " + finderError.toString());
+                    }
                 }
             } else {
                 alert("Project folder structure created successfully!\nProject save was cancelled.");
+                
+                // Still open Finder to show the created folder structure
+                try {
+                    rootFolder.execute();
+                } catch(finderError) {
+                    $.writeln("Could not open Finder: " + finderError.toString());
+                }
             }
         }
         
