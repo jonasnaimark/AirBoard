@@ -11,7 +11,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.0.0] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.1.6] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🔧 Fixed
+- **Correct Save Dialog Method**: Using `saveDlg()` method on File object instead of `File.saveDialog()`
+- **Proper Folder Targeting**: File object approach should correctly open dialog in "03 - AE" subfolder
+- **Grok's Solution**: Implemented recommended ExtendScript best practice for subfolder dialogs
+
+### 🔧 Technical Details
+- Changed from `File.saveDialog()` to `defaultFile.saveDlg()`
+- Creates File object with full path to AE folder as starting location
+- Includes file type filter for .aep files
+- Should finally open dialog in correct subfolder location
+- Associated with AirBoard_v3.1.6.zxp
+
+## [3.1.5] - 2025-08-15
+### 🔧 Fixed
+- **Alternative Save Dialog Location Approach**: Using File object with full path instead of working directory change
+- **Simplified Implementation**: Removed working directory management, using direct path approach
+
+### 🔧 Technical Details
+- Creates File object with complete path to AE folder as dialog default
+- Removed `Folder.current` approach that wasn't working
+- Should force dialog to navigate to specified folder location
+- Associated with AirBoard_v3.1.5.zxp
+
+## [3.1.4] - 2025-08-15
+### 🔧 Fixed
+- **Save Dialog Actually Opens in AE Folder**: Fixed save dialog to truly open inside "03 - AE" folder, not root folder
+- **Working Directory Management**: Temporarily changes to AE folder for dialog, then restores original directory
+
+### 🔧 Technical Details
+- Uses `Folder.current` to change working directory before opening save dialog
+- Properly restores original working directory after dialog completes
+- Dialog now opens inside "03 - AE" folder showing contents, not parent folder structure
+- Associated with AirBoard_v3.1.4.zxp
+
+## [3.1.3] - 2025-08-15
+### 🔧 Fixed
+- **Save Dialog Defaults to AE Folder**: File save dialog now opens directly in "03 - AE" folder location
+- **Automatic .aep Extension**: Ensures filename always includes .aep extension, even if user doesn't type it
+- **Better UX**: No need to navigate to correct folder, extension automatically handled
+
+### 🔧 Technical Details
+- Modified `File.saveDialog()` to use full file path as default (includes folder location)
+- Added regex check to ensure .aep extension is present in final filename
+- Dialog starts in correct "03 - AE" folder but still saves there regardless of navigation
+- Associated with AirBoard_v3.1.3.zxp
+
+## [3.1.2] - 2025-08-15
+### ✨ Added
+- **Custom Filename Dialog**: Finder Folders now shows file save dialog to enter custom .aep filename
+- **Smart Default**: Pre-fills current project name as default, fully editable
+- **Save Location Lock**: Ensures file always saves to "03 - AE" folder regardless of dialog navigation
+
+### 🔧 Technical Details
+- Added `File.saveDialog()` for custom filename input after folder creation
+- Extracts filename from dialog and saves to designated "03 - AE" folder
+- Handles user cancellation gracefully with appropriate feedback
+- Associated with AirBoard_v3.1.2.zxp
+
+## [3.1.1] - 2025-08-15
+### 🔧 Fixed
+- **No Root Folder Created**: Finder Folders now creates the 6 folders directly in selected location (no "AirBoard Project" wrapper folder)
+- **Cleaner Structure**: Folders created directly where user chooses, more intuitive workflow
+
+### 🔧 Technical Details
+- Removed automatic root folder creation in `createFinderFoldersFromPanel()`
+- Uses selected folder directly as root location for folder structure
+- Still saves AE project to "03 - AE" folder within selected location
+- Associated with AirBoard_v3.1.1.zxp
+
+## [3.1.0] - 2025-08-15
+### ✨ Added
+- **Finder Folders Functionality**: Clicking "Finder Folders" button creates complete project folder structure in file system
+- **File System Integration**: Shows native folder selection dialog to choose where to create project structure
+- **Automatic Project Saving**: Saves current After Effects project to "03 - AE" folder within created structure
+- **Smart Project Naming**: Uses current project filename or defaults to "AirBoard Project"
+
+### 📁 Finder Folder Structure Created
+- **01 - Assets** (Figma, Images/Desktop/Native, Reference/Stills/Videos, Vector, Video)
+- **02 - Exports** (Video, Lottie) 
+- **03 - AE** (Where AE project gets saved)
+- **04 - C4D**
+- **05 - Prototypes**
+- **06 - Decks**
+
+### 🔧 Technical Details
+- Implemented `createFinderFoldersFromPanel()` ExtendScript function
+- Added `createFinderFolderStructure()` recursive helper for file system folders
+- Uses `Folder.selectDialog()` for native folder selection
+- Automatic project save to designated AE folder
+- Full error handling and user feedback
+- Associated with AirBoard_v3.1.0.zxp
+
+## [3.0.0] - 2025-08-15
 ### 🔄 Rolled Back to Stable Version
 - **Removed All Automatic Organization**: Removed all automatic .aep and composition organization code that wasn't working
 - **Clean AE Folders Only**: Back to the stable version with working "AE Folders" button functionality

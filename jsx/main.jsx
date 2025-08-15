@@ -1168,6 +1168,129 @@ function createFolderStructure(parent, folders) {
     }
 }
 
+// Finder Folders functionality - Create folder structure in file system
+function createFinderFoldersFromPanel() {
+    try {
+        // Check if we have a project
+        if (!app.project) {
+            alert("Please open a project first.");
+            return "error";
+        }
+        
+        // Show folder selection dialog
+        var selectedFolder = Folder.selectDialog("Choose location to create project folder structure");
+        if (!selectedFolder) {
+            return "cancelled"; // User cancelled
+        }
+        
+        // Get project name (without extension) for saving the AE file
+        var projectFile = app.project.file;
+        var projectName = "AirBoard Project";
+        if (projectFile) {
+            projectName = projectFile.name.replace(/\.[^\.]*$/, ""); // Remove extension
+        }
+        
+        // Use selected folder directly as root (no additional folder created)
+        var rootFolder = selectedFolder;
+        
+        // Define the finder folder structure
+        var finderFolderStructure = [
+            {
+                name: "01 - Assets",
+                subfolders: [
+                    { name: "Figma" },
+                    {
+                        name: "Images",
+                        subfolders: [
+                            { name: "Desktop" },
+                            { name: "Native" }
+                        ]
+                    },
+                    {
+                        name: "Reference",
+                        subfolders: [
+                            { name: "Stills" },
+                            { name: "Videos" }
+                        ]
+                    },
+                    { name: "Vector" },
+                    { name: "Video" }
+                ]
+            },
+            {
+                name: "02 - Exports",
+                subfolders: [
+                    { name: "Video" },
+                    { name: "Lottie" }
+                ]
+            },
+            { name: "03 - AE" },
+            { name: "04 - C4D" },
+            { name: "05 - Prototypes" },
+            { name: "06 - Decks" }
+        ];
+        
+        // Create the folder structure in file system
+        createFinderFolderStructure(rootFolder, finderFolderStructure);
+        
+        // Save current AE project to 03 - AE folder with custom filename
+        var aeFolder = new Folder(rootFolder.fsName + "/03 - AE");
+        if (aeFolder.exists) {
+            // Create File object with path to AE subfolder + default filename
+            var defaultFileName = projectName + ".aep";
+            var defaultFile = new File(aeFolder.fsName + "/" + defaultFileName);
+            
+            // Open save dialog defaulting to the AE subfolder using saveDlg()
+            var saveFile = defaultFile.saveDlg("Save After Effects project as:", "After Effects Project:*.aep");
+            
+            if (saveFile) {
+                // Ensure .aep extension is included
+                var fileName = saveFile.name;
+                if (!fileName.match(/\.aep$/i)) {
+                    fileName = fileName + ".aep";
+                    saveFile = new File(saveFile.parent.fsName + "/" + fileName);
+                }
+                
+                try {
+                    app.project.save(saveFile);
+                    alert("Project folder structure created successfully!\nProject saved to: " + saveFile.fsName);
+                } catch(saveError) {
+                    alert("Folder structure created, but could not save project: " + saveError.toString());
+                }
+            } else {
+                alert("Project folder structure created successfully!\nProject save was cancelled.");
+            }
+        }
+        
+        return "success";
+        
+    } catch(e) {
+        alert("Error creating finder folder structure: " + e.toString());
+        return "error";
+    }
+}
+
+// Recursive helper function to create folder structure in file system
+function createFinderFolderStructure(parentFolder, folders) {
+    for (var i = 0; i < folders.length; i++) {
+        var folderDef = folders[i];
+        
+        // Create folder in file system
+        var newFolder = new Folder(parentFolder.fsName + "/" + folderDef.name);
+        if (!newFolder.exists) {
+            if (!newFolder.create()) {
+                $.writeln("Could not create folder: " + newFolder.fsName);
+                continue;
+            }
+        }
+        
+        // Create subfolders if they exist
+        if (folderDef.subfolders && folderDef.subfolders.length > 0) {
+            createFinderFolderStructure(newFolder, folderDef.subfolders);
+        }
+    }
+}
+
 // Helper function to find rectangle data in a shape layer
 function findRectangleData(layer) {
     try {

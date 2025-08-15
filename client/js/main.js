@@ -205,6 +205,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Finder Folders button handler
+    var finderFoldersButton = document.getElementById('finderFolders');
+    finderFoldersButton.addEventListener('click', function() {
+        console.log('Finder Folders clicked');
+        
+        // Disable button while working
+        finderFoldersButton.disabled = true;
+        finderFoldersButton.textContent = 'Creating...';
+        
+        // Call the After Effects script to create finder folder structure
+        var script = 'createFinderFoldersFromPanel()';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('Finder Folders result:', result);
+            // Re-enable button
+            finderFoldersButton.disabled = false;
+            finderFoldersButton.textContent = 'Finder Folders';
+        });
+    });
+    
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
