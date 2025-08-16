@@ -69,7 +69,7 @@ body {
     font-size: 12.5px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     margin-bottom: 10px;
     flex-grow: 1;
@@ -117,6 +117,57 @@ body {
     flex: 1; /* Takes up remaining space to push buttons right */
 }
 
+/* Resolution display - styled like dropdown */
+.resolution-display {
+    position: relative;
+    height: 38px;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 50% 0 12px; /* Right padding for 50% width buttons */
+    display: flex;
+    align-items: center;
+    user-select: none;
+    pointer-events: none; /* Prevent text selection/interaction */
+}
+
+.resolution-display .number-controls {
+    position: absolute;
+    right: 6px; /* 6px from right edge */
+    top: 50%;
+    transform: translateY(-50%);
+    width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
+    display: flex;
+    gap: 8px; /* Reduced gap between buttons */
+    pointer-events: all; /* Allow button clicks */
+    padding: 0;
+}
+
+.resolution-display .number-controls .number-btn {
+    flex: 1; /* Each button takes equal space (25% of total row) */
+    margin: 0;
+    background-color: #2f2f2f;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+
+.resolution-display .number-controls .number-btn:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+
+.resolution-display .number-controls .number-btn:active {
+    transform: scale(0.98);
+}
+
 /* Dropdown styles */
 .dropdown {
     height: 38px;
@@ -129,7 +180,7 @@ body {
     padding: 0 32px 0 12px;
     outline: none;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     display: flex;
     align-items: center;
     min-width: 0;
@@ -228,7 +279,7 @@ body {
     text-align: center;
     padding: 0 55px 0 0px;
     outline: none;
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     -webkit-appearance: none;
     -moz-appearance: textfield;
 }
@@ -271,7 +322,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     outline: none;
 }
 

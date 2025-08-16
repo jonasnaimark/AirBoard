@@ -3,47 +3,57 @@
 // Wait for the page to load
 document.addEventListener('DOMContentLoaded', function() {
     // Create connection to After Effects
-    var csInterface = new CSInterface();
+    var csInterface;
+    var extensionPath = "";
+    
+    try {
+        csInterface = new CSInterface();
+        extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
+    } catch(e) {
+        console.log("CSInterface not available:", e);
+    }
     
     // Get the buttons
     var createButton = document.getElementById('createSquircle');
     var replaceButton = document.getElementById('replaceRectangle');
     var addDeviceButton = document.getElementById('addDevice');
     var addGestureButton = document.getElementById('addGesture');
-    var incrementBtn = document.querySelector('.number-btn.increment');
-    var decrementBtn = document.querySelector('.number-btn.decrement');
     var resolutionInput = document.getElementById('resolutionMultiplier');
-    var resolutionLabel = document.getElementById('resolutionLabel');
+    var resolutionText = document.getElementById('resolutionText');
     
-    // Get the current extension path
-    var extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
-    
-    // Function to update resolution label dynamically
-    function updateResolutionLabel() {
+    // Function to update resolution display text only
+    function updateResolutionDisplay() {
         var currentValue = resolutionInput.value;
-        resolutionLabel.textContent = 'Resolution @' + currentValue + 'x';
+        console.log('Updating display to:', currentValue);
+        resolutionText.textContent = 'Resolution @' + currentValue + 'x';
+        console.log('Display updated to:', resolutionText.textContent);
     }
     
-    // Update label when input changes
-    resolutionInput.addEventListener('input', updateResolutionLabel);
-    resolutionInput.addEventListener('change', updateResolutionLabel);
+    // Get the increment/decrement buttons and attach event listeners
+    var incrementBtn = document.querySelector('.resolution-display .number-btn.increment');
+    var decrementBtn = document.querySelector('.resolution-display .number-btn.decrement');
     
-    // Number input controls
     incrementBtn.addEventListener('click', function() {
+        console.log('Increment clicked');
         var currentValue = parseInt(resolutionInput.value);
-        var maxValue = parseInt(resolutionInput.max);
+        console.log('Current value:', currentValue);
+        var maxValue = 6; // Max resolution multiplier
         if (currentValue < maxValue) {
             resolutionInput.value = currentValue + 1;
-            updateResolutionLabel();
+            console.log('New value:', resolutionInput.value);
+            updateResolutionDisplay();
         }
     });
     
     decrementBtn.addEventListener('click', function() {
+        console.log('Decrement clicked');
         var currentValue = parseInt(resolutionInput.value);
-        var minValue = parseInt(resolutionInput.min);
+        console.log('Current value:', currentValue);
+        var minValue = 1; // Min resolution multiplier
         if (currentValue > minValue) {
             resolutionInput.value = currentValue - 1;
-            updateResolutionLabel();
+            console.log('New value:', resolutionInput.value);
+            updateResolutionDisplay();
         }
     });
     
@@ -67,7 +77,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button while working
         addDeviceButton.disabled = true;
-        addDeviceButton.textContent = 'Creating...';
+        
+        // Check if CSInterface is available
+        if (!csInterface) {
+            alert('CSInterface not available. Please run this in After Effects.');
+            addDeviceButton.disabled = false;
+            return;
+        }
         
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
@@ -81,7 +97,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Device creation result:', result);
             // Re-enable button
             addDeviceButton.disabled = false;
-            addDeviceButton.textContent = 'Add Device';
         });
     });
     
@@ -135,7 +150,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button while working
         addGestureButton.disabled = true;
-        addGestureButton.textContent = 'Adding...';
         
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
@@ -149,7 +163,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Gesture result:', result);
             // Re-enable button
             addGestureButton.disabled = false;
-            addGestureButton.textContent = 'Add Gesture';
         });
     });
     
@@ -166,7 +179,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button while working
         addComponentButton.disabled = true;
-        addComponentButton.textContent = 'Adding...';
+        
+        // Check if CSInterface is available
+        if (!csInterface) {
+            alert('CSInterface not available. Please run this in After Effects.');
+            addComponentButton.disabled = false;
+            return;
+        }
         
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
@@ -180,7 +199,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Component result:', result);
             // Re-enable button
             addComponentButton.disabled = false;
-            addComponentButton.textContent = 'Add Component';
         });
     });
     
@@ -191,7 +209,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button while working
         aeFoldersButton.disabled = true;
-        aeFoldersButton.textContent = 'Creating...';
         
         // Call the After Effects script to create folder structure
         var script = 'createAEFoldersFromPanel()';
@@ -201,7 +218,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('AE Folders result:', result);
             // Re-enable button
             aeFoldersButton.disabled = false;
-            aeFoldersButton.textContent = 'AE Folders';
         });
     });
     
@@ -212,7 +228,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button while working
         finderFoldersButton.disabled = true;
-        finderFoldersButton.textContent = 'Creating...';
         
         // Call the After Effects script to create finder folder structure
         var script = 'createFinderFoldersFromPanel()';
@@ -222,7 +237,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Finder Folders result:', result);
             // Re-enable button
             finderFoldersButton.disabled = false;
-            finderFoldersButton.textContent = 'Finder Folders';
         });
     });
     
@@ -239,7 +253,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Disable button while working
         addShadowButton.disabled = true;
-        addShadowButton.textContent = 'Adding...';
+        
+        // Check if CSInterface is available
+        if (!csInterface) {
+            alert('CSInterface not available. Please run this in After Effects.');
+            addShadowButton.disabled = false;
+            return;
+        }
         
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
@@ -253,7 +273,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Shadow result:', result);
             // Re-enable button
             addShadowButton.disabled = false;
-            addShadowButton.textContent = 'Add Shadow';
         });
     });
     
