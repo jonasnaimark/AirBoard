@@ -11,7 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.5.4] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.5.7] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🎨 UI Refinement
+- **Improved Separator**: Changed duration display separator from "-" to "/" for better readability
+- **Cleaner Format**: Now displays "Fade-out 150ms / 9f" and "Fade-in 250ms / 15f"
+
+### 🔧 Technical Details
+- Updated both `updateTransitionDurationDisplay()` and `updateFadeInDurationDisplay()` functions
+- Changed separator character from " - " to " / " for consistent formatting
+- Associated with AirBoard_v3.5.7.zxp
+
+## [3.5.6] - 2025-08-16
+### 🔧 Fixed
+- **Frame Count on Startup**: Duration text now shows frame counts immediately when plugin loads
+- **Complete Frame Display**: Both "Fade-out 150ms - 9f" and "Fade-in 250ms - 15f" display correctly on startup
+
+### 🔧 Technical Details
+- Added `updateTransitionDurationDisplay()` and `updateFadeInDurationDisplay()` calls to plugin initialization
+- Frame counts now appear immediately without requiring +/- button interaction
+- Associated with AirBoard_v3.5.6.zxp
+
+## [3.5.5] - 2025-08-16
+### 🎨 UI Enhancement
+- **Dynamic Frame Count Display**: Added frame count to transition duration text (e.g., "Fade-out 150ms - 9f")
+- **Real-time Frame Updates**: Frame count automatically updates with +/- buttons (60fps calculation)
+- **Better Timeline Context**: Shows both milliseconds and frame equivalents for easier timing reference
+
+### 🔧 Technical Details
+- Added frame calculation: `frames = Math.round(ms * 0.06)` for 60fps projects
+- Updated `updateTransitionDurationDisplay()` and `updateFadeInDurationDisplay()` functions
+- Frame count dynamically updates with all increment/decrement operations
+- Associated with AirBoard_v3.5.5.zxp
+
+## [3.5.4] - 2025-08-16
 ### ✨ Added
 - **User Preferences System**: Resolution multiplier now persists between After Effects sessions
 - **Automatic Preference Loading**: Plugin restores last used resolution setting on startup

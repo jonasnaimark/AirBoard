@@ -93,7 +93,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to update transition duration display
     function updateTransitionDurationDisplay() {
         var currentValue = transitionDurationInput.value;
-        transitionDurationText.textContent = 'Fade-out ' + currentValue + 'ms';
+        var frames = Math.round(currentValue * 0.06); // Convert ms to frames at 60fps
+        transitionDurationText.textContent = 'Fade-out ' + currentValue + 'ms / ' + frames + 'f';
     }
     
     // Get the transition duration increment/decrement buttons
@@ -136,7 +137,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to update fade-in duration display
     function updateFadeInDurationDisplay() {
         var currentValue = fadeInDurationInput.value;
-        fadeInDurationText.textContent = 'Fade-in ' + currentValue + 'ms';
+        var frames = Math.round(currentValue * 0.06); // Convert ms to frames at 60fps
+        fadeInDurationText.textContent = 'Fade-in ' + currentValue + 'ms / ' + frames + 'f';
     }
     
     // Get the fade-in duration increment/decrement buttons
@@ -394,6 +396,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load saved resolution preference on startup
     loadResolutionPreference();
+    
+    // Initialize duration displays with frame counts on startup
+    updateTransitionDurationDisplay();
+    updateFadeInDurationDisplay();
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
