@@ -104,6 +104,19 @@ body {
     }
 }
 
+/* Project Setup specific styles */
+.project-setup-row {
+    justify-content: flex-end;
+}
+
+.quarter-width {
+    flex: 0 0 23%; /* Quarter width with slight adjustment for gaps */
+}
+
+.spacer {
+    flex: 1; /* Takes up remaining space to push buttons right */
+}
+
 /* Dropdown styles */
 .dropdown {
     height: 38px;

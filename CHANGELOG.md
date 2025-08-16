@@ -11,7 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.2.8] - 2025-08-15 ✨ **CURRENT RELEASE** - ELEVATION SHADOWS IMPLEMENTED
+## [3.2.9] - 2025-08-15 ✨ **CURRENT RELEASE**
+### 🎨 UI Update
+- **Project Setup Layout**: Buttons now quarter-width and right-aligned
+- **Shorter Button Text**: "AE Folders" → "AE", "Finder Folders" → "Finder"
+- **Improved Layout**: Cleaner, more compact Project Setup section
+
+### 🔧 Technical Details
+- Added `.quarter-width` and `.spacer` CSS classes for Project Setup buttons
+- Modified HTML structure with spacer div to push buttons right
+- Functionality unchanged - only visual layout improvements
+- Associated with AirBoard_v3.2.9.zxp
+
+## [3.2.8] - 2025-08-15 - ELEVATION SHADOWS IMPLEMENTED
 ### ✨ Added - MAJOR FEATURE MILESTONE
 - **🎯 ELEVATION SHADOWS FEATURE COMPLETE**: Add Shadow button now fully functional with resolution-based elevation shadow presets
 - **Smart Preset Selection**: Automatically selects correct .ffx file based on resolution multiplier and elevation level
