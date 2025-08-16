@@ -180,6 +180,19 @@ function createDeviceComposition(deviceType, multiplier) {
                         var importOptions = new ImportOptions(templateFile);
                         var importedItems = app.project.importFile(importOptions);
                         
+                        // Move imported items to the zImported_projects folder
+                        var importedFolder = getOrCreateImportedProjectsFolder();
+                        if (importedFolder && importedItems) {
+                            // Handle both single item and array of items
+                            if (importedItems instanceof Array) {
+                                for (var k = 0; k < importedItems.length; k++) {
+                                    importedItems[k].parentFolder = importedFolder;
+                                }
+                            } else {
+                                importedItems.parentFolder = importedFolder;
+                            }
+                        }
+                        
                         // Find the imported composition first
                         for (var j = 1; j <= app.project.items.length; j++) {
                             var item = app.project.items[j];
@@ -309,6 +322,19 @@ function addGestureFromPanel(gestureType, multiplier) {
         if (!gestureComp) {
             var importOptions = new ImportOptions(templateFile);
             var importedItems = app.project.importFile(importOptions);
+            
+            // Move imported items to the zImported_projects folder
+            var importedFolder = getOrCreateImportedProjectsFolder();
+            if (importedFolder && importedItems) {
+                // Handle both single item and array of items
+                if (importedItems instanceof Array) {
+                    for (var k = 0; k < importedItems.length; k++) {
+                        importedItems[k].parentFolder = importedFolder;
+                    }
+                } else {
+                    importedItems.parentFolder = importedFolder;
+                }
+            }
             
             // Find after import
             for (var j = 1; j <= app.project.items.length; j++) {
@@ -506,6 +532,19 @@ function addComponentFromPanel(componentType, multiplier) {
         if (!componentComp) {
             var importOptions = new ImportOptions(templateFile);
             var importedItems = app.project.importFile(importOptions);
+            
+            // Move imported items to the zImported_projects folder
+            var importedFolder = getOrCreateImportedProjectsFolder();
+            if (importedFolder && importedItems) {
+                // Handle both single item and array of items
+                if (importedItems instanceof Array) {
+                    for (var k = 0; k < importedItems.length; k++) {
+                        importedItems[k].parentFolder = importedFolder;
+                    }
+                } else {
+                    importedItems.parentFolder = importedFolder;
+                }
+            }
             
             // Find after import
             for (var j = 1; j <= app.project.items.length; j++) {

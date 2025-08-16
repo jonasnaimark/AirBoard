@@ -88,7 +88,7 @@ AirBoard/
 # CRITICAL: Always do ALL steps before pushing to main
 # 1. Update CSXS/manifest.xml: ExtensionBundleVersion="X.X.X"
 # 2. Update CHANGELOG.md with new version entry and detailed changes
-# 3. Build ZXP
+# 3. Build ZXP (ONLY when user explicitly requests it!)
 ./ZXPSignCmd -sign temp-package dist/AirBoard_vX.X.X.zxp new-cert.p12 mypassword
 # 4. Commit with version number
 git commit -m "vX.X.X: Description with ZXP association"
@@ -96,11 +96,17 @@ git commit -m "vX.X.X: Description with ZXP association"
 git push origin main
 ```
 
+### ⚠️ ZXP Build Policy
+**NEVER build ZXP files automatically!**
+- **ALWAYS ask the user first** before building any ZXP files
+- ZXP builds should only happen when explicitly requested by the user
+- Do not proactively create ZXP files during development or git operations
+
 ### 🚨 Main Branch Push Requirements
 **NEVER push to main without:**
 - Version increment in manifest.xml
 - CHANGELOG.md entry for new version  
-- Associated ZXP file build
+- Associated ZXP file build (but only when user requests it)
 - Version number in commit message
 
 ## 📚 Essential Documentation Files

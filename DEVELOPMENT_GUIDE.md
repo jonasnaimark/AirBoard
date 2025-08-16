@@ -2,6 +2,13 @@
 
 **Comprehensive technical documentation for developers working on the AirBoard After Effects plugin**
 
+## ⚠️ ZXP Build Policy - READ FIRST!
+**NEVER build ZXP files automatically!**
+- **ALWAYS ask the user first** before building any ZXP files
+- ZXP builds should only happen when explicitly requested by the user
+- Do not proactively create ZXP files during development or git operations
+- Only build ZXP when user specifically requests "make a zxp" or similar
+
 ## 🎯 Critical Technical Patterns
 
 ### The Resolution Scaling System 🏆

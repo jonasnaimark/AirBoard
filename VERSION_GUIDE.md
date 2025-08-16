@@ -326,6 +326,13 @@ git push origin main
 - [ ] Associated ZXP file build
 - [ ] Version number in commit message
 
+### ⚠️ ZXP Build Policy
+**IMPORTANT: NEVER build ZXP files automatically!**
+- **ALWAYS ask the user first** before building any ZXP files
+- ZXP builds should only happen when explicitly requested by the user
+- Do not proactively create ZXP files during development or git operations
+- Only build ZXP when user specifically requests "make a zxp" or similar
+
 ### Version Numbering Strategy
 
 **Current Major Versions:**

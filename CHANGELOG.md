@@ -11,7 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.4.9] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.5.0] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🎯 Fixed
+- **Import Organization**: AirBoard Templates.aep now automatically goes to "03 - Assets > zImported_projects" instead of project root
+- **Smart Folder Management**: Templates are properly organized when imported for Device Templates, Gesture Presets, and Components
+- **Cleaner Project Structure**: No more template clutter in root folder
+
+### 🔧 Technical Details
+- Added import organization code after all `app.project.importFile()` calls
+- Uses existing `getOrCreateImportedProjectsFolder()` helper function
+- Handles both single items and arrays returned by importFile()
+- Creates folder structure automatically if it doesn't exist
+- Associated with AirBoard_v3.5.0.zxp
+
+## [3.4.9] - 2025-08-16
 ### 🎨 UI Improvements
 - **Minus Symbol Fix**: Changed minus button from hyphen-minus to proper minus symbol (−) for better vertical alignment
 - **Faster Button Animations**: Reduced transition duration from 0.2s to 0.1s for snappier interactions
