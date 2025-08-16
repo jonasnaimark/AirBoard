@@ -11,7 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.5.3] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.5.4] - 2025-08-16 ✨ **CURRENT RELEASE**
+### ✨ Added
+- **User Preferences System**: Resolution multiplier now persists between After Effects sessions
+- **Automatic Preference Loading**: Plugin restores last used resolution setting on startup
+- **Seamless Workflow**: No need to manually re-adjust resolution every session
+
+### 🔧 Technical Details
+- Added `saveResolutionPreference()` and `loadResolutionPreference()` ExtendScript functions using app.settings API
+- Integrated preference saving into existing +/- button event handlers
+- Preference loading happens automatically on plugin startup
+- Validates saved values (1x-6x range) with fallback to 2x default
+- Associated with AirBoard_v3.5.4.zxp
+
+## [3.5.3] - 2025-08-16
 ### ✨ Added
 - **Transition Presets Section**: New section with Fade-out and Fade-in timing controls
 - **Dynamic Duration Controls**: −/+/Add buttons with 50ms increments (0-2000ms range)

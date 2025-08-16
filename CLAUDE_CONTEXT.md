@@ -49,12 +49,13 @@ AirBoard/
 └── dist/                     # ZXP releases
 ```
 
-## ✨ Current Features (v2.8.6)
+## ✨ Current Features (v3.5.4)
 - **Device Templates**: iPhone/Desktop with resolution scaling
 - **Gesture Presets**: Tap, Long Press, Double Tap, Mouse Click
 - **Components**: Ms Counter, Dot Loader  
 - **Effect Presets**: Squircle creation, Rectangle replacement
-- **Elevation**: UI ready, functionality pending
+- **Elevation Shadows**: Complete shadow system with resolution-based presets
+- **User Preferences**: Resolution multiplier persists between AE sessions
 
 ## 🎨 UI Patterns (CRITICAL for consistency)
 ```html
@@ -123,10 +124,60 @@ git push origin main
 - **Playhead Positioning**: Documented timeline-aware layer placement
 
 ## 🚧 Next Potential Tasks
-- **Elevation Shadows**: UI complete, needs functionality implementation
+- **Extended User Preferences**: Save/restore transition durations and other UI state between AE sessions
 - **Additional Components**: Progress bars, buttons, icons
 - **Advanced Gestures**: Pinch, swipe, multi-touch
 - **Performance**: Enhanced template caching
+
+## 🎯 PRIORITY: User Preferences Implementation Plan
+
+### 📋 Feature Overview
+Implement persistent settings that remember user preferences between After Effects sessions.
+
+### 🛠️ Technical Approach (ExtendScript Settings - Recommended)
+```javascript
+// Save preference
+app.settings.saveSetting("AirBoard", "resolutionMultiplier", "3");
+
+// Load preference  
+var savedResolution = app.settings.getSetting("AirBoard", "resolutionMultiplier");
+if (savedResolution !== "") {
+    resolutionInput.value = parseInt(savedResolution);
+}
+```
+
+### 📦 Settings to Save
+- **Resolution Multiplier**: Current @2x, @3x, etc. setting (main priority)
+- **Transition Durations**: Fade-out/Fade-in timing values (150ms, 250ms)
+- **Last Used Device**: iPhone vs Desktop preference (optional)
+- **UI State**: Any dropdown selections (optional)
+
+### ⏰ When to Save/Load
+**Save Triggers:**
+- Every time user clicks +/- buttons on resolution
+- Every time user changes transition durations
+- On plugin close/AE shutdown
+
+**Load Triggers:**
+- Plugin startup (when panel first loads)
+- After Effects launch (restore previous session)
+
+### 🎯 Implementation Steps
+1. Add save calls in existing update functions (updateResolutionDisplay, updateTransitionDurationDisplay)
+2. Add load calls in plugin initialization
+3. Update display functions to show loaded values on startup
+4. Test persistence across AE sessions
+
+### 🔧 Files to Modify
+- **jsx/main.jsx**: Add ExtendScript settings save/load functions
+- **client/js/main.js**: Add preference loading on startup
+- Integration with existing +/- button event handlers
+
+### 🎁 User Benefits
+- Seamless workflow continuation
+- No need to re-adjust resolution every session  
+- Professional plugin behavior
+- Time-saving for frequent users
 
 ## 🔥 Critical Reminders
 1. **NEVER modify the scaling percentages** - they are battle-tested

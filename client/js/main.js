@@ -29,6 +29,31 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Display updated to:', resolutionText.textContent);
     }
     
+    // Function to save resolution preference
+    function saveResolutionPreference(multiplier) {
+        if (csInterface) {
+            var script = 'saveResolutionPreference(' + multiplier + ')';
+            csInterface.evalScript(script, function(result) {
+                console.log('Resolution preference saved:', result);
+            });
+        }
+    }
+    
+    // Function to load resolution preference on startup
+    function loadResolutionPreference() {
+        if (csInterface) {
+            var script = 'loadResolutionPreference()';
+            csInterface.evalScript(script, function(result) {
+                var savedResolution = parseInt(result);
+                if (savedResolution >= 1 && savedResolution <= 6) {
+                    resolutionInput.value = savedResolution;
+                    updateResolutionDisplay();
+                    console.log('Loaded resolution preference:', savedResolution);
+                }
+            });
+        }
+    }
+    
     // Get the increment/decrement buttons and attach event listeners
     var incrementBtn = document.querySelector('.resolution-display .number-btn.increment');
     var decrementBtn = document.querySelector('.resolution-display .number-btn.decrement');
@@ -42,6 +67,8 @@ document.addEventListener('DOMContentLoaded', function() {
             resolutionInput.value = currentValue + 1;
             console.log('New value:', resolutionInput.value);
             updateResolutionDisplay();
+            // Save the new preference
+            saveResolutionPreference(parseInt(resolutionInput.value));
         }
     });
     
@@ -54,6 +81,8 @@ document.addEventListener('DOMContentLoaded', function() {
             resolutionInput.value = currentValue - 1;
             console.log('New value:', resolutionInput.value);
             updateResolutionDisplay();
+            // Save the new preference
+            saveResolutionPreference(parseInt(resolutionInput.value));
         }
     });
     
@@ -362,6 +391,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    
+    // Load saved resolution preference on startup
+    loadResolutionPreference();
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background

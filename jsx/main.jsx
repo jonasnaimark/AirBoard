@@ -1,6 +1,34 @@
 // Global variable to store extension path (set by the panel)
 var extensionRoot = "";
 
+// User Preferences - Save/Load resolution multiplier
+function saveResolutionPreference(multiplier) {
+    try {
+        app.settings.saveSetting("AirBoard", "resolutionMultiplier", multiplier.toString());
+        return "success";
+    } catch(e) {
+        $.writeln("Failed to save resolution preference: " + e.toString());
+        return "error";
+    }
+}
+
+function loadResolutionPreference() {
+    try {
+        var saved = app.settings.getSetting("AirBoard", "resolutionMultiplier");
+        if (saved !== "") {
+            var value = parseInt(saved);
+            // Validate the saved value is within valid range
+            if (value >= 1 && value <= 6) {
+                return value;
+            }
+        }
+        return 2; // Default to 2x if no valid preference found
+    } catch(e) {
+        $.writeln("Failed to load resolution preference: " + e.toString());
+        return 2; // Default to 2x on error
+    }
+}
+
 // Helper function to move composition to appropriate folder based on device type
 function moveCompositionToFolder(comp, deviceType) {
     try {

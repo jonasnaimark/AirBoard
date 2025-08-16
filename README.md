@@ -70,18 +70,21 @@
 2. Choose effect from AirBoard panel (Add Squircle/Replace Rect)
 3. Effect applied with professional results
 
-## 📋 Current Version: v2.8.6
+## 📋 Current Version: v3.5.4
 
 ### Major Features ✅
 - **Device Templates**: iPhone & Desktop with resolution scaling
 - **Gesture Presets**: Complete animation library with playhead positioning
 - **Components**: Ms Counter & Dot Loader with smart positioning
 - **Effect Presets**: Squircle and Rectangle replacement tools
+- **Elevation Shadows**: Professional shadow system with resolution-based presets
+- **User Preferences**: Resolution multiplier persists between After Effects sessions
 - **Unified UI**: Consistent spacing and dark theme
 - **Performance Optimized**: Template caching and efficient layer targeting
 
 ### In Development 🚧
-- **Elevation Shadows**: UI ready, functionality coming soon
+- **Extended User Preferences**: Save transition durations and additional UI state
+- **Additional Components**: Progress bars, buttons, icons
 
 ## 🛠️ Technical Architecture
 
@@ -190,4 +193,4 @@ Proprietary - All rights reserved
 
 ---
 
-**Made with ❤️ for the After Effects community | Current Version: v2.8.6**
+**Made with ❤️ for the After Effects community | Current Version: v3.5.4**
