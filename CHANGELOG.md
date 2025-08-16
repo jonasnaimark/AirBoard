@@ -11,7 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.4.7] - 2025-08-15 ✨ **CURRENT RELEASE**
+## [3.4.9] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🎨 UI Improvements
+- **Minus Symbol Fix**: Changed minus button from hyphen-minus to proper minus symbol (−) for better vertical alignment
+- **Faster Button Animations**: Reduced transition duration from 0.2s to 0.1s for snappier interactions
+- **Removed Loading Text**: Eliminated "Creating..." and "Adding..." button text changes for cleaner UX
+
+### 🔧 Technical Details
+- Updated minus button in HTML from "–" to "−" for proper mathematical symbol
+- Changed CSS transition duration from 0.2s to 0.1s across all button elements
+- Removed all button text changes during loading states to prevent flickering
+- Associated with AirBoard_v3.4.9.zxp
+
+## [3.4.7] - 2025-08-15
 ### 🎨 UI Improvements
 - **Minus Symbol Fix**: Changed minus button from hyphen-minus to proper minus symbol (−) for better vertical alignment
 - **Faster Button Animations**: Reduced transition duration from 0.2s to 0.1s for snappier interactions
