@@ -168,6 +168,11 @@ body {
     transform: scale(0.98);
 }
 
+.resolution-display .number-controls .add-btn {
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
 /* Dropdown styles */
 .dropdown {
     height: 38px;

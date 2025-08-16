@@ -11,7 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.5.0] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.5.3] - 2025-08-16 ✨ **CURRENT RELEASE**
+### ✨ Added
+- **Transition Presets Section**: New section with Fade-out and Fade-in timing controls
+- **Dynamic Duration Controls**: −/+/Add buttons with 50ms increments (0-2000ms range)
+- **Auto Project Structure**: Creating device compositions now automatically creates complete AE folder structure
+- **Smart Folder Check**: AE Folders button shows "already created" message if structure exists
+
+### 🎨 UI Improvements
+- **Transition Controls**: "Fade-out 150ms" and "Fade-in 250ms" with real-time updates
+- **Three-Button Layout**: Each transition row has −, +, and Add buttons (1/3 width each)
+- **Consistent Styling**: Add buttons match main button text styling
+
+### 🔧 Technical Details
+- Added complete transition timing interface with event handlers
+- Integrated full folder structure creation into device composition workflow
+- Added existence checking for AE Folders to prevent duplicates
+- Reuses existing `createFolderStructure()` function for consistency
+- Associated with AirBoard_v3.5.3.zxp
+
+## [3.5.0] - 2025-08-16
 ### 🎯 Fixed
 - **Import Organization**: AirBoard Templates.aep now automatically goes to "03 - Assets > zImported_projects" instead of project root
 - **Smart Folder Management**: Templates are properly organized when imported for Device Templates, Gesture Presets, and Components

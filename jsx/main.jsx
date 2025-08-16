@@ -236,6 +236,49 @@ function createDeviceComposition(deviceType, multiplier) {
         // Open the composition in the viewer
         comp.openInViewer();
         
+        // Create the full AE project folder structure (same as AE Folders button)
+        try {
+            var folderStructure = [
+                {
+                    name: "01 - Compositions",
+                    subfolders: [
+                        {
+                            name: "Desktop",
+                            subfolders: [
+                                { name: "01_Specs" },
+                                { name: "02_Lottie" }
+                            ]
+                        },
+                        {
+                            name: "Native", 
+                            subfolders: [
+                                { name: "01_Specs" },
+                                { name: "02_Lottie" }
+                            ]
+                        },
+                        { name: "zArchive" }
+                    ]
+                },
+                { name: "02 - Precomps" },
+                {
+                    name: "03 - Assets",
+                    subfolders: [
+                        { name: "Images" },
+                        { name: "Reference" },
+                        { name: "Renders" },
+                        { name: "Vector" },
+                        { name: "Video" },
+                        { name: "zImported_projects" }
+                    ]
+                }
+            ];
+            
+            // Create the folder structure recursively (reuses existing function)
+            createFolderStructure(app.project, folderStructure);
+        } catch(folderError) {
+            $.writeln("Folder structure creation failed: " + folderError.toString());
+        }
+        
         // Move composition to appropriate folder
         try {
             moveCompositionToFolder(comp, deviceType);
@@ -1222,6 +1265,28 @@ function createAEFoldersFromPanel() {
         if (!app.project) {
             alert("Please open a project first.");
             return "error";
+        }
+        
+        // Check if the main folders already exist
+        var mainFolders = ["01 - Compositions", "02 - Precomps", "03 - Assets"];
+        var existingFolders = 0;
+        
+        for (var i = 1; i <= app.project.items.length; i++) {
+            var item = app.project.items[i];
+            if (item instanceof FolderItem) {
+                for (var j = 0; j < mainFolders.length; j++) {
+                    if (item.name === mainFolders[j]) {
+                        existingFolders++;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // If all 3 main folders exist, show message and return
+        if (existingFolders === mainFolders.length) {
+            alert("AE Folders have already been created");
+            return "already_exists";
         }
         
         // Define the folder structure
