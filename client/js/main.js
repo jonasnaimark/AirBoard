@@ -90,18 +90,107 @@ document.addEventListener('DOMContentLoaded', function() {
     var durationValue = document.getElementById('durationValue');
     var durationText = document.getElementById('durationText');
     
-    // Duration +/- buttons (styling kept, functionality removed)
+    // Duration +/- buttons (StackOverflow record/delete/recreate approach)
     var durationIncrementBtn = document.querySelector('#durationDisplay .number-btn.increment');
     var durationDecrementBtn = document.querySelector('#durationDisplay .number-btn.decrement');
     
     if (durationIncrementBtn && durationDecrementBtn) {
-        // Buttons exist but have no functionality - keeping styling only
+        // + button: Stretch keyframes forward by 3 frames
         durationIncrementBtn.addEventListener('click', function() {
-            // Functionality removed - buttons are now decorative
+            console.log('Duration increment (stretch forward) clicked');
+            
+            // Check if CSInterface is available
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Disable button while working
+            durationIncrementBtn.disabled = true;
+            
+            // Call the ExtendScript function
+            csInterface.evalScript('stretchKeyframesForward()', function(result) {
+                console.log('Stretch forward result:', result);
+                
+                // Re-enable button
+                durationIncrementBtn.disabled = false;
+                
+                // Update display if successful (same format as readKeyframesDuration)
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+                    
+                    if (status === 'success') {
+                        var durationMs = parseInt(parts[1]);
+                        var durationFrames = parseInt(parts[2]);
+                        
+                        // Update the duration value and display
+                        durationValue.value = durationMs;
+                        durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        durationText.style.opacity = '1';
+                        
+                        console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    } else if (status === 'error') {
+                        var errorMsg = parts[1] || 'Unknown error';
+                        console.log('Stretch error:', errorMsg);
+                        
+                        // Show error briefly, then revert to selection message
+                        durationText.textContent = 'Select > 1 Keyframe';
+                    }
+                } else {
+                    durationText.textContent = 'Select > 1 Keyframe';
+                    console.log('Unexpected result:', result);
+                }
+            });
         });
         
+        // - button: Shrink keyframes backward by 3 frames
         durationDecrementBtn.addEventListener('click', function() {
-            // Functionality removed - buttons are now decorative
+            console.log('Duration decrement (stretch backward) clicked');
+            
+            // Check if CSInterface is available
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Disable button while working
+            durationDecrementBtn.disabled = true;
+            
+            // Call the ExtendScript function
+            csInterface.evalScript('stretchKeyframesBackward()', function(result) {
+                console.log('Stretch backward result:', result);
+                
+                // Re-enable button
+                durationDecrementBtn.disabled = false;
+                
+                // Update display if successful (same format as readKeyframesDuration)
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+                    
+                    if (status === 'success') {
+                        var durationMs = parseInt(parts[1]);
+                        var durationFrames = parseInt(parts[2]);
+                        
+                        // Update the duration value and display
+                        durationValue.value = durationMs;
+                        durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        durationText.style.opacity = '1';
+                        
+                        console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    } else if (status === 'error') {
+                        var errorMsg = parts[1] || 'Unknown error';
+                        console.log('Shrink error:', errorMsg);
+                        
+                        // Show error briefly, then revert to selection message
+                        durationText.textContent = 'Select > 1 Keyframe';
+                    }
+                } else {
+                    durationText.textContent = 'Select > 1 Keyframe';
+                    console.log('Unexpected result:', result);
+                }
+            });
         });
     }
     

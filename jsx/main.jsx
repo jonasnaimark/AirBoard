@@ -343,6 +343,239 @@ function adjustKeyframeDurationFromPanel(adjustment) {
     }
 }
 
+// Grok's approach: Use selectedProperties and selectedKeys APIs
+function stretchKeyframesGrokApproach(frameAdjustment) {
+    try {
+        app.beginUndoGroup("Stretch Keyframes");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|Please select a composition";
+        }
+        
+        var frameDuration = 1 / comp.frameRate;
+        var addTime = frameAdjustment * frameDuration;
+        
+        var selectedLayers = comp.selectedLayers;
+        var totalDuration = 0;
+        var processedAny = false;
+        
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            var selectedProps = layer.selectedProperties;
+            
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys < 2) continue;
+                
+                var selKeys = prop.selectedKeys;
+                if (selKeys.length < 2) continue;
+                
+                processedAny = true;
+                
+                // Check if this is time remapping for special handling
+                var isTimeRemap = false;
+                try {
+                    isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+                } catch(e) {
+                    // Property name/matchName might not be accessible
+                }
+                
+                // Sort selected key indices
+                selKeys.sort(function(a, b) { return a - b; });
+                
+                // Collect keyframe data, sorted by time
+                var keyData = [];
+                for (var k = 0; k < selKeys.length; k++) {
+                    var idx = selKeys[k];
+                    var data = {
+                        time: prop.keyTime(idx),
+                        value: prop.keyValue(idx),
+                        inInterp: prop.keyInInterpolationType(idx),
+                        outInterp: prop.keyOutInterpolationType(idx),
+                        temporalContinuous: prop.keyTemporalContinuous(idx),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(idx)
+                    };
+                    
+                    // Only store temporal ease for bezier keyframes to preserve linear keyframes
+                    if (data.inInterp === KeyframeInterpolationType.BEZIER || data.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            data.inEase = prop.keyInTemporalEase(idx);
+                            data.outEase = prop.keyOutTemporalEase(idx);
+                        } catch(e) {
+                            // Temporal ease might not be available for some properties
+                        }
+                    }
+                    
+                    // Handle spatial properties if applicable
+                    if (prop.isSpatial) {
+                        try {
+                            data.spatialContinuous = prop.keySpatialContinuous(idx);
+                            data.spatialAutoBezier = prop.keySpatialAutoBezier(idx);
+                            data.inTangent = prop.keyInSpatialTangent(idx);
+                            data.outTangent = prop.keyOutSpatialTangent(idx);
+                        } catch(e) {
+                            // Spatial properties might not be available
+                        }
+                    }
+                    
+                    keyData.push(data);
+                }
+                
+                keyData.sort(function(a, b) { return a.time - b.time; });
+                
+                var firstTime = keyData[0].time;
+                var lastTime = keyData[keyData.length - 1].time;
+                var duration = lastTime - firstTime;
+                var newDuration = duration + addTime;
+                
+                if (newDuration <= frameDuration) {
+                    // Prevent negative or zero duration; skip this property
+                    continue;
+                }
+                
+                totalDuration = newDuration; // Store for return value
+                
+                if (isTimeRemap) {
+                    // TIME REMAPPING: Special handling to avoid deletion
+                    try {
+                        var scaleFactor = newDuration / duration;
+                        
+                        // Store current selection state
+                        var selectionState = [];
+                        for (var s = 0; s < selKeys.length; s++) {
+                            selectionState.push(prop.keySelected(selKeys[s]));
+                        }
+                        
+                        // Clear selection first (same as other properties)
+                        for (var clearIdx = 1; clearIdx <= prop.numKeys; clearIdx++) {
+                            try {
+                                prop.keySelected(clearIdx, false);
+                            } catch(e) {
+                                // Continue
+                            }
+                        }
+                        
+                        // Try using setKeyTime method for time remapping, then select immediately
+                        var processedIndices = [];
+                        for (var k = keyData.length - 1; k >= 0; k--) { // Reverse order
+                            var data = keyData[k];
+                            var newTime = firstTime + (data.time - firstTime) * scaleFactor;
+                            var keyIndex = selKeys[k];
+                            
+                            try {
+                                // Try to move the keyframe time
+                                prop.setKeyTime(keyIndex, newTime);
+                                // Select immediately after moving (same as other properties)
+                                prop.setSelectedAtKey(keyIndex, true);
+                                processedIndices.push(keyIndex);
+                            } catch(e) {
+                                // If setKeyTime fails, fall back to record/delete/recreate but with minimal properties
+                                console.log("setKeyTime failed for time remapping, trying fallback...");
+                                prop.removeKey(keyIndex);
+                                var newIdx = prop.addKey(newTime);
+                                try {
+                                    prop.setValueAtKey(newIdx, data.value);
+                                    // Select immediately after creating (same as other properties)
+                                    prop.setSelectedAtKey(newIdx, true);
+                                    processedIndices.push(newIdx);
+                                } catch(e2) {
+                                    // Even this might fail
+                                }
+                            }
+                        }
+                        
+                    } catch(timeRemapError) {
+                        console.log("Time remapping failed: " + timeRemapError.toString());
+                        // Don't break the entire operation
+                    }
+                    
+                } else {
+                    // NORMAL APPROACH FOR NON-TIME-REMAPPING PROPERTIES
+                    var scaleFactor = newDuration / duration;
+                    
+                    // Remove old keys in reverse order to avoid index shifts
+                    for (var k = selKeys.length - 1; k >= 0; k--) {
+                        prop.removeKey(selKeys[k]);
+                    }
+                    
+                    // Add new keys at scaled times and reapply attributes
+                    var newSelIndices = [];
+                    for (var k = 0; k < keyData.length; k++) {
+                        var data = keyData[k];
+                        var newTime = firstTime + (data.time - firstTime) * scaleFactor;
+                        var newIdx = prop.addKey(newTime);
+                        
+                        try {
+                            prop.setValueAtKey(newIdx, data.value);
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                            
+                            // Only set temporal ease for bezier keyframes to preserve linear keyframes
+                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            }
+                            
+                            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                            
+                            if (data.spatialContinuous !== undefined) {
+                                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            }
+                        } catch(e) {
+                            console.log("Error setting keyframe properties: " + e.toString());
+                        }
+                        
+                        // Select the new key
+                        try {
+                            prop.setSelectedAtKey(newIdx, true);
+                        } catch(e) {
+                            // Selection might fail but continue
+                        }
+                        
+                        newSelIndices.push(newIdx);
+                    }
+                }
+            }
+        }
+        
+        app.endUndoGroup();
+        
+        if (!processedAny) {
+            return "error|Please select more than 1 keyframe";
+        }
+        
+        // Return success with new duration
+        var newDurationMs = Math.round(totalDuration * 1000);
+        var newDurationFrames = Math.round(totalDuration * comp.frameRate);
+        
+        return "success|" + newDurationMs + "|" + newDurationFrames;
+        
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Failed to stretch keyframes: " + e.toString();
+    }
+}
+
+// Wrapper functions for +/- buttons (using Grok's approach)
+function stretchKeyframesForward() {
+    try {
+        return stretchKeyframesGrokApproach(3); // forward 3 frames
+    } catch(e) {
+        return "error|Failed to stretch keyframes forward: " + e.toString();
+    }
+}
+
+function stretchKeyframesBackward() {
+    try {
+        return stretchKeyframesGrokApproach(-3); // backward 3 frames
+    } catch(e) {
+        return "error|Failed to stretch keyframes backward: " + e.toString();
+    }
+}
+
 // Helper function to move composition to appropriate folder based on device type
 function moveCompositionToFolder(comp, deviceType) {
     try {

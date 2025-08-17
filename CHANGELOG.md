@@ -12,7 +12,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.7.9] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.8.7] - 2025-08-17 ✨ **CURRENT RELEASE**
+### 🔧 Fixed - IDENTICAL APPROACH FOR TIME REMAPPING
+- **Exact Same Logic**: Time remapping now uses identical delete/recreate/select approach as Position/Opacity
+- **All Keyframes Selected**: All time remapping keyframes now stay selected like other properties
+- **Same Loop Structure**: Uses same forward loop through keyData with immediate selection
+- **Minimal Properties**: Only sets essential properties (value, interpolation) for time remapping
+
+### 🔧 Technical Details
+- Replaced setKeyTime() approach with proven delete/recreate pattern
+- Uses same selKeys reverse deletion loop as other properties  
+- Uses same keyData forward creation loop as other properties
+- Calls prop.setSelectedAtKey(newIdx, true) for each new keyframe
+- Simplified property setting to avoid time remapping specific issues
+- Associated with AirBoard_v3.8.7.zxp
+
+## [3.8.6] - 2025-08-17
+### 🔧 Fixed - UNIFIED SELECTION APPROACH FOR TIME REMAPPING
+- **Same Selection Method**: Time remapping now uses identical selection approach as Position/Opacity
+- **Immediate Selection**: Selects keyframes immediately after moving (setSelectedAtKey) just like other properties
+- **Simplified Logic**: Removed complex time-based reselection in favor of proven immediate selection
+- **Consistent Behavior**: Time remapping selection now matches all other property types perfectly
+
+### 🔧 Technical Details
+- Uses prop.setSelectedAtKey(keyIndex, true) immediately after prop.setKeyTime() 
+- Removed complex reselection logic that was causing deselection issues
+- Maintains same clear-then-select pattern as working properties
+- Unified code path ensures consistent selection behavior across all property types
+- Associated with AirBoard_v3.8.6.zxp
+
+## [3.8.5] - 2025-08-17
+### 🔧 Fixed - TIME REMAPPING SELECTION PERSISTENCE
+- **Enhanced Selection Logic**: Improved time remapping keyframe reselection with frame-based tolerance
+- **Multiple Fallback Strategies**: Uses precise time matching, then range-based selection as backup
+- **Frame-Rate Aware Tolerance**: Uses composition frame rate for accurate time matching
+- **Robust Selection**: Multiple approaches ensure keyframes remain selected for repeated operations
+
+### 🔧 Technical Details
+- Primary: Frame-rate based tolerance (1/frameRate) for precise time matching
+- Fallback: Range-based selection covering expected keyframe area
+- Enhanced error handling for selection operations specific to time remapping
+- Maintains in-place keyframe movement approach that prevents deletion
+- Associated with AirBoard_v3.8.5.zxp
+
+## [3.8.4] - 2025-08-17
+### 🔧 Fixed - COMPLETELY DIFFERENT TIME REMAPPING APPROACH
+- **In-Place Modification**: Uses setKeyTime() method for time remapping instead of delete/recreate
+- **Fallback Strategy**: If setKeyTime() fails, falls back to minimal delete/recreate
+- **Separate Code Paths**: Completely different handling for time remapping vs regular properties
+- **Enhanced Selection**: Time-based reselection for time remapping keyframes
+
+### 🔧 Technical Details
+- Primary approach: Uses prop.setKeyTime() to move time remapping keyframes in place
+- Fallback approach: Minimal delete/recreate if setKeyTime() fails
+- Time-based reselection system for time remapping properties
+- Maintains full record/delete/recreate for all other property types
+- Associated with AirBoard_v3.8.4.zxp
+
+## [3.8.3] - 2025-08-17
+### 🔧 Fixed - TIME REMAPPING SPECIAL HANDLING
+- **Time Remapping Detection**: Added automatic detection of time remapping properties
+- **Minimal Time Remap Approach**: Uses simplified keyframe recreation for time remapping to prevent deletion
+- **Enhanced Error Handling**: Separate error handling paths for time remapping vs regular properties
+- **Robust Property Operations**: Graceful fallbacks for property-specific operations that might fail
+
+### 🔧 Technical Details
+- Added time remapping detection via property name and matchName
+- Implemented minimal keyframe recreation approach specifically for time remapping
+- Enhanced try-catch structure with separate handling for time remapping and regular properties
+- Improved selection handling with graceful fallbacks for problematic property types
+- Associated with AirBoard_v3.8.3.zxp
+
+## [3.8.2] - 2025-08-17
+### 🔧 Fixed - TIME REMAPPING & LINEAR KEYFRAMES
+- **Time Remapping Fix**: Fixed time remapping keyframes being deleted instead of properly stretched
+- **Linear Keyframe Preservation**: Linear keyframes now maintain their interpolation type and don't become eased
+- **Robust Error Handling**: Added comprehensive try-catch blocks for property-specific operations
+- **Interpolation Type Preservation**: Only applies temporal ease to bezier keyframes, preserving linear ones
+
+### 🔧 Technical Details
+- Added conditional temporal ease application based on interpolation type
+- Wrapped temporal and spatial property operations in try-catch for time remapping compatibility
+- Enhanced keyframe data collection to preserve original interpolation characteristics
+- Fixed property-specific method calls that were causing keyframe deletion on time remapping
+- Associated with AirBoard_v3.8.2.zxp
+
+## [3.8.1] - 2025-08-17
+### ✨ Updated - GROK'S SUPERIOR KEYFRAME STRETCHING
+- **Grok's Approach**: Implemented Grok's proven selectedProperties/selectedKeys method for keyframe stretching
+- **Perfect Selection**: Uses proper APIs (layer.selectedProperties, prop.selectedKeys) for bulletproof keyframe detection
+- **Maintained Selection**: All keyframes remain selected after stretching with prop.setSelectedAtKey()
+- **Multi-Property Support**: Works across multiple selected properties and layers simultaneously
+- **Spatial Property Support**: Handles both temporal and spatial properties correctly with prop.isSpatial detection
+- **Robust Error Handling**: Gracefully handles edge cases and prevents negative durations
+
+### 🔧 Technical Details
+- Replaced manual property search with After Effects' native selectedProperties API
+- Used selectedKeys array for direct keyframe index access
+- Implemented proper spatial property detection and handling
+- Enhanced selection preservation using setSelectedAtKey() during keyframe recreation
+- Associated with AirBoard_v3.8.1.zxp
+
+## [3.8.0] - 2025-08-17
+### ✨ Added - KEYFRAME STRETCHING (StackOverflow Record/Delete/Recreate Approach)
+- **Keyframe Stretching**: +/- buttons now stretch/shrink selected keyframes by 3 frames using proven record→delete→recreate method
+- **Complete Keyframe Preservation**: Records all keyframe properties (values, interpolation, easing, spatial tangents)
+- **Bulletproof Property Detection**: Uses same logic as proven working adjustKeyframeDurationFromPanel function
+- **Anchor Point Behavior**: First selected keyframe stays fixed, others are proportionally repositioned
+- **Frame-Rate Aware**: Calculates 3 frames based on composition's actual frame rate
+- **Perfect Reselection**: All stretched keyframes remain selected for repeated operations
+- **Real-time Display**: Duration display updates immediately showing new ms/frames values
+
+### 🔧 Technical Details
+- Implemented StackOverflow's record→delete→recreate approach instead of problematic setKeyTime()
+- Added comprehensive keyframe data recording (temporal/spatial properties, easing, interpolation)
+- Enhanced property search using exact same pattern as working adjustKeyframeDurationFromPanel
+- Full undo support and robust error handling with graceful fallbacks
+- Associated with AirBoard_v3.8.0.zxp
+
+## [3.7.9] - 2025-08-16
 ### 🔧 Keyframe Reader Simplification
 - **Removed X/Y Distance Controls**: Simplified Keyframe Reader to focus on duration only
 - **Disabled +/- Button Functionality**: Buttons kept for styling but functionality removed for future implementation
