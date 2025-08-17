@@ -12,7 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.6.8] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.7.9] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🔧 Keyframe Reader Simplification
+- **Removed X/Y Distance Controls**: Simplified Keyframe Reader to focus on duration only
+- **Disabled +/- Button Functionality**: Buttons kept for styling but functionality removed for future implementation
+- **Clean Interface**: Streamlined section with just Read Keyframes button and Duration display
+
+### 🔧 Technical Details
+- Removed X Distance and Y Distance rows from HTML and JavaScript
+- Kept Duration row styling with decorative +/- buttons (no functionality)
+- Updated Read Keyframes button handler to only manage duration display
+- Simplified error handling for single duration display
+- Associated with AirBoard_v3.7.9.zxp
+
+## [3.6.8] - 2025-08-16
 ### 🎯 Keyframe Reader Feature - Complete Implementation
 - **New Keyframe Reader Section**: Read duration between selected keyframes on any property
 - **Universal Property Support**: Works with Position, Rotation, Scale, Opacity, Time Remap, Effects, Masks

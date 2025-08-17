@@ -89,99 +89,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Keyframe Reader Controls
     var durationValue = document.getElementById('durationValue');
     var durationText = document.getElementById('durationText');
-    var xDistanceValue = document.getElementById('xDistanceValue');
-    var xDistanceText = document.getElementById('xDistanceText');
-    var yDistanceValue = document.getElementById('yDistanceValue');
-    var yDistanceText = document.getElementById('yDistanceText');
     
-    // Function to update duration display
-    function updateDurationDisplay() {
-        var currentValue = durationValue.value;
-        var frames = Math.round(currentValue * 0.03); // Approximate frames at 30fps
-        durationText.textContent = currentValue + 'ms / ' + frames + 'f';
-    }
-    
-    // Function to update X distance display
-    function updateXDistanceDisplay() {
-        var currentValue = xDistanceValue.value;
-        xDistanceText.textContent = 'X Distance ' + currentValue + 'px';
-    }
-    
-    // Function to update Y distance display
-    function updateYDistanceDisplay() {
-        var currentValue = yDistanceValue.value;
-        yDistanceText.textContent = 'Y Distance ' + currentValue + 'px';
-    }
-    
-    // Duration controls
+    // Duration +/- buttons (styling kept, functionality removed)
     var durationIncrementBtn = document.querySelector('#durationDisplay .number-btn.increment');
     var durationDecrementBtn = document.querySelector('#durationDisplay .number-btn.decrement');
     
     if (durationIncrementBtn && durationDecrementBtn) {
+        // Buttons exist but have no functionality - keeping styling only
         durationIncrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(durationValue.value);
-            var maxValue = 5000; // Max 5000ms
-            if (currentValue < maxValue) {
-                durationValue.value = currentValue + 50;
-                updateDurationDisplay();
-            }
+            // Functionality removed - buttons are now decorative
         });
         
         durationDecrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(durationValue.value);
-            var minValue = 50; // Min 50ms
-            if (currentValue > minValue) {
-                durationValue.value = currentValue - 50;
-                updateDurationDisplay();
-            }
-        });
-    }
-    
-    // X Distance controls
-    var xDistanceIncrementBtn = document.querySelector('#xDistanceDisplay .number-btn.increment');
-    var xDistanceDecrementBtn = document.querySelector('#xDistanceDisplay .number-btn.decrement');
-    
-    if (xDistanceIncrementBtn && xDistanceDecrementBtn) {
-        xDistanceIncrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(xDistanceValue.value);
-            var maxValue = 1000; // Max 1000px
-            if (currentValue < maxValue) {
-                xDistanceValue.value = currentValue + 10;
-                updateXDistanceDisplay();
-            }
-        });
-        
-        xDistanceDecrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(xDistanceValue.value);
-            var minValue = -1000; // Min -1000px
-            if (currentValue > minValue) {
-                xDistanceValue.value = currentValue - 10;
-                updateXDistanceDisplay();
-            }
-        });
-    }
-    
-    // Y Distance controls
-    var yDistanceIncrementBtn = document.querySelector('#yDistanceDisplay .number-btn.increment');
-    var yDistanceDecrementBtn = document.querySelector('#yDistanceDisplay .number-btn.decrement');
-    
-    if (yDistanceIncrementBtn && yDistanceDecrementBtn) {
-        yDistanceIncrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(yDistanceValue.value);
-            var maxValue = 1000; // Max 1000px
-            if (currentValue < maxValue) {
-                yDistanceValue.value = currentValue + 10;
-                updateYDistanceDisplay();
-            }
-        });
-        
-        yDistanceDecrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(yDistanceValue.value);
-            var minValue = -1000; // Min -1000px
-            if (currentValue > minValue) {
-                yDistanceValue.value = currentValue - 10;
-                updateYDistanceDisplay();
-            }
+            // Functionality removed - buttons are now decorative
         });
     }
     
@@ -193,8 +113,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if CSInterface is available
         if (!csInterface) {
             durationText.textContent = 'Select > 1 Keyframe';
-            xDistanceText.textContent = 'Select > 1 Keyframe';
-            yDistanceText.textContent = 'Select > 1 Keyframe';
             return;
         }
         
@@ -214,26 +132,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     durationValue.value = durationMs;
                     durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
                     
-                    // Change all 3 labels to 100% opacity for brightness
+                    // Change duration label to 100% opacity for brightness
                     durationText.style.opacity = '1';
-                    xDistanceText.style.opacity = '1';
-                    yDistanceText.style.opacity = '1';
                     
                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                 } else if (status === 'error') {
                     var errorMsg = parts[1] || 'Unknown error';
                     
-                    // Update all 3 text labels with error message
+                    // Update duration text label with error message
                     durationText.textContent = 'Select > 1 Keyframe';
-                    xDistanceText.textContent = 'Select > 1 Keyframe';
-                    yDistanceText.textContent = 'Select > 1 Keyframe';
                     
                     console.log('Error:', errorMsg);
                 }
             } else {
                 durationText.textContent = 'Select > 1 Keyframe';
-                xDistanceText.textContent = 'Select > 1 Keyframe';
-                yDistanceText.textContent = 'Select > 1 Keyframe';
                 console.log('Unexpected result:', result);
             }
         });

@@ -156,10 +156,190 @@ function readKeyframesDuration() {
         var frameRate = comp.frameRate || 30;
         var durationFrames = Math.round(durationSeconds * frameRate);
         
-        return "success|" + durationMs + "|" + durationFrames;
+        return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|" + property.propertyIndex;
         
     } catch(e) {
         return "error|Failed to read keyframes: " + e.toString();
+    }
+}
+
+// ChatGPT's exact adjustKeyframeDuration function
+function adjustKeyframeDuration(property, deltaMs) {
+    if (!property || property.numKeys < 2) {
+        return;
+    }
+
+    var comp = app.project.activeItem;
+    if (!(comp instanceof CompItem)) {
+        return;
+    }
+
+    // Collect selected keys with both index and time
+    var selectedKeys = [];
+    for (var i = 1; i <= property.numKeys; i++) {
+        if (property.keySelected(i)) {
+            selectedKeys.push({ index: i, time: property.keyTime(i) });
+        }
+    }
+
+    if (selectedKeys.length < 2) {
+        alert("Select at least two keyframes to adjust duration.");
+        return;
+    }
+
+    // Sort keys by time (ascending)
+    selectedKeys.sort(function (a, b) {
+        return a.time - b.time;
+    });
+
+    var firstTime = selectedKeys[0].time;
+    var lastTime = selectedKeys[selectedKeys.length - 1].time;
+    var currentDuration = lastTime - firstTime;
+    if (currentDuration <= 0) return;
+
+    // New duration (deltaMs is in milliseconds)
+    var newDuration = currentDuration + (deltaMs / 1000.0);
+    if (newDuration <= 0) {
+        alert("Duration too short.");
+        return;
+    }
+
+    app.beginUndoGroup("Stretch Keyframes");
+
+    // Stretch keys in descending order to avoid reindex issues
+    for (var k = selectedKeys.length - 1; k >= 0; k--) {
+        var oldTime = selectedKeys[k].time;
+        var rel = (oldTime - firstTime) / currentDuration;
+        var newTime = firstTime + rel * newDuration;
+        property.setKeyTime(selectedKeys[k].index, newTime);
+    }
+
+    app.endUndoGroup();
+}
+
+// Wrapper function called from JavaScript - finds property and calls ChatGPT's function
+function adjustKeyframeDurationFromPanel(adjustment) {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "error|No composition selected";
+        }
+        
+        // Get selected layers
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "error|No layers selected";
+        }
+        
+        // Use the first selected layer
+        var layer = selectedLayers[0];
+        
+        // Function to check if property has selected keyframes
+        function hasSelectedKeyframes(property) {
+            if (!property || !property.canVaryOverTime || property.numKeys === 0) {
+                return false;
+            }
+            
+            var selectedCount = 0;
+            for (var i = 1; i <= property.numKeys; i++) {
+                if (property.keySelected(i)) {
+                    selectedCount++;
+                }
+            }
+            return selectedCount >= 2;
+        }
+        
+        // Function to recursively search for property with selected keyframes
+        function findPropertyWithSelectedKeyframes(propGroup) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
+                
+                // Check if this property has selected keyframes
+                if (hasSelectedKeyframes(prop)) {
+                    return prop;
+                }
+                
+                // If it's a property group, search recursively
+                if (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                    prop.propertyType === PropertyType.NAMED_GROUP) {
+                    var foundProp = findPropertyWithSelectedKeyframes(prop);
+                    if (foundProp) {
+                        return foundProp;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        var targetProperty = null;
+        
+        // Check transform properties first
+        targetProperty = findPropertyWithSelectedKeyframes(layer.transform);
+        
+        // If no selected keyframes in transform, check special layer properties
+        if (!targetProperty) {
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && hasSelectedKeyframes(layer.timeRemap)) {
+                    targetProperty = layer.timeRemap;
+                }
+            } catch(e) {
+                // Time remap might not be available
+            }
+        }
+        
+        // Check effects
+        if (!targetProperty && layer.effect && layer.effect.numProperties > 0) {
+            targetProperty = findPropertyWithSelectedKeyframes(layer.effect);
+        }
+        
+        // Check mask properties
+        if (!targetProperty) {
+            if (layer.mask && layer.mask.numProperties > 0) {
+                targetProperty = findPropertyWithSelectedKeyframes(layer.mask);
+            }
+        }
+        
+        // Check other layer properties like audio levels
+        if (!targetProperty) {
+            try {
+                if (layer.hasAudio && layer.audioLevels && hasSelectedKeyframes(layer.audioLevels)) {
+                    targetProperty = layer.audioLevels;
+                }
+            } catch(e) {
+                // Audio levels might not be available
+            }
+        }
+        
+        if (!targetProperty) {
+            return "error|No selected keyframes found";
+        }
+        
+        // Call ChatGPT's function with the found property
+        adjustKeyframeDuration(targetProperty, adjustment);
+        
+        // Calculate new duration for display
+        var selectedKeys = [];
+        for (var i = 1; i <= targetProperty.numKeys; i++) {
+            if (targetProperty.keySelected(i)) {
+                selectedKeys.push(i);
+            }
+        }
+        
+        if (selectedKeys.length < 2) {
+            return "error|Selection lost";
+        }
+        
+        var firstTime = targetProperty.keyTime(selectedKeys[0]);
+        var lastTime = targetProperty.keyTime(selectedKeys[selectedKeys.length - 1]);
+        var newDuration = lastTime - firstTime;
+        var newDurationMs = Math.round(newDuration * 1000);
+        var frameRate = comp.frameRate || 30;
+        var newDurationFrames = Math.round(newDuration * frameRate);
+        
+        return "success|" + newDurationMs + "|" + newDurationFrames;
+        
+    } catch(e) {
+        return "error|Failed to adjust keyframes: " + e.toString();
     }
 }
 
