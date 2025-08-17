@@ -147,6 +147,13 @@ body {
     pointer-events: none; /* Prevent text selection/interaction */
 }
 
+/* Keyframe Reader labels with reduced opacity */
+#durationText,
+#xDistanceText,
+#yDistanceText {
+    opacity: 0.5;
+}
+
 .resolution-display .number-controls {
     position: absolute;
     right: 6px; /* 6px from right edge */

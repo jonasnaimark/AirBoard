@@ -7,13 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### 🚧 In Development
-- **Keyframe Reader Section**: Add section to read and display current keyframe values
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Material Blur Feature**: Add Blur button functionality for Material 1-5 presets
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.6.0] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.6.8] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🎯 Keyframe Reader Feature - Complete Implementation
+- **New Keyframe Reader Section**: Read duration between selected keyframes on any property
+- **Universal Property Support**: Works with Position, Rotation, Scale, Opacity, Time Remap, Effects, Masks
+- **Smart Detection**: Automatically finds selected keyframes on any animatable property
+- **Dynamic Duration Display**: Shows actual duration in "XXXms / XXf" format using composition frame rate
+- **Clean Error Handling**: Inline "Select > 1 Keyframe" messages instead of popup alerts
+- **Visual Feedback**: Labels start at 50% opacity, brighten to 100% after successful reading
+- **Professional UX**: No interrupting dialogs, seamless workflow integration
+
+### 🔧 Technical Implementation
+- Added `readKeyframesDuration()` ExtendScript function with recursive property search
+- Enhanced JavaScript with csInterface integration and error handling
+- Added keyframe reader controls with +/- buttons for Duration, X Distance, Y Distance
+- Implemented opacity transitions and inline messaging system
+- Comprehensive property traversal: Transform → Time Remap → Effects → Masks → Audio
+- Associated with AirBoard_v3.6.8.zxp
+
+## [3.6.0] - 2025-08-16
 ### 🎨 UI Overhaul - Container-Based Layout
 - **Section Containers**: Added rounded containers around each section instead of border dividers
 - **Optimized Spacing**: Tighter margins and padding throughout interface

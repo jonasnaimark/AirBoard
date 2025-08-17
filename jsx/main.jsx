@@ -29,6 +29,140 @@ function loadResolutionPreference() {
     }
 }
 
+// Read Keyframes - Calculate duration between selected keyframes
+function readKeyframesDuration() {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "error|No composition selected";
+        }
+        
+        // Get selected layers
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "error|No layers selected";
+        }
+        
+        // Use the first selected layer
+        var layer = selectedLayers[0];
+        
+        // Function to check a property for selected keyframes
+        function findSelectedKeyframes(property) {
+            if (!property || !property.canVaryOverTime || property.numKeys === 0) {
+                return null;
+            }
+            
+            var selectedKeys = [];
+            for (var i = 1; i <= property.numKeys; i++) {
+                if (property.keySelected(i)) {
+                    selectedKeys.push(i);
+                }
+            }
+            
+            if (selectedKeys.length >= 2) {
+                return {
+                    property: property,
+                    keys: selectedKeys
+                };
+            }
+            return null;
+        }
+        
+        // Function to recursively search for selected keyframes in a property group
+        function searchPropertyGroup(propGroup) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
+                
+                // Check if this property has selected keyframes
+                var result = findSelectedKeyframes(prop);
+                if (result) {
+                    return result;
+                }
+                
+                // If it's a property group, search recursively
+                if (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                    prop.propertyType === PropertyType.NAMED_GROUP) {
+                    var groupResult = searchPropertyGroup(prop);
+                    if (groupResult) {
+                        return groupResult;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        // Search through all layer properties for selected keyframes
+        var keyframeData = null;
+        
+        // Check transform properties first
+        keyframeData = searchPropertyGroup(layer.transform);
+        
+        // If no selected keyframes in transform, check special layer properties
+        if (!keyframeData) {
+            // Check Time Remap property specifically
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap) {
+                    keyframeData = findSelectedKeyframes(layer.timeRemap);
+                }
+            } catch(e) {
+                // Time remap might not be available
+            }
+        }
+        
+        // Check effects
+        if (!keyframeData && layer.effect && layer.effect.numProperties > 0) {
+            keyframeData = searchPropertyGroup(layer.effect);
+        }
+        
+        // Check mask properties
+        if (!keyframeData) {
+            if (layer.mask && layer.mask.numProperties > 0) {
+                keyframeData = searchPropertyGroup(layer.mask);
+            }
+        }
+        
+        // Check other layer properties like audio levels, layer styles, etc.
+        if (!keyframeData) {
+            try {
+                // Check audio levels if it's an audio layer
+                if (layer.hasAudio && layer.audioLevels) {
+                    keyframeData = findSelectedKeyframes(layer.audioLevels);
+                }
+            } catch(e) {
+                // Audio levels might not be available
+            }
+        }
+        
+        if (!keyframeData) {
+            return "error|Please select more than 1 keyframe";
+        }
+        
+        var selectedKeys = keyframeData.keys;
+        var property = keyframeData.property;
+        
+        // Get times of the first and last selected keyframes
+        var firstKeyIndex = selectedKeys[0];
+        var lastKeyIndex = selectedKeys[selectedKeys.length - 1];
+        var time1 = property.keyTime(firstKeyIndex);
+        var time2 = property.keyTime(lastKeyIndex);
+        
+        // Calculate duration in seconds
+        var durationSeconds = Math.abs(time2 - time1);
+        
+        // Convert to milliseconds
+        var durationMs = Math.round(durationSeconds * 1000);
+        
+        // Convert to frames using composition frame rate
+        var frameRate = comp.frameRate || 30;
+        var durationFrames = Math.round(durationSeconds * frameRate);
+        
+        return "success|" + durationMs + "|" + durationFrames;
+        
+    } catch(e) {
+        return "error|Failed to read keyframes: " + e.toString();
+    }
+}
+
 // Helper function to move composition to appropriate folder based on device type
 function moveCompositionToFolder(comp, deviceType) {
     try {
