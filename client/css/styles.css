@@ -12,22 +12,31 @@ body {
 }
 
 .container {
-    padding: 6px 16px 16px 16px;
+    padding: 6px 10px 10px 10px;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
     box-sizing: border-box;
 }
 
-/* Main section styling - consistent for all sections */
-.section {
-    margin-bottom: 16px; 
-    padding-bottom: 2px;
-    border-bottom: 1px solid #3a3a3a;
+/* Section container styling - creates visual containers around sections */
+.section-container {
+    background-color: #272727;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 12px 10px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.section:last-child {
-    border-bottom: none;
+.section-container:last-child {
+    margin-bottom: 0;
+}
+
+/* Main section styling - consistent for all sections */
+.section {
+    margin: 0;
+    padding: 0;
 }
 
 .section-header {
@@ -49,6 +58,10 @@ body {
     align-items: stretch;
 }
 
+.control-row:last-child {
+    margin-bottom: 0;
+}
+
 .control-row > * {
     flex: 1;
     width: calc(50% - 5px);
@@ -60,7 +73,7 @@ body {
 
 /* Main button styles */
 .main-button {
-    height: 38px;
+    height: 35px;
     padding: 12px 20px;
     background-color: #2f2f2f;
     color: #cccccc;
@@ -120,7 +133,7 @@ body {
 /* Resolution display - styled like dropdown */
 .resolution-display {
     position: relative;
-    height: 38px;
+    height: 36px;
     background-color: #222222;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
@@ -175,7 +188,7 @@ body {
 
 /* Dropdown styles */
 .dropdown {
-    height: 38px;
+    height: 36px;
     background-color: #222222;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;
@@ -274,7 +287,7 @@ body {
 
 .resolution-input-field {
     width: 100%;
-    height: 38px;
+    height: 36px;
     background-color: #222222;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 6px;

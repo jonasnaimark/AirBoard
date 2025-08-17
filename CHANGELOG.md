@@ -7,11 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### 🚧 In Development
+- **Keyframe Reader Section**: Add section to read and display current keyframe values
+- **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Material Blur Feature**: Add Blur button functionality for Material 1-5 presets
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.5.9] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.6.0] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🎨 UI Overhaul - Container-Based Layout
+- **Section Containers**: Added rounded containers around each section instead of border dividers
+- **Optimized Spacing**: Tighter margins and padding throughout interface
+- **Refined Button Heights**: Main buttons 35px, dropdowns 36px for visual hierarchy
+- **Compact Layout**: Removed padding below last row in each section
+- **Consistent Margins**: 10px spacing throughout (sides, between sections)
+- **Subtle Styling**: Containers with #272727 background, rounded corners, subtle shadows
+
+### 🔧 Technical Details
+- Added `.section-container` wrapper divs around each section in HTML
+- Updated CSS with container styling and optimized spacing
+- Removed bottom margin from `.control-row:last-child`
+- Adjusted all element heights for better proportional balance
+- Maintained all existing functionality with no JavaScript changes
+- Associated with AirBoard_v3.6.0.zxp
+
+## [3.5.9] - 2025-08-16
 ### 🎨 UI Cleanup
 - **Removed Transition Presets Section**: Eliminated the entire Transition Presets section with Fade-out and Fade-in controls
 - **Cleaner Interface**: Streamlined plugin interface with focused feature set
