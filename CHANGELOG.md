@@ -11,7 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.5.7] - 2025-08-16 ✨ **CURRENT RELEASE**
+## [3.5.9] - 2025-08-16 ✨ **CURRENT RELEASE**
+### 🎨 UI Cleanup
+- **Removed Transition Presets Section**: Eliminated the entire Transition Presets section with Fade-out and Fade-in controls
+- **Cleaner Interface**: Streamlined plugin interface with focused feature set
+- **Code Cleanup**: Removed all associated JavaScript event handlers and initialization code
+
+### 🔧 Technical Details
+- Removed Transition Presets HTML section with duration controls
+- Removed all transition-related JavaScript functions and event handlers
+- Removed initialization calls for transition duration displays
+- No CSS changes needed (unified classes still used by other sections)
+- Associated with AirBoard_v3.5.9.zxp
+
+## [3.5.7] - 2025-08-16
 ### 🎨 UI Refinement
 - **Improved Separator**: Changed duration display separator from "-" to "/" for better readability
 - **Cleaner Format**: Now displays "Fade-out 150ms / 9f" and "Fade-in 250ms / 15f"

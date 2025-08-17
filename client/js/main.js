@@ -86,93 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Transition Duration Controls
-    var transitionDurationInput = document.getElementById('transitionDuration');
-    var transitionDurationText = document.getElementById('transitionDurationText');
     
-    // Function to update transition duration display
-    function updateTransitionDurationDisplay() {
-        var currentValue = transitionDurationInput.value;
-        var frames = Math.round(currentValue * 0.06); // Convert ms to frames at 60fps
-        transitionDurationText.textContent = 'Fade-out ' + currentValue + 'ms / ' + frames + 'f';
-    }
-    
-    // Get the transition duration increment/decrement buttons
-    var transitionIncrementBtn = document.querySelector('#transitionDurationDisplay .number-btn.increment');
-    var transitionDecrementBtn = document.querySelector('#transitionDurationDisplay .number-btn.decrement');
-    
-    if (transitionIncrementBtn && transitionDecrementBtn) {
-        transitionIncrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(transitionDurationInput.value);
-            var maxValue = 2000; // Max 2000ms
-            if (currentValue < maxValue) {
-                transitionDurationInput.value = currentValue + 50;
-                updateTransitionDurationDisplay();
-            }
-        });
-        
-        transitionDecrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(transitionDurationInput.value);
-            var minValue = 0; // Min 0ms
-            if (currentValue > minValue) {
-                transitionDurationInput.value = currentValue - 50;
-                updateTransitionDurationDisplay();
-            }
-        });
-    }
-    
-    // Transition Add button handler
-    var transitionAddBtn = document.querySelector('#transitionDurationDisplay .add-btn');
-    if (transitionAddBtn) {
-        transitionAddBtn.addEventListener('click', function() {
-            console.log('Add Fade-out transition clicked - Duration:', transitionDurationInput.value + 'ms');
-            // TODO: Add fade-out transition functionality here
-        });
-    }
-    
-    // Fade-in Duration Controls
-    var fadeInDurationInput = document.getElementById('fadeInDuration');
-    var fadeInDurationText = document.getElementById('fadeInDurationText');
-    
-    // Function to update fade-in duration display
-    function updateFadeInDurationDisplay() {
-        var currentValue = fadeInDurationInput.value;
-        var frames = Math.round(currentValue * 0.06); // Convert ms to frames at 60fps
-        fadeInDurationText.textContent = 'Fade-in ' + currentValue + 'ms / ' + frames + 'f';
-    }
-    
-    // Get the fade-in duration increment/decrement buttons
-    var fadeInIncrementBtn = document.querySelector('#fadeInDurationDisplay .number-btn.increment');
-    var fadeInDecrementBtn = document.querySelector('#fadeInDurationDisplay .number-btn.decrement');
-    
-    if (fadeInIncrementBtn && fadeInDecrementBtn) {
-        fadeInIncrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(fadeInDurationInput.value);
-            var maxValue = 2000; // Max 2000ms
-            if (currentValue < maxValue) {
-                fadeInDurationInput.value = currentValue + 50;
-                updateFadeInDurationDisplay();
-            }
-        });
-        
-        fadeInDecrementBtn.addEventListener('click', function() {
-            var currentValue = parseInt(fadeInDurationInput.value);
-            var minValue = 0; // Min 0ms
-            if (currentValue > minValue) {
-                fadeInDurationInput.value = currentValue - 50;
-                updateFadeInDurationDisplay();
-            }
-        });
-    }
-    
-    // Fade-in Add button handler
-    var fadeInAddBtn = document.querySelector('#fadeInDurationDisplay .add-btn');
-    if (fadeInAddBtn) {
-        fadeInAddBtn.addEventListener('click', function() {
-            console.log('Add Fade-in transition clicked - Duration:', fadeInDurationInput.value + 'ms');
-            // TODO: Add fade-in transition functionality here
-        });
-    }
     
     // Add Device button handler
     addDeviceButton.addEventListener('click', function() {
@@ -397,9 +311,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load saved resolution preference on startup
     loadResolutionPreference();
     
-    // Initialize duration displays with frame counts on startup
-    updateTransitionDurationDisplay();
-    updateFadeInDurationDisplay();
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
