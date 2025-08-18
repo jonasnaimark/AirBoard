@@ -296,6 +296,22 @@ body {
     opacity: 0.5;
 }
 
+/* Keyframe display - styled like resolution display but without buttons */
+.keyframe-display {
+    position: relative;
+    height: 36px;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    user-select: none;
+}
+
 .resolution-display .number-controls {
     position: absolute;
     right: 6px; /* 6px from right edge */

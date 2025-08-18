@@ -12,7 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.8.7] - 2025-08-17 ✨ **CURRENT RELEASE**
+## [3.9.9] - 2025-08-18 ✨ **CURRENT RELEASE**
+### ✨ Added - KEYFRAME HELPER UI ENHANCEMENTS
+- **X/Y Distance Display**: Added visual display elements for keyframe distance measurements
+- **Enhanced Keyframe Reader**: Extended UI with X Distance and Y Distance display components
+- **Consistent Styling**: Keyframe displays match resolution display styling without interactive buttons
+- **Improved UX**: Clean visual feedback for distance measurements between keyframes
+
+### 🔧 Technical Details
+- Added `.keyframe-display` CSS class for consistent styling
+- Added X Distance and Y Distance display elements to Keyframe Reader section
+- Version updated to 3.9.9 in manifest.xml
+- Build script updated for v4.1.2 ZXP generation
+- Associated with AirBoard_v3.9.9.zxp
+
+## [3.8.7] - 2025-08-17
 ### 🔧 Fixed - IDENTICAL APPROACH FOR TIME REMAPPING
 - **Exact Same Logic**: Time remapping now uses identical delete/recreate/select approach as Position/Opacity
 - **All Keyframes Selected**: All time remapping keyframes now stay selected like other properties
