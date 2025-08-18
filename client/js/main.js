@@ -21,6 +21,155 @@ document.addEventListener('DOMContentLoaded', function() {
     var resolutionInput = document.getElementById('resolutionMultiplier');
     var resolutionText = document.getElementById('resolutionText');
     
+    // Accordion functionality
+    function initializeAccordion() {
+        var accordionToggles = document.querySelectorAll('.accordion-toggle');
+        
+        accordionToggles.forEach(function(toggle) {
+            toggle.addEventListener('click', function(e) {
+                // Only handle click if it's specifically on the toggle button, not the header
+                if (e.target !== this && !this.contains(e.target)) return;
+                
+                var sectionName = this.getAttribute('data-section');
+                var content = document.querySelector('.section-content[data-section="' + sectionName + '"]');
+                var section = content ? content.closest('.section') : null;
+                
+                if (content && section) {
+                    var isCollapsed = content.classList.contains('collapsed');
+                    
+                    if (isCollapsed) {
+                        // Expand
+                        content.classList.remove('collapsed');
+                        section.classList.remove('collapsed');
+                        this.classList.remove('collapsed');
+                    } else {
+                        // Collapse
+                        content.classList.add('collapsed');
+                        section.classList.add('collapsed');
+                        this.classList.add('collapsed');
+                    }
+                }
+            });
+        });
+    }
+    
+    
+    // Section reordering functionality
+    function initializeSectionReordering() {
+        var container = document.querySelector('.container');
+        
+        function attachReorderHandlers() {
+            var moveUpButtons = document.querySelectorAll('.move-up');
+            var moveDownButtons = document.querySelectorAll('.move-down');
+            
+            moveUpButtons.forEach(function(button) {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    var sectionContainer = this.closest('.section-container');
+                    var previousSibling = sectionContainer.previousElementSibling;
+                    
+                    if (previousSibling) {
+                        // Calculate the distance to slide
+                        var previousHeight = previousSibling.offsetHeight + 10; // height + margin
+                        
+                        // Add moving class for elevated shadow
+                        sectionContainer.classList.add('moving');
+                        
+                        // Slide the section up to the previous position
+                        sectionContainer.style.transform = 'translateY(-' + previousHeight + 'px)';
+                        
+                        // Also slide the previous section down
+                        var sectionHeight = sectionContainer.offsetHeight + 10;
+                        previousSibling.style.transform = 'translateY(' + sectionHeight + 'px)';
+                        
+                        setTimeout(function() {
+                            // Move in DOM first
+                            container.insertBefore(sectionContainer, previousSibling);
+                            
+                            // Now both sections should end up at their correct positions
+                            // Reset transforms immediately without animation
+                            sectionContainer.style.transition = 'none';
+                            previousSibling.style.transition = 'none';
+                            sectionContainer.style.transform = '';
+                            previousSibling.style.transform = '';
+                            
+                            // Restore transition after a brief moment
+                            setTimeout(function() {
+                                sectionContainer.style.transition = '';
+                                previousSibling.style.transition = '';
+                                sectionContainer.classList.remove('moving');
+                                
+                                // Reattach handlers after DOM change
+                                setTimeout(attachReorderHandlers, 50);
+                            }, 50);
+                        }, 300);
+                    }
+                });
+            });
+            
+            moveDownButtons.forEach(function(button) {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    var sectionContainer = this.closest('.section-container');
+                    var nextSibling = sectionContainer.nextElementSibling;
+                    
+                    if (nextSibling) {
+                        // Calculate the distance to slide
+                        var nextHeight = nextSibling.offsetHeight + 10; // height + margin
+                        
+                        // Add moving class for elevated shadow
+                        sectionContainer.classList.add('moving');
+                        
+                        // Slide the section down to the next position
+                        sectionContainer.style.transform = 'translateY(' + nextHeight + 'px)';
+                        
+                        // Also slide the next section up
+                        var sectionHeight = sectionContainer.offsetHeight + 10;
+                        nextSibling.style.transform = 'translateY(-' + sectionHeight + 'px)';
+                        
+                        setTimeout(function() {
+                            // Move in DOM first
+                            var nextNextSibling = nextSibling.nextElementSibling;
+                            if (nextNextSibling) {
+                                container.insertBefore(sectionContainer, nextNextSibling);
+                            } else {
+                                container.appendChild(sectionContainer);
+                            }
+                            
+                            // Reset transforms immediately without animation
+                            sectionContainer.style.transition = 'none';
+                            nextSibling.style.transition = 'none';
+                            sectionContainer.style.transform = '';
+                            nextSibling.style.transform = '';
+                            
+                            // Restore transition after a brief moment
+                            setTimeout(function() {
+                                sectionContainer.style.transition = '';
+                                nextSibling.style.transition = '';
+                                sectionContainer.classList.remove('moving');
+                                
+                                // Reattach handlers after DOM change
+                                setTimeout(attachReorderHandlers, 50);
+                            }, 50);
+                        }, 300);
+                    }
+                });
+            });
+        }
+        
+        attachReorderHandlers();
+    }
+    
+    // Initialize accordion on page load
+    initializeAccordion();
+    
+    // Initialize section reordering
+    initializeSectionReordering();
+    
     // Function to update resolution display text only
     function updateResolutionDisplay() {
         var currentValue = resolutionInput.value;

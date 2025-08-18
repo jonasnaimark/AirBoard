@@ -27,7 +27,14 @@ body {
     padding: 12px 10px;
     margin-bottom: 10px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
 }
+
+.section-container.moving {
+    position: relative;
+    z-index: 10;
+}
+
 
 .section-container:last-child {
     margin-bottom: 0;
@@ -40,14 +47,151 @@ body {
 }
 
 .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin: 0 0 10px 0;
+    padding: 0;
+    transition: margin 0.15s ease;
+}
+
+.section-header h2 {
     color: #ffffff;
     font-size: 12px;
     font-weight: 500;
-    margin: 0 0 10px 0;
+    margin: 0;
     padding: 0;
     border: none;
     text-transform: none;
     letter-spacing: 0.5px;
+}
+
+/* Section controls container */
+.section-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* Section control buttons - all same size, bigger */
+.section-btn, .accordion-toggle {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    transition: all 0.3s ease;
+    border-radius: 3px;
+    margin-top: -4px;
+    outline: none;
+}
+
+.section-btn:focus, .accordion-toggle:focus {
+    outline: none;
+}
+
+.section-btn:hover, .accordion-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Section controls always visible but arrows hidden */
+.section-controls {
+    opacity: 1;
+}
+
+/* Move buttons start hidden, show on hover over controls area */
+.section-btn {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.section-controls:hover .section-btn {
+    opacity: 1;
+}
+
+/* Accordion toggle always visible at 35% opacity, 100% on hover over controls area */
+.accordion-toggle {
+    opacity: 0.35;
+    transition: opacity 0.2s ease;
+}
+
+.section-controls:hover .accordion-toggle {
+    opacity: 1;
+}
+
+/* Control arrows for move up/down - slightly smaller */
+.control-arrow {
+    width: 5px;
+    height: 5px;
+    border-right: 1px solid #ffffff;
+    border-bottom: 1px solid #ffffff;
+    transition: transform 0.3s ease;
+    transform-origin: center;
+}
+
+.control-arrow.up {
+    transform: rotate(-135deg); /* Pointing up */
+    margin-top: 2px; /* Move down 2px */
+}
+
+.control-arrow.down {
+    transform: rotate(45deg); /* Pointing down */
+    margin-top: -2px; /* Move up 2px */
+}
+
+/* Accordion arrow - acts as collapse/expand toggle - bigger */
+.accordion-arrow {
+    width: 7px;
+    height: 1px;
+    background-color: #ffffff;
+    position: relative;
+    transition: all 0.3s ease;
+    transform-origin: center;
+}
+
+.accordion-arrow::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 3px;
+    width: 1px;
+    height: 7px;
+    background-color: #ffffff;
+    transition: opacity 0.3s ease;
+}
+
+/* When collapsed, show + (cross) */
+.accordion-toggle.collapsed .accordion-arrow::before {
+    opacity: 1;
+}
+
+/* When expanded, show - (horizontal line only) */
+.accordion-toggle:not(.collapsed) .accordion-arrow::before {
+    opacity: 0;
+}
+
+/* Section content container */
+.section-content {
+    overflow: hidden;
+    transition: max-height 0.15s ease, opacity 0.15s ease, padding 0.15s ease;
+    max-height: 500px;
+    opacity: 1;
+}
+
+.section-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* Adjust header margins when section is collapsed */
+.section.collapsed .section-header {
+    margin-bottom: 0;
 }
 
 /* Shared flex layout for controls */
