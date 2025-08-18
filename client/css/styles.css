@@ -52,7 +52,7 @@ body {
     align-items: flex-start;
     margin: 0 0 10px 0;
     padding: 0;
-    transition: margin 0.15s ease;
+    transition: margin 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
 }
 
 .section-header h2 {
@@ -135,12 +135,12 @@ body {
 
 .control-arrow.up {
     transform: rotate(-135deg); /* Pointing up */
-    margin-top: 2px; /* Move down 2px */
+    margin-top: 4px; /* Move down 4px */
 }
 
 .control-arrow.down {
     transform: rotate(45deg); /* Pointing down */
-    margin-top: -2px; /* Move up 2px */
+    margin-top: -3px; /* Move up 3px */
 }
 
 /* Accordion arrow - acts as collapse/expand toggle - bigger */
@@ -177,16 +177,14 @@ body {
 /* Section content container */
 .section-content {
     overflow: hidden;
-    transition: max-height 0.15s ease, opacity 0.15s ease, padding 0.15s ease;
-    max-height: 500px;
+    transition: max-height 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00), opacity 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
+    max-height: 200px; /* Reduced from 500px to match actual content height better */
     opacity: 1;
 }
 
 .section-content.collapsed {
     max-height: 0;
     opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
 }
 
 /* Adjust header margins when section is collapsed */
