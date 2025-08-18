@@ -12,7 +12,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [4.2.3] - 2025-08-18 ✨ **CURRENT RELEASE**
+## [4.2.6] - 2025-08-18 ✨ **CURRENT RELEASE**
+### ✨ Added - COMPLETE DISTANCE NUDGING FUNCTIONALITY
+- **X/Y Position Nudging**: Move position keyframes by ±10px with smart snapping and precision control
+- **Smart 10px Snapping Logic**: First nudge snaps to nearest 10px boundary, then continues in 10px increments
+- **Direction-Based Control**: "In" mode nudges first keyframe, "Out" mode nudges last keyframe in selection
+- **Axis-Specific Validation**: X buttons only work with Position/X Position, Y buttons only with Position/Y Position
+- **Real-Time Display Updates**: Distance values refresh immediately showing new travel distances after nudging
+
+### 🎮 Enhanced - INTELLIGENT BUTTON BEHAVIOR
+- **Property Type Detection**: Automatically validates axis compatibility and shows specific error messages
+- **Multi-Property Support**: Works seamlessly with Position (2D arrays), X Position, and Y Position properties
+- **Live Error Feedback**: Displays "Select X position keyframes" or "Select Y position keyframes" for axis mismatches
+- **Responsive Controls**: Buttons remain active during operations (no disabling) for smooth interaction
+- **Precision Targeting**: Only moves the selected keyframe (first or last) without affecting others
+
+### 🔧 Technical Implementation
+- **JavaScript Integration**: Added comprehensive event handlers for X/Y increment/decrement buttons with direction detection
+- **ExtendScript Functions**: `nudgeXPosition()`, `nudgeYPosition()`, and core `nudgePositionAxis()` with smart snapping
+- **Smart Snapping Algorithm**: `calculateSmartNudge()` provides 10px boundary detection with 0.1px tolerance
+- **Undo Group Handling**: Each nudge operation wrapped in "Nudge X Position" or "Nudge Y Position" for clean undo history
+- **Distance Recalculation**: Integrates with existing `calculatePositionDistance()` for immediate display updates
+- **Error Management**: Comprehensive axis validation and user-friendly error messaging in distance display
+- **Associated with AirBoard-v4.2.6.zxp**
+
+## [4.2.3] - 2025-08-18
 ### ✨ Added - COMPLETE X/Y POSITION DISTANCE MEASUREMENT SYSTEM
 - **Resolution-Aware Scaling**: X/Y distances automatically scaled by resolution setting and displayed as "@1x" equivalents
 - **Clean Decimal Formatting**: Trailing zeros removed (91.50px → 91.5px) for polished display

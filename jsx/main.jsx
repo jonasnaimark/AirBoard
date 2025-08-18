@@ -212,61 +212,7 @@ function readKeyframesDuration() {
         var hasXDistance = false;
         var hasYDistance = false;
         
-        // Function to check if property is position-related
-        function isPositionProperty(prop) {
-            if (!prop) return false;
-            var name = prop.name.toLowerCase();
-            var matchName = prop.matchName || "";
-            
-            return (name === "position" || name === "x position" || name === "y position" ||
-                   matchName === "ADBE Position" || matchName === "ADBE Position_0" || matchName === "ADBE Position_1");
-        }
         
-        // Function to calculate distance for position properties
-        function calculatePositionDistance(posProperty, keyIndices) {
-            if (!posProperty || keyIndices.length < 2) return { x: 0, y: 0, hasX: false, hasY: false };
-            
-            var totalXDist = 0;
-            var totalYDist = 0;
-            var hasXData = false;
-            var hasYData = false;
-            
-            // Sort key indices to process in chronological order
-            var sortedKeys = keyIndices.slice().sort(function(a, b) {
-                return posProperty.keyTime(a) - posProperty.keyTime(b);
-            });
-            
-            for (var i = 0; i < sortedKeys.length - 1; i++) {
-                var key1 = sortedKeys[i];
-                var key2 = sortedKeys[i + 1];
-                
-                var value1 = posProperty.keyValue(key1);
-                var value2 = posProperty.keyValue(key2);
-                
-                // Handle both 2D position [x,y] and separated 1D position values
-                if (value1 instanceof Array && value2 instanceof Array) {
-                    // 2D Position case
-                    if (value1.length >= 2 && value2.length >= 2) {
-                        totalXDist += Math.abs(value2[0] - value1[0]);
-                        totalYDist += Math.abs(value2[1] - value1[1]);
-                        hasXData = true;
-                        hasYData = true;
-                    }
-                } else if (typeof value1 === "number" && typeof value2 === "number") {
-                    // 1D Position case (X Position or Y Position)
-                    var propName = posProperty.name.toLowerCase();
-                    if (propName === "x position") {
-                        totalXDist += Math.abs(value2 - value1);
-                        hasXData = true;
-                    } else if (propName === "y position") {
-                        totalYDist += Math.abs(value2 - value1);
-                        hasYData = true;
-                    }
-                }
-            }
-            
-            return { x: Math.round(totalXDist), y: Math.round(totalYDist), hasX: hasXData, hasY: hasYData };
-        }
         
         // Search for position keyframes specifically
         function searchForPositionKeyframes(propGroup) {
@@ -771,6 +717,304 @@ function stretchKeyframesBackward() {
         return stretchKeyframesGrokApproach(-3); // backward 3 frames
     } catch(e) {
         return "error|Failed to stretch keyframes backward: " + e.toString();
+    }
+}
+
+// X Position nudging functions
+function nudgeXPosition(pixelAmount, direction) {
+    try {
+        return nudgePositionAxis('x', pixelAmount, direction);
+    } catch(e) {
+        return "error|Failed to nudge X position: " + e.toString();
+    }
+}
+
+// Y Position nudging functions  
+function nudgeYPosition(pixelAmount, direction) {
+    try {
+        return nudgePositionAxis('y', pixelAmount, direction);
+    } catch(e) {
+        return "error|Failed to nudge Y position: " + e.toString();
+    }
+}
+
+// Core position nudging function with distance-based smart 10px snapping
+function nudgePositionAxis(axis, nudgeDirection, direction) {
+    try {
+        app.beginUndoGroup("Nudge " + axis.toUpperCase() + " Distance");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|Please select a composition";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        var processedAny = false;
+        var finalDistance = 0;
+        var hasDistance = false;
+        
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            var selectedProps = layer.selectedProperties;
+            
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys < 2) continue;
+                
+                var selKeys = prop.selectedKeys;
+                if (selKeys.length < 2) continue;
+                
+                // Check if this is a position-related property and if it matches the axis
+                if (!isPositionProperty(prop)) continue;
+                
+                // Check axis compatibility
+                var propName = prop.name.toLowerCase();
+                var isValidAxis = false;
+                
+                if (axis === 'x') {
+                    // X axis: works with Position or X Position
+                    isValidAxis = (propName === "position" || propName === "x position");
+                } else {
+                    // Y axis: works with Position or Y Position  
+                    isValidAxis = (propName === "position" || propName === "y position");
+                }
+                
+                if (!isValidAxis) {
+                    // Return axis mismatch error
+                    app.endUndoGroup();
+                    return "error|Select " + axis.toUpperCase() + " position keyframes";
+                }
+                
+                processedAny = true;
+                
+                // Sort selected key indices
+                selKeys.sort(function(a, b) { return a - b; });
+                
+                // Get the first and last keyframes for distance calculation
+                var firstKeyIndex = selKeys[0];
+                var lastKeyIndex = selKeys[selKeys.length - 1];
+                
+                var firstValue = prop.keyValue(firstKeyIndex);
+                var lastValue = prop.keyValue(lastKeyIndex);
+                
+                // Extract the coordinate values for the specified axis
+                var firstCoord, lastCoord;
+                
+                if (firstValue instanceof Array && lastValue instanceof Array) {
+                    // 2D Position case [x, y]
+                    if (firstValue.length >= 2 && lastValue.length >= 2) {
+                        firstCoord = axis === 'x' ? firstValue[0] : firstValue[1];
+                        lastCoord = axis === 'x' ? lastValue[0] : lastValue[1];
+                    } else {
+                        continue;
+                    }
+                } else if (typeof firstValue === "number" && typeof lastValue === "number") {
+                    // 1D Position case
+                    firstCoord = firstValue;
+                    lastCoord = lastValue;
+                } else {
+                    continue;
+                }
+                
+                // Calculate current distance
+                var currentDistance = Math.abs(lastCoord - firstCoord);
+                
+                // Get the current resolution multiplier
+                var resolutionMultiplier = 2; // Default to 2x
+                try {
+                    var saved = app.settings.getSetting("AirBoard", "resolutionMultiplier");
+                    if (saved !== "") {
+                        var value = parseInt(saved);
+                        if (value >= 1 && value <= 6) {
+                            resolutionMultiplier = value;
+                        }
+                    }
+                } catch(e) {
+                    // Use default 2x if we can't read the setting
+                }
+                
+                // Calculate target distance using smart 5px snapping (resolution-aware)
+                var targetDistance = calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolutionMultiplier);
+                
+                // Calculate the adjustment needed
+                var distanceDifference = targetDistance - currentDistance;
+                
+                // Determine which keyframe to move and in which direction
+                var keyIndexToMove, newCoord;
+                
+                if (direction === 'in') {
+                    // "In" mode: move first keyframe to achieve target distance
+                    keyIndexToMove = firstKeyIndex;
+                    if (lastCoord >= firstCoord) {
+                        // Normal case: last > first, move first towards/away from last
+                        newCoord = firstCoord - distanceDifference;
+                    } else {
+                        // Reverse case: first > last, move first towards/away from last
+                        newCoord = firstCoord + distanceDifference;
+                    }
+                } else {
+                    // "Out" mode: move last keyframe to achieve target distance  
+                    keyIndexToMove = lastKeyIndex;
+                    if (lastCoord >= firstCoord) {
+                        // Normal case: last > first, move last towards/away from first
+                        newCoord = lastCoord + distanceDifference;
+                    } else {
+                        // Reverse case: first > last, move last towards/away from first
+                        newCoord = lastCoord - distanceDifference;
+                    }
+                }
+                
+                // Apply the new value
+                var currentValue = prop.keyValue(keyIndexToMove);
+                var newValue;
+                
+                if (currentValue instanceof Array && currentValue.length >= 2) {
+                    // 2D Position case [x, y]
+                    newValue = [currentValue[0], currentValue[1]];
+                    if (axis === 'x') {
+                        newValue[0] = newCoord;
+                    } else {
+                        newValue[1] = newCoord;
+                    }
+                } else if (typeof currentValue === "number") {
+                    // 1D Position case
+                    newValue = newCoord;
+                } else {
+                    continue;
+                }
+                
+                // Apply the new keyframe value
+                try {
+                    prop.setValueAtKey(keyIndexToMove, newValue);
+                } catch(e) {
+                    $.writeln("Failed to set keyframe value: " + e.toString());
+                }
+                
+                // Store the final distance for return
+                finalDistance = targetDistance;
+                hasDistance = true;
+            }
+        }
+        
+        app.endUndoGroup();
+        
+        if (!processedAny) {
+            return "error|Select " + axis.toUpperCase() + " position keyframes";
+        }
+        
+        // Recalculate total distance for display (in case of multi-keyframe paths)
+        if (processedAny) {
+            // Re-read to get accurate total distance through all keyframes
+            var readResult = readKeyframesDuration();
+            if (readResult && readResult.indexOf('success|') === 0) {
+                var parts = readResult.split('|');
+                var xDistance = parseFloat(parts[6]) || 0;
+                var yDistance = parseFloat(parts[7]) || 0;
+                var hasXDistance = parts[8] === '1';
+                var hasYDistance = parts[9] === '1';
+                
+                if (axis === 'x' && hasXDistance) {
+                    finalDistance = xDistance;
+                } else if (axis === 'y' && hasYDistance) {
+                    finalDistance = yDistance;
+                }
+            }
+        }
+        
+        return "success|" + finalDistance + "|" + (hasDistance ? "1" : "0");
+        
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Failed to nudge distance: " + e.toString();
+    }
+}
+
+// Helper function to check if property is position-related
+function isPositionProperty(prop) {
+    if (!prop) return false;
+    var name = prop.name.toLowerCase();
+    var matchName = prop.matchName || "";
+    
+    return (name === "position" || name === "x position" || name === "y position" ||
+           matchName === "ADBE Position" || matchName === "ADBE Position_0" || matchName === "ADBE Position_1");
+}
+
+// Helper function to calculate distance for position properties
+function calculatePositionDistance(posProperty, keyIndices) {
+    if (!posProperty || keyIndices.length < 2) return { x: 0, y: 0, hasX: false, hasY: false };
+    
+    var totalXDist = 0;
+    var totalYDist = 0;
+    var hasXData = false;
+    var hasYData = false;
+    
+    // Sort key indices to process in chronological order
+    var sortedKeys = keyIndices.slice().sort(function(a, b) {
+        return posProperty.keyTime(a) - posProperty.keyTime(b);
+    });
+    
+    for (var i = 0; i < sortedKeys.length - 1; i++) {
+        var key1 = sortedKeys[i];
+        var key2 = sortedKeys[i + 1];
+        
+        var value1 = posProperty.keyValue(key1);
+        var value2 = posProperty.keyValue(key2);
+        
+        // Handle both 2D position [x,y] and separated 1D position values
+        if (value1 instanceof Array && value2 instanceof Array) {
+            // 2D Position case
+            if (value1.length >= 2 && value2.length >= 2) {
+                totalXDist += Math.abs(value2[0] - value1[0]);
+                totalYDist += Math.abs(value2[1] - value1[1]);
+                hasXData = true;
+                hasYData = true;
+            }
+        } else if (typeof value1 === "number" && typeof value2 === "number") {
+            // 1D Position case (X Position or Y Position)
+            var propName = posProperty.name.toLowerCase();
+            if (propName === "x position") {
+                totalXDist += Math.abs(value2 - value1);
+                hasXData = true;
+            } else if (propName === "y position") {
+                totalYDist += Math.abs(value2 - value1);
+                hasYData = true;
+            }
+        }
+    }
+    
+    return { x: Math.round(totalXDist), y: Math.round(totalYDist), hasX: hasXData, hasY: hasYData };
+}
+
+// Smart 5px distance snapping logic (resolution-aware, distance-based)
+function calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolutionMultiplier) {
+    // Base increment is 5px at @1x, scaled by resolution multiplier
+    var baseIncrement = 5;
+    var scaledIncrement = baseIncrement * resolutionMultiplier;
+    
+    // Check if current distance is already aligned to scaledIncrement boundary
+    var remainder = Math.abs(currentDistance % scaledIncrement);
+    var tolerance = 0.1;
+    var isAlreadySnapped = (remainder < tolerance) || (remainder > (scaledIncrement - tolerance));
+    
+    if (isAlreadySnapped) {
+        // Already snapped to boundary - apply scaled increment/decrement
+        if (nudgeDirection > 0) {
+            // + button: increase distance by scaledIncrement
+            return currentDistance + scaledIncrement;
+        } else {
+            // - button: decrease distance by scaledIncrement (minimum 0)
+            return Math.max(0, currentDistance - scaledIncrement);
+        }
+    } else {
+        // Not snapped yet - snap to nearest scaledIncrement multiple
+        if (nudgeDirection > 0) {
+            // + button: snap to next higher scaledIncrement
+            return Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
+        } else {
+            // - button: snap to next lower scaledIncrement (minimum 0)
+            return Math.max(0, Math.floor(currentDistance / scaledIncrement) * scaledIncrement);
+        }
     }
 }
 

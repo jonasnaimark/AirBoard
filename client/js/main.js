@@ -592,6 +592,140 @@ document.addEventListener('DOMContentLoaded', function() {
     setupInOutToggle('xInBtn', 'xOutBtn');
     setupInOutToggle('yInBtn', 'yOutBtn');
     
+    // X Distance +/- buttons
+    var xIncrementBtn = document.getElementById('xIncrementBtn');
+    var xDecrementBtn = document.getElementById('xDecrementBtn');
+    
+    if (xIncrementBtn && xDecrementBtn) {
+        // X + button: Move X position forward by 10px
+        xIncrementBtn.addEventListener('click', function() {
+            console.log('X Distance increment clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Get current In/Out state
+            var isInDirection = document.getElementById('xInBtn').classList.contains('selected');
+            var direction = isInDirection ? 'in' : 'out';
+            
+            // Call the ExtendScript function
+            csInterface.evalScript('nudgeXPosition(1, "' + direction + '")', function(result) {
+                console.log('X nudge forward result:', result);
+                
+                // Update display based on result
+                updateDistanceDisplay('x', result);
+            });
+        });
+        
+        // X - button: Move X position backward by 10px
+        xDecrementBtn.addEventListener('click', function() {
+            console.log('X Distance decrement clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Get current In/Out state
+            var isInDirection = document.getElementById('xInBtn').classList.contains('selected');
+            var direction = isInDirection ? 'in' : 'out';
+            
+            // Call the ExtendScript function
+            csInterface.evalScript('nudgeXPosition(-1, "' + direction + '")', function(result) {
+                console.log('X nudge backward result:', result);
+                
+                // Update display based on result
+                updateDistanceDisplay('x', result);
+            });
+        });
+    }
+    
+    // Y Distance +/- buttons
+    var yIncrementBtn = document.getElementById('yIncrementBtn');
+    var yDecrementBtn = document.getElementById('yDecrementBtn');
+    
+    if (yIncrementBtn && yDecrementBtn) {
+        // Y + button: Move Y position forward by 10px
+        yIncrementBtn.addEventListener('click', function() {
+            console.log('Y Distance increment clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Get current In/Out state
+            var isInDirection = document.getElementById('yInBtn').classList.contains('selected');
+            var direction = isInDirection ? 'in' : 'out';
+            
+            // Call the ExtendScript function
+            csInterface.evalScript('nudgeYPosition(1, "' + direction + '")', function(result) {
+                console.log('Y nudge forward result:', result);
+                
+                // Update display based on result
+                updateDistanceDisplay('y', result);
+            });
+        });
+        
+        // Y - button: Move Y position backward by 10px
+        yDecrementBtn.addEventListener('click', function() {
+            console.log('Y Distance decrement clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Get current In/Out state
+            var isInDirection = document.getElementById('yInBtn').classList.contains('selected');
+            var direction = isInDirection ? 'in' : 'out';
+            
+            // Call the ExtendScript function
+            csInterface.evalScript('nudgeYPosition(-1, "' + direction + '")', function(result) {
+                console.log('Y nudge backward result:', result);
+                
+                // Update display based on result
+                updateDistanceDisplay('y', result);
+            });
+        });
+    }
+    
+    // Helper function to update distance display after nudging
+    function updateDistanceDisplay(axis, result) {
+        var textElement = document.getElementById(axis + 'DistanceText');
+        
+        if (result && result.indexOf('|') !== -1) {
+            var parts = result.split('|');
+            var status = parts[0];
+            
+            if (status === 'success') {
+                var distance = parseFloat(parts[1]);
+                var hasDistance = parts[2] === '1';
+                
+                // Get current resolution multiplier for scaling display
+                var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+                
+                if (hasDistance && distance > 0) {
+                    var scaledDistance = parseFloat((distance / resolutionMultiplier).toFixed(2));
+                    textElement.textContent = axis.toUpperCase() + ': ' + scaledDistance + 'px @1x';
+                    textElement.style.opacity = '1';
+                } else {
+                    textElement.textContent = 'Select > 1 Keyframe';
+                    textElement.style.opacity = '0.5';
+                }
+            } else if (status === 'error') {
+                var errorMsg = parts[1] || 'Select > 1 Keyframe';
+                textElement.textContent = errorMsg;
+                textElement.style.opacity = '0.5';
+            }
+        } else {
+            textElement.textContent = 'Select > 1 Keyframe';
+            textElement.style.opacity = '0.5';
+        }
+    }
+    
     // Add Device button handler
     addDeviceButton.addEventListener('click', function() {
         console.log('Add Device clicked');
