@@ -12,7 +12,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [4.1.6] - 2025-08-18 ✨ **CURRENT RELEASE**
+## [4.2.3] - 2025-08-18 ✨ **CURRENT RELEASE**
+### ✨ Added - COMPLETE X/Y POSITION DISTANCE MEASUREMENT SYSTEM
+- **Resolution-Aware Scaling**: X/Y distances automatically scaled by resolution setting and displayed as "@1x" equivalents
+- **Clean Decimal Formatting**: Trailing zeros removed (91.50px → 91.5px) for polished display
+- **Comprehensive Position Support**: Works with Position, X Position, and Y Position properties (2D arrays and separated values)
+- **Multi-Keyframe Calculation**: Calculates total distance traveled through all selected keyframes chronologically
+- **Compact Display Format**: "X: 150.5px @1x" and "Y: 75px @1x" with bolded labels when active
+
+### 🎮 Added - DISTANCE ROW CONTROL BUTTONS
+- **4-Button System**: Each distance row features "In" | "Out" | "−" | "+" buttons for future nudging functionality
+- **Radio-Style In/Out Toggle**: Click to switch between In/Out selection (only one active at a time)
+- **Subtle Selection Styling**: Selected buttons show lighter background + brighter border without color changes
+- **Optimized Layout**: Quarter-width buttons with 4px gaps, matching established design patterns
+
+### 🔧 Fixed - CRITICAL KEYFRAME STRETCHING BUG
+- **Timeline Position Independence**: Duration +/- buttons now work reliably for keyframes at ANY timeline position
+- **Smart 50ms Snapping**: First press snaps to nearest 50ms multiple, subsequent presses increment by exactly 50ms
+- **Frame Rate Independent**: Always uses millisecond-based calculations for consistent behavior across frame rates
+- **Continuous Nudging**: Both + and - buttons work indefinitely without silent failures
+- **Root Cause Resolution**: Fixed time calculation logic that previously only worked for keyframes starting at frame 0
+
+### 🎨 UI Improvements - ENHANCED VISUAL CONSISTENCY
+- **Unified Error Messaging**: All three rows now show consistent "Select > 1 Keyframe" error message at 50% opacity
+- **Refined Button Spacing**: Duration row gap reduced to 6px to match container padding spacing
+- **Improved Initial State**: Clean labels (Duration, X Distance, Y Distance) at 50% opacity before reading keyframes
+- **Enhanced Button Styling**: Distance buttons match established styling with consistent border opacity
+
+### 🔧 Technical Details
+- Enhanced `readKeyframesDuration()` ExtendScript function with comprehensive position distance calculation
+- Fixed `stretchKeyframesGrokApproach()` time calculation logic using proper relative positioning
+- Replaced problematic 50ms snapping with smart hybrid approach (snap first, then increment)
+- Added In/Out toggle JavaScript functionality with proper event handling
+- Implemented resolution-based scaling with `parseFloat()` for clean decimal display
+- Associated with AirBoard-v4.2.3.zxp
+
+## [4.1.6] - 2025-08-18
 ### 🔧 Fixed - UI REFINEMENTS
 - **Removed Bold Formatting**: X/Y Distance values now display as clean "X Distance: 150px" without bold labels
 - **Added Missing Error Messages**: When insufficient position keyframes are selected after clicking "Read Keyframes":

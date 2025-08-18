@@ -593,35 +593,34 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                 var lastTime = keyData[keyData.length - 1].time;
                 var duration = lastTime - firstTime;
                 
-                // Convert duration to milliseconds for 50ms snapping logic
+                // Smart 50ms snapping: first press snaps to nearest 50ms, subsequent presses increment by 50ms
                 var durationMs = duration * 1000;
+                var newDurationMs;
                 
-                // Calculate snapped duration based on direction
-                var snappedDurationMs;
-                if (frameAdjustment > 0) {
-                    // For +: snap to next 50ms increment, then add 50ms if already aligned
-                    var nextIncrement = Math.ceil(durationMs / 50) * 50;
-                    if (nextIncrement === durationMs) {
-                        // Already at 50ms increment, add 50ms more
-                        snappedDurationMs = durationMs + 50;
+                // Check if current duration is already a multiple of 50ms (within 1ms tolerance for floating point)
+                var remainder = durationMs % 50;
+                var isAlreadySnapped = (remainder < 1) || (remainder > 49);
+                
+                if (isAlreadySnapped) {
+                    // Already snapped to 50ms boundary - increment by exactly 50ms
+                    if (frameAdjustment > 0) {
+                        newDurationMs = durationMs + 50;
                     } else {
-                        // Not aligned, snap to next increment
-                        snappedDurationMs = nextIncrement;
+                        newDurationMs = durationMs - 50;
                     }
                 } else {
-                    // For -: snap to previous 50ms increment, then subtract 50ms if already aligned
-                    var prevIncrement = Math.floor(durationMs / 50) * 50;
-                    if (prevIncrement === durationMs) {
-                        // Already at 50ms increment, subtract 50ms more
-                        snappedDurationMs = durationMs - 50;
+                    // Not snapped yet - snap to nearest 50ms multiple
+                    if (frameAdjustment > 0) {
+                        // + button: snap to next 50ms increment
+                        newDurationMs = Math.ceil(durationMs / 50) * 50;
                     } else {
-                        // Not aligned, snap to previous increment
-                        snappedDurationMs = prevIncrement;
+                        // - button: snap to previous 50ms increment
+                        newDurationMs = Math.floor(durationMs / 50) * 50;
                     }
                 }
                 
                 // Convert back to seconds
-                var newDuration = snappedDurationMs / 1000;
+                var newDuration = newDurationMs / 1000;
                 
                 if (newDuration <= frameDuration) {
                     // Prevent negative or zero duration; skip this property
@@ -654,7 +653,10 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                         var processedIndices = [];
                         for (var k = keyData.length - 1; k >= 0; k--) { // Reverse order
                             var data = keyData[k];
-                            var newTime = firstTime + (data.time - firstTime) * scaleFactor;
+                            // Calculate relative position (0 to 1) within the selected keyframe range
+                            var relativePosition = (data.time - firstTime) / duration;
+                            // Apply to new duration, maintaining start position
+                            var newTime = firstTime + relativePosition * newDuration;
                             var keyIndex = selKeys[k];
                             
                             try {
@@ -697,7 +699,10 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                     var newSelIndices = [];
                     for (var k = 0; k < keyData.length; k++) {
                         var data = keyData[k];
-                        var newTime = firstTime + (data.time - firstTime) * scaleFactor;
+                        // Calculate relative position (0 to 1) within the selected keyframe range
+                        var relativePosition = (data.time - firstTime) / duration;
+                        // Apply to new duration, maintaining start position
+                        var newTime = firstTime + relativePosition * newDuration;
                         var newIdx = prop.addKey(newTime);
                         
                         try {

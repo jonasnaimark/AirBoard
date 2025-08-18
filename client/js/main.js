@@ -508,29 +508,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
                     durationText.style.opacity = '1';
                     
+                    // Get current resolution multiplier for scaling
+                    var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+                    
                     // Update X Distance display
                     var xDistanceText = document.getElementById('xDistanceText');
                     if (hasXDistance && xDistance > 0) {
-                        xDistanceText.textContent = 'X Distance: ' + xDistance + 'px';
+                        var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
+                        xDistanceText.textContent = 'X: ' + scaledXDistance + 'px @1x';
                         xDistanceText.style.opacity = '1';
                     } else {
-                        xDistanceText.textContent = 'Select > 1 X Position Keyframe';
+                        xDistanceText.textContent = 'Select > 1 Keyframe';
                         xDistanceText.style.opacity = '0.5';
                     }
                     
                     // Update Y Distance display
                     var yDistanceText = document.getElementById('yDistanceText');
                     if (hasYDistance && yDistance > 0) {
-                        yDistanceText.textContent = 'Y Distance: ' + yDistance + 'px';
+                        var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
+                        yDistanceText.textContent = 'Y: ' + scaledYDistance + 'px @1x';
                         yDistanceText.style.opacity = '1';
                     } else {
-                        yDistanceText.textContent = 'Select > 1 Y Position Keyframe';
+                        yDistanceText.textContent = 'Select > 1 Keyframe';
                         yDistanceText.style.opacity = '0.5';
                     }
                     
                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
-                    console.log('X Distance:', hasXDistance ? xDistance + 'px' : 'N/A');
-                    console.log('Y Distance:', hasYDistance ? yDistance + 'px' : 'N/A');
+                    console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
+                    console.log('Y Distance:', hasYDistance ? scaledYDistance + 'px @1x (raw: ' + yDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
                 } else if (status === 'error') {
                     var errorMsg = parts[1] || 'Unknown error';
                     
@@ -541,9 +546,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Reset X and Y distance displays to error state
                     var xDistanceText = document.getElementById('xDistanceText');
                     var yDistanceText = document.getElementById('yDistanceText');
-                    xDistanceText.textContent = 'Select > 1 X Position Keyframe';
+                    xDistanceText.textContent = 'Select > 1 Keyframe';
                     xDistanceText.style.opacity = '0.5';
-                    yDistanceText.textContent = 'Select > 1 Y Position Keyframe';
+                    yDistanceText.textContent = 'Select > 1 Keyframe';
                     yDistanceText.style.opacity = '0.5';
                     
                     console.log('Error:', errorMsg);
@@ -555,9 +560,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Reset X and Y distance displays to error state
                 var xDistanceText = document.getElementById('xDistanceText');
                 var yDistanceText = document.getElementById('yDistanceText');
-                xDistanceText.textContent = 'Select > 1 X Position Keyframe';
+                xDistanceText.textContent = 'Select > 1 Keyframe';
                 xDistanceText.style.opacity = '0.5';
-                yDistanceText.textContent = 'Select > 1 Y Position Keyframe';
+                yDistanceText.textContent = 'Select > 1 Keyframe';
                 yDistanceText.style.opacity = '0.5';
                 
                 console.log('Unexpected result:', result);
@@ -566,6 +571,26 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Don't initialize displays on startup - keep default labels
+    
+    // Distance controls - In/Out toggle functionality
+    function setupInOutToggle(inBtnId, outBtnId) {
+        var inBtn = document.getElementById(inBtnId);
+        var outBtn = document.getElementById(outBtnId);
+        
+        inBtn.addEventListener('click', function() {
+            inBtn.classList.add('selected');
+            outBtn.classList.remove('selected');
+        });
+        
+        outBtn.addEventListener('click', function() {
+            outBtn.classList.add('selected');
+            inBtn.classList.remove('selected');
+        });
+    }
+    
+    // Setup toggle functionality for both X and Y distance controls
+    setupInOutToggle('xInBtn', 'xOutBtn');
+    setupInOutToggle('yInBtn', 'yOutBtn');
     
     // Add Device button handler
     addDeviceButton.addEventListener('click', function() {
