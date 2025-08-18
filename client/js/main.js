@@ -48,6 +48,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         section.classList.add('collapsed');
                         this.classList.add('collapsed');
                     }
+                    
+                    // Save accordion states after toggle
+                    setTimeout(saveAccordionStates, 100);
                 }
             });
         });
@@ -101,8 +104,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 previousSibling.style.transition = '';
                                 sectionContainer.classList.remove('moving');
                                 
-                                // Reattach handlers after DOM change
-                                setTimeout(attachReorderHandlers, 50);
+                                // Reattach handlers and save order after DOM change
+                                setTimeout(function() {
+                                    attachReorderHandlers();
+                                    saveSectionOrder();
+                                }, 50);
                             }, 50);
                         }, 300);
                     }
@@ -152,8 +158,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 nextSibling.style.transition = '';
                                 sectionContainer.classList.remove('moving');
                                 
-                                // Reattach handlers after DOM change
-                                setTimeout(attachReorderHandlers, 50);
+                                // Reattach handlers and save order after DOM change
+                                setTimeout(function() {
+                                    attachReorderHandlers();
+                                    saveSectionOrder();
+                                }, 50);
                             }, 50);
                         }, 300);
                     }
@@ -201,6 +210,128 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+    }
+    
+    // Function to save section order
+    function saveSectionOrder() {
+        if (csInterface) {
+            var container = document.querySelector('.container');
+            var sections = Array.from(container.querySelectorAll('.section-container'));
+            var sectionOrder = sections.map(function(section) {
+                var header = section.querySelector('.section-header h2');
+                return header ? header.textContent : '';
+            }).join('|');
+            
+            var script = 'saveSectionOrder("' + sectionOrder + '")';
+            csInterface.evalScript(script, function(result) {
+                console.log('Section order saved:', result);
+            });
+        }
+    }
+    
+    // Function to load section order on startup
+    function loadSectionOrder() {
+        if (csInterface) {
+            var script = 'loadSectionOrder()';
+            csInterface.evalScript(script, function(result) {
+                if (result && result.length > 0) {
+                    applySectionOrder(result);
+                    console.log('Loaded section order:', result);
+                }
+            });
+        }
+    }
+    
+    // Function to apply saved section order
+    function applySectionOrder(orderString) {
+        var container = document.querySelector('.container');
+        var sections = Array.from(container.querySelectorAll('.section-container'));
+        var orderArray = orderString.split('|');
+        
+        // Create a map of section titles to section elements
+        var sectionMap = {};
+        sections.forEach(function(section) {
+            var header = section.querySelector('.section-header h2');
+            if (header) {
+                sectionMap[header.textContent] = section;
+            }
+        });
+        
+        // Reorder sections according to saved order
+        orderArray.forEach(function(title, index) {
+            var section = sectionMap[title];
+            if (section) {
+                container.appendChild(section);
+            }
+        });
+    }
+    
+    // Function to save accordion states
+    function saveAccordionStates() {
+        if (csInterface) {
+            var sections = document.querySelectorAll('.section');
+            var states = [];
+            
+            sections.forEach(function(section) {
+                var header = section.querySelector('.section-header h2');
+                var isCollapsed = section.classList.contains('collapsed');
+                if (header) {
+                    states.push(header.textContent + ':' + (isCollapsed ? 'collapsed' : 'expanded'));
+                }
+            });
+            
+            var statesString = states.join('|');
+            var script = 'saveAccordionStates("' + statesString + '")';
+            csInterface.evalScript(script, function(result) {
+                console.log('Accordion states saved:', result);
+            });
+        }
+    }
+    
+    // Function to load accordion states on startup
+    function loadAccordionStates() {
+        if (csInterface) {
+            var script = 'loadAccordionStates()';
+            csInterface.evalScript(script, function(result) {
+                if (result && result.length > 0) {
+                    applyAccordionStates(result);
+                    console.log('Loaded accordion states:', result);
+                }
+            });
+        }
+    }
+    
+    // Function to apply saved accordion states
+    function applyAccordionStates(statesString) {
+        var states = statesString.split('|');
+        var stateMap = {};
+        
+        states.forEach(function(state) {
+            var parts = state.split(':');
+            if (parts.length === 2) {
+                stateMap[parts[0]] = parts[1] === 'collapsed';
+            }
+        });
+        
+        var sections = document.querySelectorAll('.section');
+        sections.forEach(function(section) {
+            var header = section.querySelector('.section-header h2');
+            if (header && stateMap.hasOwnProperty(header.textContent)) {
+                var shouldBeCollapsed = stateMap[header.textContent];
+                var content = section.querySelector('.section-content');
+                var toggle = section.querySelector('.accordion-toggle');
+                
+                if (shouldBeCollapsed) {
+                    content.classList.add('collapsed');
+                    section.classList.add('collapsed');
+                    toggle.classList.add('collapsed');
+                } else {
+                    content.classList.remove('collapsed');
+                    section.classList.remove('collapsed');
+                    toggle.classList.remove('collapsed');
+                }
+            }
+        });
     }
     
     // Get the increment/decrement buttons and attach event listeners
@@ -611,8 +742,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     
-    // Load saved resolution preference on startup
+    // Load saved preferences on startup
     loadResolutionPreference();
+    
+    // Load section preferences after a brief delay to ensure DOM is ready
+    setTimeout(function() {
+        loadSectionOrder();
+        setTimeout(loadAccordionStates, 100);
+    }, 200);
     
     
     // Set up the panel theme to match After Effects

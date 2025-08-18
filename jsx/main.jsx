@@ -29,6 +29,56 @@ function loadResolutionPreference() {
     }
 }
 
+// Save section order preference
+function saveSectionOrder(sectionOrder) {
+    try {
+        app.settings.saveSetting("AirBoard", "sectionOrder", sectionOrder);
+        return "Section order saved";
+    } catch(e) {
+        $.writeln("Failed to save section order: " + e.toString());
+        return "error";
+    }
+}
+
+// Load section order preference
+function loadSectionOrder() {
+    try {
+        var saved = app.settings.getSetting("AirBoard", "sectionOrder");
+        if (saved !== "") {
+            return saved;
+        }
+        return ""; // Default empty order
+    } catch(e) {
+        $.writeln("Failed to load section order: " + e.toString());
+        return ""; // Default empty order on error
+    }
+}
+
+// Save accordion states preference
+function saveAccordionStates(accordionStates) {
+    try {
+        app.settings.saveSetting("AirBoard", "accordionStates", accordionStates);
+        return "Accordion states saved";
+    } catch(e) {
+        $.writeln("Failed to save accordion states: " + e.toString());
+        return "error";
+    }
+}
+
+// Load accordion states preference
+function loadAccordionStates() {
+    try {
+        var saved = app.settings.getSetting("AirBoard", "accordionStates");
+        if (saved !== "") {
+            return saved;
+        }
+        return ""; // Default empty states
+    } catch(e) {
+        $.writeln("Failed to load accordion states: " + e.toString());
+        return ""; // Default empty states on error
+    }
+}
+
 // Read Keyframes - Calculate duration between selected keyframes
 function readKeyframesDuration() {
     try {

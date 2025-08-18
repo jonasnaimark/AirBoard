@@ -13,7 +13,7 @@ cp -r CSXS client jsx assets temp-package/
 
 # Navigate to temp directory and create ZXP
 cd temp-package
-../ZXPSignCmd -sign . ../dist/AirBoard-v4.0.1.zxp ../new-cert.p12 mypassword
+../ZXPSignCmd -sign . ../dist/AirBoard-v4.1.0.zxp ../new-cert.p12 mypassword
 
 # Return to parent directory
 cd ..
@@ -22,9 +22,9 @@ cd ..
 rm -rf temp-package
 
 # Verify the file was created
-if [ -f "dist/AirBoard-v4.0.1.zxp" ]; then
-    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.0.1.zxp"
-    ls -la dist/AirBoard-v4.0.1.zxp
+if [ -f "dist/AirBoard-v4.1.0.zxp" ]; then
+    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.1.0.zxp"
+    ls -la dist/AirBoard-v4.1.0.zxp
 else
     echo "❌ ERROR: ZXP file was not created"
 fi
