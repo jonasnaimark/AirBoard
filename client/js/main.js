@@ -497,24 +497,69 @@ document.addEventListener('DOMContentLoaded', function() {
                     var durationMs = parseInt(parts[1]);
                     var durationFrames = parseInt(parts[2]);
                     
+                    // Parse position distance data (new format)
+                    var xDistance = parts.length > 6 ? parseInt(parts[6]) : 0;
+                    var yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
+                    var hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
+                    var hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
+                    
                     // Update the duration value and display
                     durationValue.value = durationMs;
                     durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
-                    
-                    // Change duration label to 100% opacity for brightness
                     durationText.style.opacity = '1';
                     
+                    // Update X Distance display
+                    var xDistanceText = document.getElementById('xDistanceText');
+                    if (hasXDistance && xDistance > 0) {
+                        xDistanceText.textContent = 'X Distance: ' + xDistance + 'px';
+                        xDistanceText.style.opacity = '1';
+                    } else {
+                        xDistanceText.textContent = 'Select > 1 X Position Keyframe';
+                        xDistanceText.style.opacity = '0.5';
+                    }
+                    
+                    // Update Y Distance display
+                    var yDistanceText = document.getElementById('yDistanceText');
+                    if (hasYDistance && yDistance > 0) {
+                        yDistanceText.textContent = 'Y Distance: ' + yDistance + 'px';
+                        yDistanceText.style.opacity = '1';
+                    } else {
+                        yDistanceText.textContent = 'Select > 1 Y Position Keyframe';
+                        yDistanceText.style.opacity = '0.5';
+                    }
+                    
                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    console.log('X Distance:', hasXDistance ? xDistance + 'px' : 'N/A');
+                    console.log('Y Distance:', hasYDistance ? yDistance + 'px' : 'N/A');
                 } else if (status === 'error') {
                     var errorMsg = parts[1] || 'Unknown error';
                     
                     // Update duration text label with error message
                     durationText.textContent = 'Select > 1 Keyframe';
+                    durationText.style.opacity = '0.5';
+                    
+                    // Reset X and Y distance displays to error state
+                    var xDistanceText = document.getElementById('xDistanceText');
+                    var yDistanceText = document.getElementById('yDistanceText');
+                    xDistanceText.textContent = 'Select > 1 X Position Keyframe';
+                    xDistanceText.style.opacity = '0.5';
+                    yDistanceText.textContent = 'Select > 1 Y Position Keyframe';
+                    yDistanceText.style.opacity = '0.5';
                     
                     console.log('Error:', errorMsg);
                 }
             } else {
                 durationText.textContent = 'Select > 1 Keyframe';
+                durationText.style.opacity = '0.5';
+                
+                // Reset X and Y distance displays to error state
+                var xDistanceText = document.getElementById('xDistanceText');
+                var yDistanceText = document.getElementById('yDistanceText');
+                xDistanceText.textContent = 'Select > 1 X Position Keyframe';
+                xDistanceText.style.opacity = '0.5';
+                yDistanceText.textContent = 'Select > 1 Y Position Keyframe';
+                yDistanceText.style.opacity = '0.5';
+                
                 console.log('Unexpected result:', result);
             }
         });

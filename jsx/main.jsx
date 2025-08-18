@@ -206,7 +206,122 @@ function readKeyframesDuration() {
         var frameRate = comp.frameRate || 30;
         var durationFrames = Math.round(durationSeconds * frameRate);
         
-        return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|" + property.propertyIndex;
+        // Additionally calculate X and Y position distances if position keyframes are selected
+        var xDistance = 0;
+        var yDistance = 0;
+        var hasXDistance = false;
+        var hasYDistance = false;
+        
+        // Function to check if property is position-related
+        function isPositionProperty(prop) {
+            if (!prop) return false;
+            var name = prop.name.toLowerCase();
+            var matchName = prop.matchName || "";
+            
+            return (name === "position" || name === "x position" || name === "y position" ||
+                   matchName === "ADBE Position" || matchName === "ADBE Position_0" || matchName === "ADBE Position_1");
+        }
+        
+        // Function to calculate distance for position properties
+        function calculatePositionDistance(posProperty, keyIndices) {
+            if (!posProperty || keyIndices.length < 2) return { x: 0, y: 0, hasX: false, hasY: false };
+            
+            var totalXDist = 0;
+            var totalYDist = 0;
+            var hasXData = false;
+            var hasYData = false;
+            
+            // Sort key indices to process in chronological order
+            var sortedKeys = keyIndices.slice().sort(function(a, b) {
+                return posProperty.keyTime(a) - posProperty.keyTime(b);
+            });
+            
+            for (var i = 0; i < sortedKeys.length - 1; i++) {
+                var key1 = sortedKeys[i];
+                var key2 = sortedKeys[i + 1];
+                
+                var value1 = posProperty.keyValue(key1);
+                var value2 = posProperty.keyValue(key2);
+                
+                // Handle both 2D position [x,y] and separated 1D position values
+                if (value1 instanceof Array && value2 instanceof Array) {
+                    // 2D Position case
+                    if (value1.length >= 2 && value2.length >= 2) {
+                        totalXDist += Math.abs(value2[0] - value1[0]);
+                        totalYDist += Math.abs(value2[1] - value1[1]);
+                        hasXData = true;
+                        hasYData = true;
+                    }
+                } else if (typeof value1 === "number" && typeof value2 === "number") {
+                    // 1D Position case (X Position or Y Position)
+                    var propName = posProperty.name.toLowerCase();
+                    if (propName === "x position") {
+                        totalXDist += Math.abs(value2 - value1);
+                        hasXData = true;
+                    } else if (propName === "y position") {
+                        totalYDist += Math.abs(value2 - value1);
+                        hasYData = true;
+                    }
+                }
+            }
+            
+            return { x: Math.round(totalXDist), y: Math.round(totalYDist), hasX: hasXData, hasY: hasYData };
+        }
+        
+        // Search for position keyframes specifically
+        function searchForPositionKeyframes(propGroup) {
+            var results = { x: 0, y: 0, hasX: false, hasY: false };
+            
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
+                
+                // Check if this is a position property with selected keyframes
+                if (isPositionProperty(prop)) {
+                    var selectedKeys = [];
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (prop.keySelected(j)) {
+                            selectedKeys.push(j);
+                        }
+                    }
+                    
+                    if (selectedKeys.length >= 2) {
+                        var distance = calculatePositionDistance(prop, selectedKeys);
+                        if (distance.hasX) {
+                            results.x += distance.x;
+                            results.hasX = true;
+                        }
+                        if (distance.hasY) {
+                            results.y += distance.y;
+                            results.hasY = true;
+                        }
+                    }
+                }
+                
+                // If it's a property group, search recursively
+                if (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                    prop.propertyType === PropertyType.NAMED_GROUP) {
+                    var groupResult = searchForPositionKeyframes(prop);
+                    if (groupResult.hasX) {
+                        results.x += groupResult.x;
+                        results.hasX = true;
+                    }
+                    if (groupResult.hasY) {
+                        results.y += groupResult.y;
+                        results.hasY = true;
+                    }
+                }
+            }
+            return results;
+        }
+        
+        // Calculate position distances from transform properties
+        var positionResults = searchForPositionKeyframes(layer.transform);
+        xDistance = positionResults.x;
+        yDistance = positionResults.y;
+        hasXDistance = positionResults.hasX;
+        hasYDistance = positionResults.hasY;
+        
+        return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|" + property.propertyIndex + "|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0");
         
     } catch(e) {
         return "error|Failed to read keyframes: " + e.toString();

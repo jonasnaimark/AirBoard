@@ -12,7 +12,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [3.9.9] - 2025-08-18 ✨ **CURRENT RELEASE**
+## [4.1.6] - 2025-08-18 ✨ **CURRENT RELEASE**
+### 🔧 Fixed - UI REFINEMENTS
+- **Removed Bold Formatting**: X/Y Distance values now display as clean "X Distance: 150px" without bold labels
+- **Added Missing Error Messages**: When insufficient position keyframes are selected after clicking "Read Keyframes":
+  - X Distance shows "Select > 1 X Position Keyframe"
+  - Y Distance shows "Select > 1 Y Position Keyframe"
+- **Preserved Clean Initial State**: X/Y Distance displays still start as simple "X Distance" and "Y Distance" at 50% opacity
+
+### 🔧 Technical Details
+- Removed innerHTML with `<strong>` tags, reverted to textContent for clean formatting
+- Enhanced error state handling to show specific position keyframe requirements
+- Maintained proper initial state vs error state distinction
+- Associated with AirBoard-v4.1.6.zxp
+
+## [4.1.4] - 2025-08-18
+### 🎨 UI Improvements - ENHANCED VISUAL HIERARCHY
+- **Duration Display**: Now shows "Select > 1 Keyframe" at 50% opacity initially instead of "Duration"
+- **Simplified Initial State**: X/Y Distance displays now show simple "X Distance" and "Y Distance" at 50% opacity
+- **Bolded Active Labels**: When distance values are shown, labels are bolded: "**X Distance:** 150px"
+- **Consistent Opacity Patterns**: All text elements start at 50% opacity and brighten to 100% when data is available
+- **Cleaner UX Flow**: More intuitive progression from instruction → data display
+
+### 🔧 Technical Details
+- Updated HTML initial text content for all keyframe displays
+- Enhanced JavaScript to use innerHTML with `<strong>` tags for bolded labels
+- Consistent opacity handling across Duration, X Distance, and Y Distance displays
+- Improved error state handling with proper opacity resets
+- Associated with AirBoard-v4.1.4.zxp
+
+## [4.1.3] - 2025-08-18
+### ✨ Added - X/Y POSITION DISTANCE MEASUREMENT
+- **X Distance Calculation**: Shows total X coordinate movement between selected position keyframes
+- **Y Distance Calculation**: Shows total Y coordinate movement between selected position keyframes
+- **Multi-Keyframe Support**: Calculates total distance traveled through all selected keyframes chronologically
+- **Position Property Support**: Works with Position, X Position, and Y Position keyframes (both 2D and separated)
+- **Smart Error Messaging**: Shows "Select > 1 X Position Keyframe" when insufficient keyframes selected
+- **Pixel Units**: Always displays distance in pixels (px) with positive values regardless of movement direction
+
+### 🔧 Technical Details
+- Enhanced `readKeyframesDuration()` ExtendScript function with position distance calculation
+- Added comprehensive position property detection (Position, X Position, Y Position)
+- Handles both 2D position arrays [x,y] and separated 1D position values
+- JavaScript parsing updated to handle extended result format
+- Real-time opacity changes (50% instruction text → 100% when data available)
+- Associated with AirBoard-v4.1.3.zxp
+
+## [3.9.9] - 2025-08-18
 ### ✨ Added - KEYFRAME HELPER UI ENHANCEMENTS
 - **X/Y Distance Display**: Added visual display elements for keyframe distance measurements
 - **Enhanced Keyframe Reader**: Extended UI with X Distance and Y Distance display components
