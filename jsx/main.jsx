@@ -355,7 +355,6 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
         }
         
         var frameDuration = 1 / comp.frameRate;
-        var addTime = frameAdjustment * frameDuration;
         
         var selectedLayers = comp.selectedLayers;
         var totalDuration = 0;
@@ -428,7 +427,36 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                 var firstTime = keyData[0].time;
                 var lastTime = keyData[keyData.length - 1].time;
                 var duration = lastTime - firstTime;
-                var newDuration = duration + addTime;
+                
+                // Convert duration to milliseconds for 50ms snapping logic
+                var durationMs = duration * 1000;
+                
+                // Calculate snapped duration based on direction
+                var snappedDurationMs;
+                if (frameAdjustment > 0) {
+                    // For +: snap to next 50ms increment, then add 50ms if already aligned
+                    var nextIncrement = Math.ceil(durationMs / 50) * 50;
+                    if (nextIncrement === durationMs) {
+                        // Already at 50ms increment, add 50ms more
+                        snappedDurationMs = durationMs + 50;
+                    } else {
+                        // Not aligned, snap to next increment
+                        snappedDurationMs = nextIncrement;
+                    }
+                } else {
+                    // For -: snap to previous 50ms increment, then subtract 50ms if already aligned
+                    var prevIncrement = Math.floor(durationMs / 50) * 50;
+                    if (prevIncrement === durationMs) {
+                        // Already at 50ms increment, subtract 50ms more
+                        snappedDurationMs = durationMs - 50;
+                    } else {
+                        // Not aligned, snap to previous increment
+                        snappedDurationMs = prevIncrement;
+                    }
+                }
+                
+                // Convert back to seconds
+                var newDuration = snappedDurationMs / 1000;
                 
                 if (newDuration <= frameDuration) {
                     // Prevent negative or zero duration; skip this property
