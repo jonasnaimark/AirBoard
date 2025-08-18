@@ -1086,10 +1086,17 @@ function addGestureFromPanel(gestureType, multiplier) {
         // Handle positioning - check if property has keyframes  
         try {
             if (gestureLayer.transform.position.numKeys > 0) {
-                // If there are keyframes, offset all keyframe values to center
-                var currentPos = gestureLayer.transform.position.value;
-                var offsetX = (comp.width/2) - currentPos[0];
-                var offsetY = (comp.height/2) - currentPos[1];
+                // If there are keyframes, offset all keyframe values to center based on second keyframe
+                var referencePos;
+                if (gestureLayer.transform.position.numKeys >= 2) {
+                    // Use second keyframe as reference for centering
+                    referencePos = gestureLayer.transform.position.keyValue(2);
+                } else {
+                    // Fallback to first keyframe if only one exists
+                    referencePos = gestureLayer.transform.position.keyValue(1);
+                }
+                var offsetX = (comp.width/2) - referencePos[0];
+                var offsetY = (comp.height/2) - referencePos[1];
                 
                 for (var p = 1; p <= gestureLayer.transform.position.numKeys; p++) {
                     var keyTime = gestureLayer.transform.position.keyTime(p);
