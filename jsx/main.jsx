@@ -1567,11 +1567,18 @@ function addComponentFromPanel(componentType, multiplier) {
         var componentData = {
             "timer": {
                 compName: "Millisecond Counter",
-                layerName: "Time Counter"
+                layerName: "Time Counter",
+                templateFile: "AirBoard Templates.aep"
             },
             "dot-loader": {
                 compName: "Dot Loader",
-                layerName: "Dot Loader"
+                layerName: "Dot Loader",
+                templateFile: "AirBoard Templates.aep"
+            },
+            "belo-spin": {
+                compName: "Belo - Continuous Loop",
+                layerName: "Belo Spin", // This will be the name after copying
+                templateFile: "Belo Spin.aep"
             }
         };
         
@@ -1583,12 +1590,12 @@ function addComponentFromPanel(componentType, multiplier) {
         }
         
         // Template file path
-        var templatePath = extensionRoot + "/assets/templates/AirBoard Templates.aep";
+        var templatePath = extensionRoot + "/assets/templates/" + data.templateFile;
         var templateFile = new File(templatePath);
         
         // Check alternate path separator
         if (!templateFile.exists) {
-            templatePath = extensionRoot + "\\assets\\templates\\AirBoard Templates.aep";
+            templatePath = extensionRoot + "\\assets\\templates\\" + data.templateFile;
             templateFile = new File(templatePath);
         }
         
@@ -1653,8 +1660,14 @@ function addComponentFromPanel(componentType, multiplier) {
             }
         }
         
+        // If exact layer name not found, try to use the first layer as fallback
+        if (!sourceLayer && componentComp.layers.length > 0) {
+            sourceLayer = componentComp.layers[1];
+            $.writeln("Layer '" + data.layerName + "' not found, using first layer: " + sourceLayer.name);
+        }
+        
         if (!sourceLayer) {
-            alert("Cannot find layer '" + data.layerName + "' in " + data.compName);
+            alert("Cannot find any layers in " + data.compName);
             // app.endUndoGroup();
             return "error";
         }

@@ -1,29 +1,69 @@
 // This file connects the HTML panel to After Effects
 
+// Hide control buttons on startup - only show after "Read Keyframes" is clicked
+setTimeout(function() {
+    var durationControls = document.querySelector('#durationDisplay .number-controls');
+    var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
+    var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
+    
+    if (durationControls) durationControls.style.display = 'none';
+    if (xControls) xControls.style.display = 'none';
+    if (yControls) yControls.style.display = 'none';
+}, 1000); // Wait for DOM to be ready
+
 // Debug utilities for Chrome DevTools
 const DEBUG = {
     log: (msg, data) => console.log(`🎬 AirBoard: ${msg}`, data || ''),
     error: (msg, error) => console.error(`❌ AirBoard Error: ${msg}`, error),
     info: (msg, data) => console.info(`ℹ️ AirBoard: ${msg}`, data || ''),
-    warn: (msg, data) => console.warn(`⚠️ AirBoard Warning: ${msg}`, data || ''),
-    alert: (msg) => alert(`🐛 DEBUG: ${msg}`) // Simple popup debugging
+    warn: (msg, data) => console.warn(`⚠️ AirBoard Warning: ${msg}`, data || '')
 };
 
-// Log startup
-DEBUG.log('Panel loading...');
+// Helper functions to show/hide control buttons
+function hidePositionButtons() {
+    var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
+    var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
+    if (xControls) xControls.style.display = 'none';
+    if (yControls) yControls.style.display = 'none';
+}
 
-// Add debugging test function to window for easy access from Chrome DevTools
-window.testDebug = () => {
-    DEBUG.log('Debug test triggered from Chrome DevTools!');
-    DEBUG.info('Extension path:', extensionPath);
-    DEBUG.warn('This is a test warning');
-    DEBUG.error('This is a test error (not real)');
-    console.table([
-        {feature: 'Console logging', status: '✅ Working'},
-        {feature: 'Chrome DevTools', status: '✅ Connected'},
-        {feature: 'After Effects API', status: csInterface ? '✅ Available' : '❌ Not available'}
-    ]);
-};
+function showPositionButtons() {
+    var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
+    var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
+    if (xControls) xControls.style.display = 'flex';
+    if (yControls) yControls.style.display = 'flex';
+}
+
+function hideXButtons() {
+    var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
+    if (xControls) xControls.style.display = 'none';
+}
+
+function showXButtons() {
+    var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
+    if (xControls) xControls.style.display = 'flex';
+}
+
+function hideYButtons() {
+    var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
+    if (yControls) yControls.style.display = 'none';
+}
+
+function showYButtons() {
+    var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
+    if (yControls) yControls.style.display = 'flex';
+}
+
+function hideDurationButtons() {
+    var durationControls = document.querySelector('#durationDisplay .number-controls');
+    if (durationControls) durationControls.style.display = 'none';
+}
+
+function showDurationButtons() {
+    var durationControls = document.querySelector('#durationDisplay .number-controls');
+    if (durationControls) durationControls.style.display = 'flex';
+}
+
 
 // Add simple debug panel to the extension UI (DEV MODE only)
 window.addDebugPanel = () => {
@@ -338,7 +378,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return header ? header.textContent : '';
             }).join('|');
             
-            var script = 'saveSectionOrder("' + sectionOrder + '")';
+            var script = 'saveSectionOrder(' + JSON.stringify(sectionOrder) + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Section order saved:', result);
             });
@@ -397,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             var statesString = states.join('|');
-            var script = 'saveAccordionStates("' + statesString + '")';
+            var script = 'saveAccordionStates(' + JSON.stringify(statesString) + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Accordion states saved:', result);
             });
@@ -595,9 +635,18 @@ document.addEventListener('DOMContentLoaded', function() {
     readKeyframesButton.addEventListener('click', function() {
         DEBUG.log('Read Keyframes clicked');
         
+        // Reset distance displays when starting read operation
+        var xDistanceText = document.getElementById('xDistanceText');
+        var yDistanceText = document.getElementById('yDistanceText');
+        xDistanceText.textContent = 'Select > 1 keyframe';
+        xDistanceText.style.opacity = '1';
+        yDistanceText.textContent = 'Select > 1 keyframe';
+        yDistanceText.style.opacity = '1';
+        
         // Check if CSInterface is available
         if (!csInterface) {
-            durationText.textContent = 'Select > 1 Keyframe';
+            durationText.textContent = 'Select > 1 keyframe';
+            durationText.style.opacity = '1';
             return;
         }
         
@@ -626,29 +675,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
                     durationText.style.opacity = '1';
                     
+                    // Show duration buttons when we have valid data
+                    showDurationButtons();
+                    
                     // Get current resolution multiplier for scaling
                     var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
                     
                     // Update X Distance display
                     var xDistanceText = document.getElementById('xDistanceText');
-                    if (hasXDistance && xDistance > 0) {
-                        var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
-                        xDistanceText.textContent = 'X: ' + scaledXDistance + 'px @1x';
-                        xDistanceText.style.opacity = '1';
+                    if (hasXDistance) {
+                        if (xDistance > 0) {
+                            var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
+                            xDistanceText.textContent = 'X: ' + scaledXDistance + 'px @1x';
+                            xDistanceText.style.opacity = '1';
+                            showXButtons();
+                        } else {
+                            // Has X position keyframes but no distance change
+                            xDistanceText.textContent = 'No change in X position';
+                            xDistanceText.style.opacity = '1';
+                            hideXButtons();
+                        }
                     } else {
-                        xDistanceText.textContent = 'Select > 1 Keyframe';
-                        xDistanceText.style.opacity = '0.5';
+                        // No X position keyframes selected
+                        xDistanceText.textContent = 'Select X position keyframe';
+                        xDistanceText.style.opacity = '1';
+                        hideXButtons();
                     }
                     
                     // Update Y Distance display
                     var yDistanceText = document.getElementById('yDistanceText');
-                    if (hasYDistance && yDistance > 0) {
-                        var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
-                        yDistanceText.textContent = 'Y: ' + scaledYDistance + 'px @1x';
-                        yDistanceText.style.opacity = '1';
+                    if (hasYDistance) {
+                        if (yDistance > 0) {
+                            var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
+                            yDistanceText.textContent = 'Y: ' + scaledYDistance + 'px @1x';
+                            yDistanceText.style.opacity = '1';
+                            showYButtons();
+                        } else {
+                            // Has Y position keyframes but no distance change
+                            yDistanceText.textContent = 'No change in Y position';
+                            yDistanceText.style.opacity = '1';
+                            hideYButtons();
+                        }
                     } else {
-                        yDistanceText.textContent = 'Select > 1 Keyframe';
-                        yDistanceText.style.opacity = '0.5';
+                        // No Y position keyframes selected
+                        yDistanceText.textContent = 'Select Y position keyframe';
+                        yDistanceText.style.opacity = '1';
+                        hideYButtons();
                     }
                     
                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
@@ -658,30 +730,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     var errorMsg = parts[1] || 'Unknown error';
                     
                     // Update duration text label with error message
-                    durationText.textContent = 'Select > 1 Keyframe';
-                    durationText.style.opacity = '0.5';
+                    durationText.textContent = 'Select > 1 keyframe';
+                    durationText.style.opacity = '1';
                     
-                    // Reset X and Y distance displays to error state
+                    // Reset X and Y distance displays to error state and hide buttons
                     var xDistanceText = document.getElementById('xDistanceText');
                     var yDistanceText = document.getElementById('yDistanceText');
-                    xDistanceText.textContent = 'Select > 1 Keyframe';
-                    xDistanceText.style.opacity = '0.5';
-                    yDistanceText.textContent = 'Select > 1 Keyframe';
-                    yDistanceText.style.opacity = '0.5';
+                    xDistanceText.textContent = 'Select > 1 keyframe';
+                    xDistanceText.style.opacity = '1';
+                    hideXButtons();
+                    yDistanceText.textContent = 'Select > 1 keyframe';
+                    yDistanceText.style.opacity = '1';
+                    hideYButtons();
                     
                     DEBUG.error('Keyframe reading failed:', errorMsg);
                 }
             } else {
-                durationText.textContent = 'Select > 1 Keyframe';
-                durationText.style.opacity = '0.5';
+                durationText.textContent = 'Select > 1 keyframe';
+                durationText.style.opacity = '1';
                 
-                // Reset X and Y distance displays to error state
+                // Reset X and Y distance displays to error state and hide buttons
                 var xDistanceText = document.getElementById('xDistanceText');
                 var yDistanceText = document.getElementById('yDistanceText');
-                xDistanceText.textContent = 'Select > 1 Keyframe';
-                xDistanceText.style.opacity = '0.5';
-                yDistanceText.textContent = 'Select > 1 Keyframe';
-                yDistanceText.style.opacity = '0.5';
+                xDistanceText.textContent = 'Select > 1 keyframe';
+                xDistanceText.style.opacity = '1';
+                hideXButtons();
+                yDistanceText.textContent = 'Select > 1 keyframe';
+                yDistanceText.style.opacity = '1';
+                hideYButtons();
                 
                 console.log('Unexpected result:', result);
             }
@@ -1076,4 +1152,5 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up the panel theme to match After Effects
     csInterface.setBackgroundColor(38, 38, 38); // Dark gray background
+    
 });
