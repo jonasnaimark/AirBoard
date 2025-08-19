@@ -1,6 +1,19 @@
 // Global variable to store extension path (set by the panel)
 var extensionRoot = "";
 
+// Debug utilities for ExtendScript
+var DEBUG_JSX = {
+    log: function(message, data) {
+        $.writeln("🎬 AirBoard: " + message + (data ? " | " + data : ""));
+    },
+    error: function(message, error) {
+        $.writeln("❌ AirBoard Error: " + message + " | " + error.toString());
+    },
+    info: function(message, data) {
+        $.writeln("ℹ️ AirBoard Info: " + message + (data ? " | " + data : ""));
+    }
+};
+
 // User Preferences - Save/Load resolution multiplier
 function saveResolutionPreference(multiplier) {
     try {
@@ -81,6 +94,7 @@ function loadAccordionStates() {
 
 // Read Keyframes - Calculate duration between selected keyframes
 function readKeyframesDuration() {
+    DEBUG_JSX.log("readKeyframesDuration() called");
     try {
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
@@ -954,32 +968,31 @@ function calculatePositionDistance(posProperty, keyIndices) {
         return posProperty.keyTime(a) - posProperty.keyTime(b);
     });
     
-    for (var i = 0; i < sortedKeys.length - 1; i++) {
-        var key1 = sortedKeys[i];
-        var key2 = sortedKeys[i + 1];
-        
-        var value1 = posProperty.keyValue(key1);
-        var value2 = posProperty.keyValue(key2);
-        
-        // Handle both 2D position [x,y] and separated 1D position values
-        if (value1 instanceof Array && value2 instanceof Array) {
-            // 2D Position case
-            if (value1.length >= 2 && value2.length >= 2) {
-                totalXDist += Math.abs(value2[0] - value1[0]);
-                totalYDist += Math.abs(value2[1] - value1[1]);
-                hasXData = true;
-                hasYData = true;
-            }
-        } else if (typeof value1 === "number" && typeof value2 === "number") {
-            // 1D Position case (X Position or Y Position)
-            var propName = posProperty.name.toLowerCase();
-            if (propName === "x position") {
-                totalXDist += Math.abs(value2 - value1);
-                hasXData = true;
-            } else if (propName === "y position") {
-                totalYDist += Math.abs(value2 - value1);
-                hasYData = true;
-            }
+    // Calculate distance between first and last keyframes only
+    var firstKey = sortedKeys[0];
+    var lastKey = sortedKeys[sortedKeys.length - 1];
+    
+    var value1 = posProperty.keyValue(firstKey);
+    var value2 = posProperty.keyValue(lastKey);
+    
+    // Handle both 2D position [x,y] and separated 1D position values
+    if (value1 instanceof Array && value2 instanceof Array) {
+        // 2D Position case
+        if (value1.length >= 2 && value2.length >= 2) {
+            totalXDist = Math.abs(value2[0] - value1[0]);
+            totalYDist = Math.abs(value2[1] - value1[1]);
+            hasXData = true;
+            hasYData = true;
+        }
+    } else if (typeof value1 === "number" && typeof value2 === "number") {
+        // 1D Position case (X Position or Y Position)
+        var propName = posProperty.name.toLowerCase();
+        if (propName === "x position") {
+            totalXDist = Math.abs(value2 - value1);
+            hasXData = true;
+        } else if (propName === "y position") {
+            totalYDist = Math.abs(value2 - value1);
+            hasYData = true;
         }
     }
     

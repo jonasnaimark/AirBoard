@@ -377,6 +377,7 @@ body {
     font-weight: 500;
     height: 26px;
     border-radius: 4px;
+    outline: none; /* Remove focus outline */
 }
 
 .keyframe-display .distance-controls .distance-btn:hover {
@@ -387,6 +388,10 @@ body {
 
 .keyframe-display .distance-controls .distance-btn:active {
     transform: scale(0.98);
+}
+
+.keyframe-display .distance-controls .distance-btn:focus {
+    outline: none; /* Remove focus outline */
 }
 
 /* In/Out radio-style selection states - subtle opacity-based selection */

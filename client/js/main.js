@@ -1,5 +1,120 @@
 // This file connects the HTML panel to After Effects
 
+// Debug utilities for Chrome DevTools
+const DEBUG = {
+    log: (msg, data) => console.log(`🎬 AirBoard: ${msg}`, data || ''),
+    error: (msg, error) => console.error(`❌ AirBoard Error: ${msg}`, error),
+    info: (msg, data) => console.info(`ℹ️ AirBoard: ${msg}`, data || ''),
+    warn: (msg, data) => console.warn(`⚠️ AirBoard Warning: ${msg}`, data || ''),
+    alert: (msg) => alert(`🐛 DEBUG: ${msg}`) // Simple popup debugging
+};
+
+// Log startup
+DEBUG.log('Panel loading...');
+
+// Add debugging test function to window for easy access from Chrome DevTools
+window.testDebug = () => {
+    DEBUG.log('Debug test triggered from Chrome DevTools!');
+    DEBUG.info('Extension path:', extensionPath);
+    DEBUG.warn('This is a test warning');
+    DEBUG.error('This is a test error (not real)');
+    console.table([
+        {feature: 'Console logging', status: '✅ Working'},
+        {feature: 'Chrome DevTools', status: '✅ Connected'},
+        {feature: 'After Effects API', status: csInterface ? '✅ Available' : '❌ Not available'}
+    ]);
+};
+
+// Add simple debug panel to the extension UI (DEV MODE only)
+window.addDebugPanel = () => {
+    if (document.getElementById('debug-panel')) return; // Already exists
+    
+    const debugPanel = document.createElement('div');
+    debugPanel.id = 'debug-panel';
+    debugPanel.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 250px;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 10px;
+        font-size: 10px;
+        color: #ccc;
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        font-family: monospace;
+    `;
+    
+    debugPanel.innerHTML = `
+        <div style="font-weight: bold; margin-bottom: 5px; user-select: none;">🐛 Debug Panel</div>
+        <div id="debug-log" style="
+            user-select: text; 
+            -webkit-user-select: text; 
+            -moz-user-select: text;
+            font-family: monospace;
+            font-size: 9px;
+            line-height: 1.3;
+        "></div>
+        <div style="margin-top: 8px; user-select: none;">
+            <button onclick="document.getElementById('debug-log').innerHTML = ''" style="
+                background: #444; 
+                border: 1px solid #666; 
+                color: #ccc; 
+                padding: 2px 6px; 
+                border-radius: 3px; 
+                font-size: 9px;
+                margin-right: 4px;
+                cursor: pointer;
+            ">Clear</button>
+            <button onclick="navigator.clipboard && navigator.clipboard.writeText(document.getElementById('debug-log').innerText)" style="
+                background: #444; 
+                border: 1px solid #666; 
+                color: #ccc; 
+                padding: 2px 6px; 
+                border-radius: 3px; 
+                font-size: 9px;
+                margin-right: 4px;
+                cursor: pointer;
+            ">Copy</button>
+            <button onclick="document.getElementById('debug-panel').remove()" style="
+                background: #666; 
+                border: 1px solid #888; 
+                color: white; 
+                padding: 2px 6px; 
+                border-radius: 3px; 
+                font-size: 9px;
+                cursor: pointer;
+            ">Close</button>
+        </div>
+    `;
+    
+    document.body.appendChild(debugPanel);
+    
+    // Redirect console.log to debug panel
+    const originalLog = console.log;
+    console.log = (...args) => {
+        originalLog(...args);
+        const logDiv = document.getElementById('debug-log');
+        if (logDiv) {
+            logDiv.innerHTML += `<div style="
+                margin: 2px 0; 
+                font-size: 9px; 
+                padding: 1px 0;
+                user-select: text;
+                -webkit-user-select: text;
+                word-wrap: break-word;
+            ">${args.join(' ')}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    };
+};
+
 // Wait for the page to load
 document.addEventListener('DOMContentLoaded', function() {
     // Create connection to After Effects
@@ -9,8 +124,9 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         csInterface = new CSInterface();
         extensionPath = csInterface.getSystemPath(SystemPath.EXTENSION);
+        DEBUG.log('CSInterface initialized successfully');
     } catch(e) {
-        console.log("CSInterface not available:", e);
+        DEBUG.error("CSInterface not available", e);
     }
     
     // Get the buttons
@@ -477,7 +593,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Read Keyframes button handler
     var readKeyframesButton = document.getElementById('readKeyframes');
     readKeyframesButton.addEventListener('click', function() {
-        console.log('Read Keyframes clicked');
+        DEBUG.log('Read Keyframes clicked');
         
         // Check if CSInterface is available
         if (!csInterface) {
@@ -486,8 +602,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Call the After Effects script to read keyframe duration
+        DEBUG.log('About to call readKeyframesDuration() in After Effects...');
         csInterface.evalScript('readKeyframesDuration()', function(result) {
-            console.log('Keyframe reading result:', result);
+            DEBUG.log('Got result from After Effects:', result);
             
             if (result && result.indexOf('|') !== -1) {
                 var parts = result.split('|');
@@ -496,6 +613,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (status === 'success') {
                     var durationMs = parseInt(parts[1]);
                     var durationFrames = parseInt(parts[2]);
+                    DEBUG.log('Successfully parsed duration:', durationMs + 'ms, ' + durationFrames + ' frames');
                     
                     // Parse position distance data (new format)
                     var xDistance = parts.length > 6 ? parseInt(parts[6]) : 0;
@@ -551,7 +669,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     yDistanceText.textContent = 'Select > 1 Keyframe';
                     yDistanceText.style.opacity = '0.5';
                     
-                    console.log('Error:', errorMsg);
+                    DEBUG.error('Keyframe reading failed:', errorMsg);
                 }
             } else {
                 durationText.textContent = 'Select > 1 Keyframe';

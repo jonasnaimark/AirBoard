@@ -142,6 +142,22 @@ The most critical technical achievement was solving the gesture layer scaling is
 
 ## 🔧 Development
 
+### Quick Development Setup
+
+For rapid testing without building ZXPs:
+```bash
+# One-time setup
+./dev-sync.sh
+
+# Development workflow:
+# 1. Edit code → 2. Save → 3. Restart AE → 4. Test "AirBoard Dev"
+
+# Production build (auto-removes [DEV MODE] markers):
+./build-latest.sh
+```
+
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for complete development guide.
+
 ### Contributing Guidelines
 
 1. **UI Changes**: Use unified `.section` and `.control-row` classes
