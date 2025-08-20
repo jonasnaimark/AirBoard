@@ -2675,7 +2675,163 @@ function findRectangleData(layer) {
     }
 }
 
-// Add Shadow functionality - Apply elevation shadow presets based on resolution and elevation
+// Detect the current elevation applied to a layer
+function getCurrentElevation(layer) {
+    try {
+        // Check for stroke layer style (indicates Elevation 0)
+        if (typeof layer.layerStyles !== 'undefined') {
+            var layerStyles = layer.layerStyles;
+            if (typeof layerStyles.stroke !== 'undefined' && layerStyles.stroke.enabled) {
+                return "0"; // Stroke layer style enabled = Elevation 0
+            }
+        }
+        
+        // Alternative method for stroke layer style
+        if (typeof layer.property !== 'undefined') {
+            var layerStylesGroup = layer.property("Layer Styles");
+            if (layerStylesGroup) {
+                for (var j = 1; j <= layerStylesGroup.numProperties; j++) {
+                    var styleProp = layerStylesGroup.property(j);
+                    if (styleProp.name.toLowerCase().indexOf("stroke") !== -1 && styleProp.enabled) {
+                        return "0"; // Stroke layer style enabled = Elevation 0
+                    }
+                }
+            }
+        }
+        
+        // Check for drop shadow effects (indicates Elevation 1-4)
+        var effects = layer.Effects;
+        var shadowCount = 0;
+        for (var i = 1; i <= effects.numProperties; i++) {
+            var effect = effects.property(i);
+            if (effect.name.indexOf("Drop Shadow") !== -1) {
+                shadowCount++;
+            }
+        }
+        
+        // Guess elevation based on shadow count (this is approximate)
+        if (shadowCount === 0) {
+            return null; // No shadows, no stroke = no elevation applied
+        } else if (shadowCount === 1) {
+            return "1"; // 1 shadow = likely Elevation 1
+        } else if (shadowCount === 3) {
+            return "2"; // 3 shadows = likely Elevation 2
+        } else if (shadowCount === 5) {
+            return "3"; // 5 shadows = likely Elevation 3
+        } else if (shadowCount >= 7) {
+            return "4"; // 7+ shadows = likely Elevation 4
+        }
+        
+        // If we have shadows but can't determine exact elevation, assume change needed
+        return "unknown";
+        
+    } catch(error) {
+        return null;
+    }
+}
+
+// Handle stroke layer style enable/disable based on elevation type
+
+// Remove shadow-related effects from a layer before applying new shadow preset
+function removeShadowEffects(layer, targetElevationType) {
+    var debugInfo = [];
+    try {
+        var effects = layer.Effects;
+        var effectsToRemove = [];
+        
+        // List of effect match names that should be removed for shadow swapping
+        // Initially using common shadow effect names - will be updated based on debug output
+        var shadowEffectNames = [
+            "ADBE Drop Shadow",             // Drop Shadow
+            "ADBE Stroke",                  // Stroke (often used for outlines/borders)
+            "ADBE Gaussian Blur 2",         // Gaussian Blur (sometimes used for shadows)
+            "ADBE Glow",                    // Glow effects
+            "ADBE Inner/Outer Glow"         // Inner/Outer Glow
+        ];
+        
+        // Collect effects to remove (iterate backwards to avoid index issues)
+        for (var i = effects.numProperties; i >= 1; i--) {
+            var effect = effects.property(i);
+            var matchName = effect.matchName;
+            var displayName = effect.name;
+            
+            // Check if this effect should be removed
+            for (var j = 0; j < shadowEffectNames.length; j++) {
+                if (matchName === shadowEffectNames[j]) {
+                    effectsToRemove.push(i);
+                    break;
+                }
+            }
+        }
+        
+        // Remove the identified effects
+        for (var k = 0; k < effectsToRemove.length; k++) {
+            try {
+                effects.property(effectsToRemove[k]).remove();
+            } catch(removeError) {
+                // Continue if removal fails
+            }
+        }
+        
+        // Handle layer styles (Elevation 0 uses stroke layer style, others don't)
+        try {
+            // Method 1: Check if layer has layerStyles property
+            if (typeof layer.layerStyles !== 'undefined') {
+                var layerStyles = layer.layerStyles;
+                
+                if (typeof layerStyles.stroke !== 'undefined') {
+                    // Elevation 0 uses stroke layer style, others don't
+                    if (targetElevationType === "0") {
+                        // Elevation 0: Enable stroke layer style
+                        if (!layerStyles.stroke.enabled) {
+                            layerStyles.stroke.enabled = true;
+                        }
+                    } else {
+                        // Elevation 1-4: Disable stroke layer style
+                        if (layerStyles.stroke.enabled) {
+                            layerStyles.stroke.enabled = false;
+                        }
+                    }
+                }
+            }
+            
+            // Method 2: Try direct property access via layer.property("Layer Styles")
+            if (typeof layer.property !== 'undefined') {
+                var layerStylesGroup = layer.property("Layer Styles");
+                if (layerStylesGroup) {
+                    for (var j = 1; j <= layerStylesGroup.numProperties; j++) {
+                        var styleProp = layerStylesGroup.property(j);
+                        
+                        if (styleProp.name.toLowerCase().indexOf("stroke") !== -1) {
+                            // Elevation 0 uses stroke layer style, others don't
+                            if (targetElevationType === "0") {
+                                // Elevation 0: Enable stroke layer style
+                                if (!styleProp.enabled) {
+                                    styleProp.enabled = true;
+                                }
+                            } else {
+                                // Elevation 1-4: Disable stroke layer style
+                                if (styleProp.enabled) {
+                                    styleProp.enabled = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+        } catch(layerStyleError) {
+            // Layer style access failed - continue without error
+        }
+        
+        return [];
+        
+    } catch(error) {
+        return [];
+    }
+}
+
+// Simplified Shadow System - No elevation detection, just apply presets and manage stroke layer styles
 function addShadowFromPanel(elevationType, resolutionMultiplier) {
     try {
         // Check if we have a selected layer
@@ -2692,8 +2848,73 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
         }
         
         var targetLayer = selectedLayers[0]; // Apply to first selected layer
+        var debugInfo = [];
         
-        // Build the preset file path based on resolution and elevation
+        // Debug layer information  
+        debugInfo.push("=== SHADOW SYSTEM (ELEVATIONS 1-4) ===");
+        debugInfo.push("Layer name: " + targetLayer.name);
+        debugInfo.push("Layer type: " + targetLayer.toString());
+        debugInfo.push("Layer instanceof AVLayer: " + (targetLayer instanceof AVLayer));
+        
+        if (targetLayer instanceof AVLayer) {
+            debugInfo.push("Has source: " + (targetLayer.source !== null));
+            if (targetLayer.source) {
+                debugInfo.push("Source type: " + targetLayer.source.toString());
+                debugInfo.push("Source instanceof FootageItem: " + (targetLayer.source instanceof FootageItem));
+                
+                if (targetLayer.source instanceof FootageItem) {
+                    debugInfo.push("Has footageSource: " + (targetLayer.source.footageSource !== null));
+                    if (targetLayer.source.footageSource) {
+                        debugInfo.push("FootageSource type: " + targetLayer.source.footageSource.toString());
+                        debugInfo.push("FootageSource instanceof SolidSource: " + (targetLayer.source.footageSource instanceof SolidSource));
+                        
+                        // Additional checks for solid detection
+                        if (typeof targetLayer.source.footageSource.color !== 'undefined') {
+                            debugInfo.push("Has color property (indicates solid): true");
+                        }
+                    }
+                }
+                
+                // Additional solid layer detection methods
+                if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
+                    debugInfo.push("Name starts with 'Solid': true");
+                }
+            }
+        }
+        
+        // Enhanced solid layer detection
+        var isSolidLayer = false;
+        
+        // Method 1: Standard instanceof check
+        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem && 
+            targetLayer.source.footageSource instanceof SolidSource) {
+            isSolidLayer = true;
+            debugInfo.push("✓ Detected as solid via SolidSource instanceof");
+        }
+        
+        // Method 2: Check for color property (solids have this)
+        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem && 
+            targetLayer.source.footageSource && 
+            typeof targetLayer.source.footageSource.color !== 'undefined') {
+            isSolidLayer = true;
+            debugInfo.push("✓ Detected as solid via color property");
+        }
+        
+        // Method 3: Check layer name pattern
+        if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
+            isSolidLayer = true;
+            debugInfo.push("✓ Detected as solid via name pattern");
+        }
+        
+        if (isSolidLayer) {
+            debugInfo.push("❌ BLOCKED: This is a solid layer");
+            alert("Cannot apply shadow presets to solid layers. Please select a shape layer, text layer, or other content layer.");
+            return "error|" + debugInfo.join("|");
+        } else {
+            debugInfo.push("✅ ALLOWED: This is not a solid layer");
+        }
+        
+        // Apply the shadow preset (Elevations 1-4 only)
         var resolutionFolder = resolutionMultiplier + "x";
         var presetFileName = resolutionMultiplier + "x - Elevation " + elevationType + ".ffx";
         var presetPath = extensionRoot + "/assets/presets/Shadows/" + resolutionFolder + "/" + presetFileName;
@@ -2712,11 +2933,59 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
         
         // Apply the preset to the selected layer
         try {
+            // Check layer count before applying preset
+            var layerCountBefore = comp.numLayers;
+            debugInfo.push("📊 Layer count before: " + layerCountBefore);
+            debugInfo.push("📁 Applying preset: " + presetFileName);
+            
+            // Check effect count before applying preset (specifically for Elevation 1 debugging)
+            var effectCountBefore = targetLayer.Effects.numProperties;
+            debugInfo.push("🎭 Effect count before: " + effectCountBefore);
+            
             targetLayer.applyPreset(presetFile);
-            return "success";
+            
+            // Check layer count after applying preset
+            var layerCountAfter = comp.numLayers;
+            debugInfo.push("📊 Layer count after: " + layerCountAfter);
+            
+            // Check effect count after applying preset (specifically for Elevation 1 debugging)
+            var effectCountAfter = targetLayer.Effects.numProperties;
+            debugInfo.push("🎭 Effect count after: " + effectCountAfter);
+            debugInfo.push("🎭 Effects added: " + (effectCountAfter - effectCountBefore));
+            
+            // List all effects after preset application for debugging
+            debugInfo.push("📋 Current effects on layer:");
+            var effects = targetLayer.Effects;
+            for (var e = 1; e <= effects.numProperties; e++) {
+                var effect = effects.property(e);
+                debugInfo.push("  " + e + ". " + effect.name);
+            }
+            
+            if (layerCountAfter > layerCountBefore) {
+                var newLayersCount = layerCountAfter - layerCountBefore;
+                debugInfo.push("⚠️ WARNING: Preset created " + newLayersCount + " new layers");
+                
+                // Delete the newly created layers (they're always at the top)
+                var deletedLayers = [];
+                for (var i = 1; i <= newLayersCount; i++) {
+                    var layerToDelete = comp.layer(1); // Always delete layer 1 (top layer)
+                    deletedLayers.push(layerToDelete.name + " (" + layerToDelete.toString() + ")");
+                    layerToDelete.remove();
+                }
+                
+                debugInfo.push("🗑️ Deleted " + newLayersCount + " unwanted layers:");
+                for (var j = 0; j < deletedLayers.length; j++) {
+                    debugInfo.push("  - Deleted: " + deletedLayers[j]);
+                }
+            }
+            
+            debugInfo.push("✅ Preset applied successfully");
+            
+            return "success|" + debugInfo.join("|");
         } catch(applyError) {
+            debugInfo.push("❌ Error applying preset: " + applyError.toString());
             alert("Error applying shadow preset: " + applyError.toString());
-            return "error";
+            return "error|" + debugInfo.join("|");
         }
         
     } catch(e) {
@@ -3137,4 +3406,235 @@ function applyShimmerToLayer(layer, shimmerNum, controlsLayer) {
     
     // Apply opacity expression
     layer.property("Transform").property("Opacity").expression = shimmerExpression;
+}
+
+// Add Blur functionality - Apply material blur presets and convert to adjustment layer
+function addBlurFromPanel(materialType) {
+    try {
+        // Check if we have a selected layer
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            return "error";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (!selectedLayers || selectedLayers.length === 0) {
+            alert("Please select a layer to apply blur to.");
+            return "error";
+        }
+        
+        var targetLayer = selectedLayers[0]; // Apply to first selected layer
+        var materialDebugInfo = [];
+        
+        // Debug layer information
+        materialDebugInfo.push("=== MATERIAL LAYER DEBUG ===");
+        materialDebugInfo.push("Layer name: " + targetLayer.name);
+        materialDebugInfo.push("Layer type: " + targetLayer.toString());
+        materialDebugInfo.push("Layer instanceof AVLayer: " + (targetLayer instanceof AVLayer));
+        
+        if (targetLayer instanceof AVLayer) {
+            materialDebugInfo.push("Has source: " + (targetLayer.source !== null));
+            if (targetLayer.source) {
+                materialDebugInfo.push("Source type: " + targetLayer.source.toString());
+                materialDebugInfo.push("Source instanceof FootageItem: " + (targetLayer.source instanceof FootageItem));
+                
+                if (targetLayer.source instanceof FootageItem) {
+                    materialDebugInfo.push("Has footageSource: " + (targetLayer.source.footageSource !== null));
+                    if (targetLayer.source.footageSource) {
+                        materialDebugInfo.push("FootageSource type: " + targetLayer.source.footageSource.toString());
+                        materialDebugInfo.push("FootageSource instanceof SolidSource: " + (targetLayer.source.footageSource instanceof SolidSource));
+                    }
+                }
+            }
+        }
+        
+        // Enhanced solid layer detection for materials
+        var isSolidLayer = false;
+        
+        // Method 1: Standard instanceof check
+        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem && 
+            targetLayer.source.footageSource instanceof SolidSource) {
+            isSolidLayer = true;
+            materialDebugInfo.push("✓ Detected as solid via SolidSource instanceof");
+        }
+        
+        // Method 2: Check for color property (solids have this)
+        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem && 
+            targetLayer.source.footageSource && 
+            typeof targetLayer.source.footageSource.color !== 'undefined') {
+            isSolidLayer = true;
+            materialDebugInfo.push("✓ Detected as solid via color property");
+        }
+        
+        // Method 3: Check layer name pattern
+        if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
+            isSolidLayer = true;
+            materialDebugInfo.push("✓ Detected as solid via name pattern");
+        }
+        
+        if (isSolidLayer) {
+            materialDebugInfo.push("❌ BLOCKED: This is a solid layer");
+            alert("Cannot apply material presets to solid layers. Please select a shape layer, text layer, or other content layer.");
+            return "error|" + materialDebugInfo.join("|");
+        } else {
+            materialDebugInfo.push("✅ ALLOWED: This is not a solid layer");
+        }
+        
+        // Build the preset file path
+        var presetFileName = materialType + ".ffx";
+        var presetPath = extensionRoot + "/assets/presets/Materials/" + presetFileName;
+        var presetFile = new File(presetPath);
+        
+        // Check alternate path separator for Windows compatibility
+        if (!presetFile.exists) {
+            presetPath = extensionRoot + "\\assets\\presets\\Materials\\" + presetFileName;
+            presetFile = new File(presetPath);
+        }
+        
+        if (!presetFile.exists) {
+            alert("Cannot find material blur preset file:\n" + presetFileName + "\n\nExpected location:\n" + presetPath);
+            return "error";
+        }
+        
+        app.beginUndoGroup("Add Material Blur");
+        
+        try {
+            // Convert layer to adjustment layer
+            targetLayer.adjustmentLayer = true;
+            materialDebugInfo.push("🔧 Converted to adjustment layer");
+            
+            // Remove existing material-related effects before applying new preset
+            var removalDebugInfo = removeMaterialEffects(targetLayer);
+            materialDebugInfo = materialDebugInfo.concat(removalDebugInfo);
+            
+            // Ensure the layer remains selected after effect removal
+            targetLayer.selected = true;
+            materialDebugInfo.push("🎯 Ensured layer remains selected after effect removal");
+            
+            // Check layer count before applying preset
+            var layerCountBefore = comp.numLayers;
+            materialDebugInfo.push("📊 Layer count before: " + layerCountBefore);
+            
+            // Apply the preset to the selected layer
+            materialDebugInfo.push("📁 Applying preset: " + presetFileName);
+            targetLayer.applyPreset(presetFile);
+            
+            // Check layer count after applying preset
+            var layerCountAfter = comp.numLayers;
+            materialDebugInfo.push("📊 Layer count after: " + layerCountAfter);
+            
+            // Debug: Check effects after preset application but before layer cleanup
+            materialDebugInfo.push("🔍 Effects after preset application:");
+            var effectsAfterPreset = targetLayer.Effects;
+            for (var e = 1; e <= effectsAfterPreset.numProperties; e++) {
+                var effect = effectsAfterPreset.property(e);
+                materialDebugInfo.push("  " + e + ". " + effect.name + " (" + effect.matchName + ")");
+            }
+            
+            if (layerCountAfter > layerCountBefore) {
+                var newLayersCount = layerCountAfter - layerCountBefore;
+                materialDebugInfo.push("⚠️ WARNING: Preset created " + newLayersCount + " new layers");
+                
+                // Delete the newly created layers (they're always at the top)
+                var deletedLayers = [];
+                for (var i = 1; i <= newLayersCount; i++) {
+                    var layerToDelete = comp.layer(1); // Always delete layer 1 (top layer)
+                    deletedLayers.push(layerToDelete.name + " (" + layerToDelete.toString() + ")");
+                    layerToDelete.remove();
+                }
+                
+                materialDebugInfo.push("🗑️ Deleted " + newLayersCount + " unwanted layers:");
+                for (var j = 0; j < deletedLayers.length; j++) {
+                    materialDebugInfo.push("  - Deleted: " + deletedLayers[j]);
+                }
+            }
+            
+            materialDebugInfo.push("✅ Preset applied successfully");
+            
+            // Return success with debug info
+            return "success|" + materialDebugInfo.join("|");
+            
+        } catch(applyError) {
+            alert("Error applying material blur preset: " + applyError.toString());
+            return "error";
+        }
+        
+    } catch(e) {
+        alert("Error adding material blur: " + e.toString());
+        return "error";
+    } finally {
+        app.endUndoGroup();
+    }
+}
+
+// Remove material-related effects from a layer before applying new material preset
+function removeMaterialEffects(layer) {
+    var debugInfo = [];
+    try {
+        var effects = layer.Effects;
+        var effectsToRemove = [];
+        
+        // List of effect match names that should be removed for material swapping
+        var materialEffectNames = [
+            "ADBE HUE SATURATION",          // Hue/Saturation
+            "ADBE Box Blur2",               // Fast Box Blur (corrected matchName)  
+            "ADBE Brightness & Contrast 2", // Brightness & Contrast
+            "ADBE Tint",                    // Tint
+            "ADBE Box Blur"                 // Box Blur (alternative)
+        ];
+        
+        debugInfo.push("=== EFFECT ANALYSIS ===");
+        
+        // Collect effects to remove (iterate backwards to avoid index issues)
+        for (var i = effects.numProperties; i >= 1; i--) {
+            var effect = effects.property(i);
+            var matchName = effect.matchName;
+            var displayName = effect.name; // This includes the numbered versions
+            
+            // Debug logging 
+            debugInfo.push("Effect " + i + ": '" + displayName + "' (matchName: " + matchName + ")");
+            
+            // Check if this effect should be removed
+            var shouldRemove = false;
+            for (var j = 0; j < materialEffectNames.length; j++) {
+                if (matchName === materialEffectNames[j]) {
+                    shouldRemove = true;
+                    effectsToRemove.push(i);
+                    debugInfo.push("✓ WILL REMOVE: " + displayName);
+                    break;
+                }
+            }
+            
+            if (!shouldRemove) {
+                debugInfo.push("→ KEEPING: " + displayName + " (not a material effect)");
+            }
+        }
+        
+        // Remove the identified effects (reverse sort to maintain proper indices)
+        effectsToRemove.sort(function(a, b) { return b - a; }); // Descending order
+        
+        for (var k = 0; k < effectsToRemove.length; k++) {
+            try {
+                var effectIndex = effectsToRemove[k];
+                var effectToRemove = effects.property(effectIndex);
+                var effectName = effectToRemove.name;
+                effectToRemove.remove();
+                debugInfo.push("✓ Removed effect: " + effectName + " (was at index " + effectIndex + ")");
+            } catch(removeError) {
+                debugInfo.push("✗ Could not remove effect at index " + effectsToRemove[k] + ": " + removeError.toString());
+            }
+        }
+        
+        if (effectsToRemove.length > 0) {
+            debugInfo.push("🗑️ Removed " + effectsToRemove.length + " existing material effects");
+        } else {
+            debugInfo.push("ℹ️ No existing material effects found to remove");
+        }
+        
+    } catch(error) {
+        debugInfo.push("Error removing material effects: " + error.toString());
+    }
+    
+    return debugInfo;
 }

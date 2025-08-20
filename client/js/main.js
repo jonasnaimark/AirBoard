@@ -176,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var addGestureButton = document.getElementById('addGesture');
     var addOverlayButton = document.getElementById('addOverlay');
     var addShimmerButton = document.getElementById('shimmerLayers');
+    var addBlurButton = document.getElementById('addBlur');
     var resolutionInput = document.getElementById('resolutionMultiplier');
     var resolutionText = document.getElementById('resolutionText');
     
@@ -1042,6 +1043,62 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Add Blur button handler
+    addBlurButton.addEventListener('click', function() {
+        console.log('Add Blur clicked');
+        
+        // Get selected material type
+        var materialType = document.getElementById('materialType').value;
+        
+        console.log('Material Type:', materialType);
+        
+        // Disable button while working
+        addBlurButton.disabled = true;
+        addBlurButton.textContent = 'Adding...';
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script to add material blur
+        var script = 'addBlurFromPanel("' + materialType + '")';
+        console.log('Executing script:', script);
+        
+        csInterface.evalScript(script, function(result) {
+            console.log('Material blur result:', result);
+            
+            // Parse debug info from result and show in debug panel
+            if (result && result.indexOf('|') > -1) {
+                var parts = result.split('|');
+                var status = parts[0];
+                var debugInfo = parts.slice(1);
+                
+                // Show debug info in the debug panel
+                var debugPanel = document.getElementById('debugPanel');
+                if (debugPanel) {
+                    debugPanel.style.display = 'block';
+                    var debugContent = document.getElementById('debugContent');
+                    if (debugContent) {
+                        debugContent.innerHTML = '<h3>=== MATERIAL EFFECT DEBUG INFO ===</h3>';
+                        for (var i = 0; i < debugInfo.length; i++) {
+                            debugContent.innerHTML += '<div>' + debugInfo[i] + '</div>';
+                        }
+                    }
+                }
+                
+                // Also log to console for backup
+                console.log('=== MATERIAL EFFECT DEBUG INFO ===');
+                for (var i = 0; i < debugInfo.length; i++) {
+                    console.log(debugInfo[i]);
+                }
+            }
+            
+            // Re-enable button
+            addBlurButton.disabled = false;
+            addBlurButton.textContent = 'Add Blur';
+        });
+    });
+    
     // Add Gesture button handler
     addGestureButton.addEventListener('click', function() {
         console.log('Add Gesture clicked');
@@ -1175,6 +1232,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         csInterface.evalScript(script, function(result) {
             console.log('Shadow result:', result);
+            
+            // Parse debug information and show in debug panel
+            if (result && result.indexOf('|') > -1) {
+                var parts = result.split('|');
+                var debugInfo = parts.slice(1);
+                
+                // Show debug info in the debug panel
+                var debugPanel = document.getElementById('debugPanel');
+                if (debugPanel) {
+                    debugPanel.style.display = 'block';
+                    var debugContent = document.getElementById('debugContent');
+                    if (debugContent) {
+                        debugContent.innerHTML = '<h3>=== SHADOW DEBUG INFO ===</h3>';
+                        for (var i = 0; i < debugInfo.length; i++) {
+                            debugContent.innerHTML += '<div>' + debugInfo[i] + '</div>';
+                        }
+                    }
+                }
+                
+                // Also log to console for backup
+                console.log('=== SHADOW DEBUG INFO ===');
+                for (var i = 0; i < debugInfo.length; i++) {
+                    console.log(debugInfo[i]);
+                }
+            }
+            
             // Re-enable button
             addShadowButton.disabled = false;
         });
