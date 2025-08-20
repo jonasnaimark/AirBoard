@@ -12,7 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [4.2.6] - 2025-08-18 ✨ **CURRENT RELEASE**
+## [4.6.1] - 2025-08-20 ✨ **CURRENT RELEASE**
+### 🔧 Fixed - STABILITY ROLLBACK
+- **Rolled Back to Stable Version**: Reverted to working version before remote asset loading issues
+- **Enhanced Device Dropdown**: Updated dropdown text to show device widths ("iPhone - 393w", "Desktop - 1440w")
+- **Development Workflow Fix**: Restored clean asset structure without config file dependencies
+- **Error Resolution**: Fixed "Cannot load AE folder structure configuration" and "Unknown device type" errors
+
+### 🔧 Technical Details
+- Reverted git history to commit bdf0311 (stable working version)
+- Maintained simple assets/ folder structure without remote config dependencies
+- Preserved all core functionality: keyframe system, device templates, gestures, components
+- Associated with AirBoard_v4.6.1.zxp
+
+## [4.2.6] - 2025-08-18
 ### ✨ Added - COMPLETE DISTANCE NUDGING FUNCTIONALITY
 - **X/Y Position Nudging**: Move position keyframes by ±10px with smart snapping and precision control
 - **Smart 10px Snapping Logic**: First nudge snaps to nearest 10px boundary, then continues in 10px increments
