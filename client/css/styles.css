@@ -66,6 +66,28 @@ body {
     letter-spacing: 0.5px;
 }
 
+/* Subsection titles within sections */
+.subsection-title {
+    color: #cccccc;
+    font-size: 10px;
+    font-weight: 400;
+    margin: 4px 0 6px 0; /* Reduced top margin, added bottom padding */
+    padding: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    opacity: 0.8;
+}
+
+/* First subsection title (Shape) - less top margin */
+.subsection-title:first-of-type {
+    margin-top: 2px;
+}
+
+/* Spaced subsection titles (Effects, Shimmer) - extra top margin */
+.subsection-title.spaced {
+    margin-top: 10px; /* 6px extra + 4px base = 10px total */
+}
+
 /* Section controls container */
 .section-controls {
     display: flex;
@@ -178,7 +200,7 @@ body {
 .section-content {
     overflow: hidden;
     transition: max-height 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00), opacity 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
-    max-height: 200px; /* Reduced from 500px to match actual content height better */
+    max-height: 300px; /* Increased to accommodate Presets section with multiple subsections */
     opacity: 1;
 }
 

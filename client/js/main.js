@@ -174,6 +174,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var replaceButton = document.getElementById('replaceRectangle');
     var addDeviceButton = document.getElementById('addDevice');
     var addGestureButton = document.getElementById('addGesture');
+    var addOverlayButton = document.getElementById('addOverlay');
+    var addShimmerButton = document.getElementById('shimmerLayers');
     var resolutionInput = document.getElementById('resolutionMultiplier');
     var resolutionText = document.getElementById('resolutionText');
     
@@ -393,6 +395,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (result && result.length > 0) {
                     applySectionOrder(result);
                     console.log('Loaded section order:', result);
+                } else {
+                    // Apply default section order if no saved order exists
+                    var defaultOrder = 'Device Templates|Gestures|Presets|Keyframe Reader|Components|Project Setup';
+                    applySectionOrder(defaultOrder);
+                    console.log('Applied default section order:', defaultOrder);
                 }
             });
         }
@@ -998,6 +1005,40 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Replace result:', result);
             // Re-enable button
             replaceButton.classList.remove('loading');
+        });
+    });
+    
+    // Add Overlay button handler
+    addOverlayButton.addEventListener('click', function() {
+        console.log('Add Overlay clicked');
+        
+        // Disable button while working
+        addOverlayButton.disabled = true;
+        addOverlayButton.textContent = 'Adding...';
+        
+        // Call the After Effects script to add shimmer
+        csInterface.evalScript('addShimmerFromPanel()', function(result) {
+            console.log('Shimmer result:', result);
+            // Re-enable button
+            addOverlayButton.disabled = false;
+            addOverlayButton.textContent = 'Add Overlay';
+        });
+    });
+    
+    // Add Shimmer button handler
+    addShimmerButton.addEventListener('click', function() {
+        console.log('Add Shimmer clicked');
+        
+        // Disable button while working
+        addShimmerButton.disabled = true;
+        addShimmerButton.textContent = 'Adding...';
+        
+        // Call the After Effects script to add shimmer effect
+        csInterface.evalScript('addShimmerEffectFromPanel()', function(result) {
+            console.log('Shimmer effect result:', result);
+            // Re-enable button
+            addShimmerButton.disabled = false;
+            addShimmerButton.textContent = 'Add Shimmer';
         });
     });
     

@@ -67,6 +67,17 @@ function loadSectionOrder() {
     }
 }
 
+// Clear section order preference (for one-time reset)
+function clearSectionOrder() {
+    try {
+        app.settings.saveSetting("AirBoard", "sectionOrder", "");
+        return "Section order cleared";
+    } catch(e) {
+        $.writeln("Failed to clear section order: " + e.toString());
+        return "error";
+    }
+}
+
 // Save accordion states preference
 function saveAccordionStates(accordionStates) {
     try {
@@ -2712,4 +2723,418 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
         alert("Error adding shadow: " + e.toString());
         return "error";
     }
+}
+
+// Add Shimmer functionality - Creates shimmer loading effect layers
+function addShimmerFromPanel() {
+    try {
+        var comp = app.project.activeItem;
+        
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            return "error";
+        }
+        
+        app.beginUndoGroup("Add Shimmer Layer");
+        
+        try {
+            // Check for existing controls layer
+            var controlsLayer = null;
+            var highestShimmerNum = 0;
+            
+            for (var i = 1; i <= comp.numLayers; i++) {
+                if (comp.layer(i).name === "Shimmer Controls") {
+                    controlsLayer = comp.layer(i);
+                } else if (comp.layer(i).name.indexOf("Shimmer - ") !== -1) {
+                    // Extract shimmer number
+                    var match = comp.layer(i).name.match(/Shimmer - (\d+)/);
+                    if (match) {
+                        var num = parseInt(match[1]);
+                        if (num > highestShimmerNum) {
+                            highestShimmerNum = num;
+                        }
+                    }
+                }
+            }
+            
+            if (!controlsLayer) {
+                // Create Controls Layer and first shimmer
+                controlsLayer = createShimmerControlsLayer(comp);
+                createShimmerLayer(comp, controlsLayer, 1);
+            } else {
+                // Create next shimmer layer
+                createShimmerLayer(comp, controlsLayer, highestShimmerNum + 1);
+            }
+            
+            return "success";
+            
+        } catch (error) {
+            alert("Error: " + error.toString());
+            return "error";
+        }
+        
+    } catch(e) {
+        alert("Error adding shimmer: " + e.toString());
+        return "error";
+    } finally {
+        app.endUndoGroup();
+    }
+}
+
+// Create the Shimmer Controls layer
+function createShimmerControlsLayer(comp) {
+    // Create a shape layer as the controls
+    var controlsLayer = comp.layers.addShape();
+    controlsLayer.name = "Shimmer Controls";
+    
+    // Make it a guide layer
+    controlsLayer.guideLayer = true;
+    
+    // Set layer color to green (9 is green in AE's label colors)
+    controlsLayer.label = 9;
+    
+    // Position in top left corner
+    controlsLayer.property("Transform").property("Position").setValue([0, 0]);
+    
+    // Add slider control for delay
+    var sliderEffect = controlsLayer.Effects.addProperty("ADBE Slider Control");
+    sliderEffect.name = "Stagger Delay (frames)";
+    sliderEffect.property("Slider").setValue(30);
+    
+    // Add color control with white color
+    var colorEffect = controlsLayer.Effects.addProperty("ADBE Color Control");
+    colorEffect.name = "Shimmer Color";
+    // White default
+    colorEffect.property("Color").setValue([1, 1, 1, 1]);
+    
+    // Add opacity control for the shape
+    var opacityEffect = controlsLayer.Effects.addProperty("ADBE Slider Control");
+    opacityEffect.name = "Shimmer Opacity";
+    opacityEffect.property("Slider").setValue(60); // 60% default
+    
+    // Add opacity keyframes with specific timing
+    var opacity = controlsLayer.property("Transform").property("Opacity");
+    
+    // Calculate times based on frame rate
+    var fps = comp.frameRate;
+    var fadeInDuration = 18 / fps;  // 300ms = 18 frames at 60fps
+    var fadeOutDuration = 42 / fps; // 700ms = 42 frames at 60fps
+    var waitDuration = 20 / fps;    // 333ms = 20 frames at 60fps
+    
+    var currentTime = 0;
+    
+    // Keyframe 1: Start at 0%
+    opacity.setValueAtTime(currentTime, 0);
+    
+    // Keyframe 2: Fade to 100% over 18 frames
+    currentTime += fadeInDuration;
+    opacity.setValueAtTime(currentTime, 100);
+    
+    // Keyframe 3: Fade to 0% over 42 frames
+    currentTime += fadeOutDuration;
+    opacity.setValueAtTime(currentTime, 0);
+    
+    // Keyframe 4: Wait 20 frames (stay at 0%)
+    currentTime += waitDuration;
+    opacity.setValueAtTime(currentTime, 0);
+    
+    // Set all keyframes to use custom bezier easing (0.40, 0.00, 0.20, 1.00)
+    var easeIn = new KeyframeEase(0.40, 40);
+    var easeOut = new KeyframeEase(0.20, 80);
+    
+    for (var k = 1; k <= opacity.numKeys; k++) {
+        opacity.setInterpolationTypeAtKey(k, KeyframeInterpolationType.BEZIER);
+        opacity.setTemporalEaseAtKey(k, [easeIn], [easeOut]);
+    }
+    
+    // Add loop expression to opacity
+    opacity.expression = 'loopOut("cycle");';
+    
+    return controlsLayer;
+}
+
+// Create a Shimmer layer
+function createShimmerLayer(comp, controlsLayer, shimmerNum) {
+    // Create a shape layer - it will be added at the top (layer 1) by default
+    var shimmerLayer = comp.layers.addShape();
+    
+    // Format number with leading zero
+    var numStr = shimmerNum < 10 ? "0" + shimmerNum : shimmerNum.toString();
+    shimmerLayer.name = "Shimmer - " + numStr;
+    
+    // Position at center
+    shimmerLayer.property("Transform").property("Position").setValue([comp.width/2, comp.height/2]);
+    
+    // Add a rectangle shape with 500x500 size
+    var shapeGroup = shimmerLayer.property("Contents").addProperty("ADBE Vector Group");
+    shapeGroup.name = "Rectangle Group";
+    
+    var rect = shapeGroup.property("Contents").addProperty("ADBE Vector Shape - Rect");
+    rect.property("Size").setValue([500, 500]);
+    
+    // Add fill
+    var fill = shapeGroup.property("Contents").addProperty("ADBE Vector Graphic - Fill");
+    fill.property("Color").setValue([1, 1, 1]); // White (will be overridden by expression)
+    fill.property("Opacity").setValue(60); // 60% (will be overridden by expression)
+    
+    // Set layer label color to sea foam (label 7)
+    shimmerLayer.label = 7;
+    
+    // Apply expressions
+    var shimmerExpression = [
+        '// Get the controls layer',
+        'var controls = thisComp.layer("Shimmer Controls");',
+        'var controlsOpacity = controls.opacity;',
+        '',
+        '// Get stagger delay value from slider',
+        'var staggerFrames = controls.effect("Stagger Delay (frames)")("Slider");',
+        '',
+        '// Calculate position-based delay',
+        'var myPos = thisLayer.position;',
+        'var compWidth = thisComp.width;',
+        'var compHeight = thisComp.height;',
+        '',
+        '// Calculate diagonal distance from top-left',
+        'var distX = myPos[0];',
+        'var distY = myPos[1];',
+        'var diagonalDist = Math.sqrt(distX * distX + distY * distY);',
+        '',
+        '// Calculate maximum possible diagonal distance',
+        'var maxDist = Math.sqrt(compWidth * compWidth + compHeight * compHeight);',
+        '',
+        '// Normalize distance to 0-1 range',
+        'var normalizedDist = diagonalDist / maxDist;',
+        '',
+        '// Convert stagger frames to time',
+        'var delayTime = (staggerFrames * normalizedDist) * thisComp.frameDuration;',
+        '',
+        '// Apply delayed opacity',
+        'controlsOpacity.valueAtTime(time - delayTime);'
+    ].join('\n');
+    
+    // Apply opacity expression
+    shimmerLayer.property("Transform").property("Opacity").expression = shimmerExpression;
+    
+    // Link fill color and opacity to controls
+    fill.property("Color").expression = 'thisComp.layer("Shimmer Controls").effect("Shimmer Color")("Color");';
+    fill.property("Opacity").expression = 'thisComp.layer("Shimmer Controls").effect("Shimmer Opacity")("Slider");';
+}
+
+// Add Shimmer Effect functionality - Applies shimmer animation to selected layers
+function addShimmerEffectFromPanel() {
+    try {
+        var comp = app.project.activeItem;
+        
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            return "error";
+        }
+        
+        app.beginUndoGroup("Add Shimmer Effect");
+        
+        try {
+            // First, get selected layers before creating anything
+            var selectedLayers = [];
+            var hasControlsLayer = false;
+            var controlsLayer = null;
+            
+            // Check if controls layer exists
+            for (var i = 1; i <= comp.numLayers; i++) {
+                if (comp.layer(i).name === "Shimmer Controls") {
+                    controlsLayer = comp.layer(i);
+                    hasControlsLayer = true;
+                    break;
+                }
+            }
+            
+            // Collect selected layers (excluding controls layer if it exists)
+            for (var j = 1; j <= comp.numLayers; j++) {
+                var layer = comp.layer(j);
+                if (layer.selected && layer !== controlsLayer) {
+                    selectedLayers.push(layer);
+                }
+            }
+            
+            if (selectedLayers.length === 0) {
+                alert("Please select at least one layer to apply the shimmer effect.");
+                return "error";
+            }
+            
+            // Create controls layer if it doesn't exist
+            if (!hasControlsLayer) {
+                controlsLayer = createShimmerEffectControlsLayer(comp);
+                
+                // Move controls layer below the lowest selected layer
+                if (selectedLayers.length > 0) {
+                    var lowestIndex = selectedLayers[selectedLayers.length - 1].index;
+                    if (lowestIndex < comp.numLayers) {
+                        controlsLayer.moveAfter(comp.layer(lowestIndex));
+                    }
+                }
+            }
+            
+            // Sort by layer index (position in timeline)
+            selectedLayers.sort(function(a, b) {
+                return a.index - b.index;
+            });
+            
+            // Apply shimmer to selected layers
+            for (var k = 0; k < selectedLayers.length; k++) {
+                applyShimmerToLayer(selectedLayers[k], k + 1, controlsLayer);
+            }
+            
+            return "success";
+            
+        } catch (error) {
+            alert("Error: " + error.toString());
+            return "error";
+        }
+        
+    } catch(e) {
+        alert("Error adding shimmer effect: " + e.toString());
+        return "error";
+    } finally {
+        app.endUndoGroup();
+    }
+}
+
+// Create the Shimmer Controls layer (for effect version)
+function createShimmerEffectControlsLayer(comp) {
+    // Create a shape layer as the controls
+    var controlsLayer = comp.layers.addShape();
+    controlsLayer.name = "Shimmer Controls";
+    
+    // Make it a guide layer
+    controlsLayer.guideLayer = true;
+    
+    // Set layer color to green (9 is green in AE's label colors)
+    controlsLayer.label = 9;
+    
+    // Position in top left corner
+    controlsLayer.property("Transform").property("Position").setValue([0, 0]);
+    
+    // Add slider control for delay
+    var sliderEffect = controlsLayer.Effects.addProperty("ADBE Slider Control");
+    sliderEffect.name = "Stagger Delay (frames)";
+    sliderEffect.property("Slider").setValue(30);
+    
+    // Add fade out percentage control
+    var fadeOutEffect = controlsLayer.Effects.addProperty("ADBE Slider Control");
+    fadeOutEffect.name = "Fade Out %";
+    fadeOutEffect.property("Slider").setValue(40);
+    
+    // Add global opacity control
+    var globalOpacityEffect = controlsLayer.Effects.addProperty("ADBE Slider Control");
+    globalOpacityEffect.name = "Shimmer Opacity";
+    globalOpacityEffect.property("Slider").setValue(100);
+    
+    // Add opacity keyframes with inverted timing (starts at 100%, fades to fade out %)
+    var opacity = controlsLayer.property("Transform").property("Opacity");
+    
+    // Calculate times based on frame rate
+    var fps = comp.frameRate;
+    var fadeOutDuration = 18 / fps;  // 300ms = 18 frames at 60fps
+    var fadeInDuration = 42 / fps;   // 700ms = 42 frames at 60fps
+    var waitDuration = 20 / fps;     // 333ms = 20 frames at 60fps
+    
+    var currentTime = 0;
+    
+    // Keyframe 1: Start at 100%
+    opacity.setValueAtTime(currentTime, 100);
+    
+    // Keyframe 2: Fade to 40% over 18 frames
+    currentTime += fadeOutDuration;
+    opacity.setValueAtTime(currentTime, 40);
+    
+    // Keyframe 3: Fade back to 100% over 42 frames
+    currentTime += fadeInDuration;
+    opacity.setValueAtTime(currentTime, 100);
+    
+    // Keyframe 4: Wait 20 frames (stay at 100%)
+    currentTime += waitDuration;
+    opacity.setValueAtTime(currentTime, 100);
+    
+    // Set all keyframes to use custom bezier easing (0.40, 0.00, 0.20, 1.00)
+    var easeIn = new KeyframeEase(0.40, 40);
+    var easeOut = new KeyframeEase(0.20, 80);
+    
+    for (var k = 1; k <= opacity.numKeys; k++) {
+        opacity.setInterpolationTypeAtKey(k, KeyframeInterpolationType.BEZIER);
+        opacity.setTemporalEaseAtKey(k, [easeIn], [easeOut]);
+    }
+    
+    // Add loop expression to opacity
+    opacity.expression = 'loopOut("cycle");';
+    
+    return controlsLayer;
+}
+
+// Apply shimmer effect to a layer
+function applyShimmerToLayer(layer, shimmerNum, controlsLayer) {
+    // Format number with leading zero
+    var numStr = shimmerNum < 10 ? "0" + shimmerNum : shimmerNum.toString();
+    layer.name = "Shimmer - " + numStr;
+    
+    // Set layer label color to sea foam (label 7)
+    layer.label = 7;
+    
+    // Get the layer's current opacity value
+    var currentOpacity = layer.property("Transform").property("Opacity").value;
+    
+    // Apply shimmer expression that respects original opacity
+    var shimmerExpression = [
+        '// Store original opacity',
+        'var originalOpacity = ' + currentOpacity + ';',
+        '',
+        '// Get the controls layer',
+        'var controls = thisComp.layer("Shimmer Controls");',
+        'var controlsOpacity = controls.opacity;',
+        '',
+        '// Get fade out percentage from slider',
+        'var fadeOutPercent = controls.effect("Fade Out %")("Slider");',
+        '',
+        '// Get global opacity from slider',
+        'var globalOpacity = controls.effect("Shimmer Opacity")("Slider");',
+        '',
+        '// Get stagger delay value from slider',
+        'var staggerFrames = controls.effect("Stagger Delay (frames)")("Slider");',
+        '',
+        '// Calculate visual center using sourceRectAtTime',
+        '// This works for all layer types including shape layers',
+        'var rect = thisLayer.sourceRectAtTime(time, false);',
+        'var visualPos = thisLayer.toComp([rect.left + rect.width/2, rect.top + rect.height/2]);',
+        '',
+        '// Calculate position-based delay using visual position',
+        'var myPos = visualPos;',
+        'var compWidth = thisComp.width;',
+        'var compHeight = thisComp.height;',
+        '',
+        '// Calculate diagonal distance from top-left',
+        'var distX = myPos[0];',
+        'var distY = myPos[1];',
+        'var diagonalDist = Math.sqrt(distX * distX + distY * distY);',
+        '',
+        '// Calculate maximum possible diagonal distance',
+        'var maxDist = Math.sqrt(compWidth * compWidth + compHeight * compHeight);',
+        '',
+        '// Normalize distance to 0-1 range',
+        'var normalizedDist = diagonalDist / maxDist;',
+        '',
+        '// Convert stagger frames to time',
+        'var delayTime = (staggerFrames * normalizedDist) * thisComp.frameDuration;',
+        '',
+        '// Get the delayed control opacity value',
+        'var delayedControlOpacity = controlsOpacity.valueAtTime(time - delayTime);',
+        '',
+        '// Map control opacity to use the fade out percentage',
+        '// When control is at 100%, use full original opacity',
+        '// When control is at 40%, use fadeOutPercent of original opacity',
+        'var shimmerRange = linear(delayedControlOpacity, 40, 100, fadeOutPercent/100, 1);',
+        '',
+        '// Apply both shimmer and global opacity',
+        'originalOpacity * shimmerRange * (globalOpacity/100);'
+    ].join('\n');
+    
+    // Apply opacity expression
+    layer.property("Transform").property("Opacity").expression = shimmerExpression;
 }

@@ -61,7 +61,7 @@
         <div class="section-container">
             <section class="section">
                 <div class="section-header">
-                    <h2>Gesture Presets</h2>
+                    <h2>Gestures</h2>
                     <div class="section-controls">
                         <button class="section-btn move-up" title="Move Up">
                             <div class="control-arrow up"></div>
@@ -83,6 +83,68 @@
                         <option value="mouseclick">Mouse Click</option>
                     </select>
                     <button id="addGesture" class="main-button">Add Gesture</button>
+                </div>
+                </div>
+            </section>
+        </div>
+        
+        <!-- Presets Section -->      
+        <div class="section-container">
+            <section class="section">
+                <div class="section-header">
+                    <h2>Presets</h2>
+                    <div class="section-controls">
+                        <button class="section-btn move-up" title="Move Up">
+                            <div class="control-arrow up"></div>
+                        </button>
+                        <button class="section-btn move-down" title="Move Down">
+                            <div class="control-arrow down"></div>
+                        </button>
+                        <button class="accordion-toggle" data-section="effect-presets">
+                            <div class="accordion-arrow"></div>
+                        </button>
+                    </div>
+                </div>
+                <div class="section-content" data-section="effect-presets">
+                <div class="subsection-title">Shape</div>
+                <div class="control-row">
+                    <button id="createSquircle" class="main-button">
+                        <span class="full-text">Add Squircle</span>
+                        <span class="short-text">Squircle</span>
+                    </button>
+                    <button id="replaceRectangle" class="main-button">
+                        Replace Rect
+                    </button>
+                </div>
+                <div class="subsection-title spaced">Effects</div>
+                <div class="control-row">
+                    <select id="elevationType" class="dropdown">
+                        <option value="0">Elevation 0</option>
+                        <option value="1">Elevation 1</option>
+                        <option value="2">Elevation 2</option>
+                        <option value="3">Elevation 3</option>
+                        <option value="4">Elevation 4</option>
+                    </select>
+                    <button id="addShadow" class="main-button">Add Shadow</button>
+                </div>
+                <div class="control-row">
+                    <select id="materialType" class="dropdown">
+                        <option value="1">Material 1</option>
+                        <option value="2">Material 2</option>
+                        <option value="3">Material 3</option>
+                        <option value="4">Material 4</option>
+                        <option value="5">Material 5</option>
+                    </select>
+                    <button id="addBlur" class="main-button">Add Blur</button>
+                </div>
+                <div class="subsection-title spaced">Shimmer</div>
+                <div class="control-row">
+                    <button id="addOverlay" class="main-button">
+                        Add Overlay
+                    </button>
+                    <button id="shimmerLayers" class="main-button">
+                        Add Shimmer
+                    </button>
                 </div>
                 </div>
             </section>
@@ -140,57 +202,6 @@
                             <button class="distance-btn nudge-btn increment" id="yIncrementBtn" type="button">+</button>
                         </div>
                     </div>
-                </div>
-                </div>
-            </section>
-        </div>
-        
-        <!-- Effect Presets Section -->      
-        <div class="section-container">
-            <section class="section">
-                <div class="section-header">
-                    <h2>Effect Presets</h2>
-                    <div class="section-controls">
-                        <button class="section-btn move-up" title="Move Up">
-                            <div class="control-arrow up"></div>
-                        </button>
-                        <button class="section-btn move-down" title="Move Down">
-                            <div class="control-arrow down"></div>
-                        </button>
-                        <button class="accordion-toggle" data-section="effect-presets">
-                            <div class="accordion-arrow"></div>
-                        </button>
-                    </div>
-                </div>
-                <div class="section-content" data-section="effect-presets">
-                <div class="control-row">
-                    <button id="createSquircle" class="main-button">
-                        <span class="full-text">Add Squircle</span>
-                        <span class="short-text">Squircle</span>
-                    </button>
-                    <button id="replaceRectangle" class="main-button">
-                        Replace Rect
-                    </button>
-                </div>
-                <div class="control-row">
-                    <select id="elevationType" class="dropdown">
-                        <option value="0">Elevation 0</option>
-                        <option value="1">Elevation 1</option>
-                        <option value="2">Elevation 2</option>
-                        <option value="3">Elevation 3</option>
-                        <option value="4">Elevation 4</option>
-                    </select>
-                    <button id="addShadow" class="main-button">Add Shadow</button>
-                </div>
-                <div class="control-row">
-                    <select id="materialType" class="dropdown">
-                        <option value="1">Material 1</option>
-                        <option value="2">Material 2</option>
-                        <option value="3">Material 3</option>
-                        <option value="4">Material 4</option>
-                        <option value="5">Material 5</option>
-                    </select>
-                    <button id="addBlur" class="main-button">Add Blur</button>
                 </div>
                 </div>
             </section>

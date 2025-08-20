@@ -12,7 +12,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [4.6.1] - 2025-08-20 ✨ **CURRENT RELEASE**
+## [4.7.0] - 2025-08-20 ✨ **CURRENT RELEASE**
+### ✨ Added - COMPLETE SHIMMER ANIMATION SYSTEM
+- **New Shimmer Section**: Added "Shimmer" subsection to Presets with two powerful shimmer tools
+- **Add Overlay Button**: Creates new shimmer rectangle layers with customizable color, opacity, and stagger timing
+- **Add Shimmer Button**: Applies shimmer animation directly to selected existing layers while preserving original opacity
+- **Shimmer Controls Layer**: Automatic controls layer with sliders for stagger delay, fade percentages, and global opacity settings
+- **Position-Based Staggering**: Intelligent diagonal-distance calculation for natural wave-like shimmer propagation
+- **Custom Bezier Easing**: Professional animation curves (0.40, 0.00, 0.20, 1.00) with looping expressions
+
+### 🎨 Enhanced - UI IMPROVEMENTS AND ORGANIZATION
+- **Renamed Sections**: "Effect Presets" → "Presets", "Gesture Presets" → "Gestures" for cleaner navigation
+- **Improved Section Order**: Device Templates → Gestures → Presets → Keyframe Reader → Components → Project Setup
+- **Enhanced Device Dropdown**: Shows device widths ("iPhone - 393w", "Desktop - 1440w") for better clarity
+- **Optimized Spacing**: Fine-tuned subsection title spacing with proper padding above Effects and Shimmer sections
+- **Subsection Organization**: Added "Shape", "Effects", and "Shimmer" subsections for logical feature grouping
+
+### 🔧 Fixed - PERFORMANCE AND STABILITY
+- **User Preferences Reset**: Fixed section order preferences to match new default layout
+- **Section Container Height**: Increased max-height from 200px to 300px to prevent content clipping
+- **Preference System Restore**: Maintained full user preference functionality after order corrections
+
+### 🔧 Technical Details
+- Added `addShimmerFromPanel()` and `addShimmerEffectFromPanel()` ExtendScript functions
+- Implemented dual shimmer control systems for overlay vs effect modes
+- Enhanced JavaScript event handlers for new shimmer buttons
+- Preserved existing functionality while adding comprehensive shimmer capabilities
+- Associated with AirBoard_v4.7.0.zxp
+
+## [4.6.1] - 2025-08-20
 ### 🔧 Fixed - STABILITY ROLLBACK
 - **Rolled Back to Stable Version**: Reverted to working version before remote asset loading issues
 - **Enhanced Device Dropdown**: Updated dropdown text to show device widths ("iPhone - 393w", "Desktop - 1440w")
