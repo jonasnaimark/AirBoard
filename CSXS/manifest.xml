@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.airboard.panel" ExtensionBundleVersion="4.7.0"
-                   ExtensionBundleName="AirBoard" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.airboard.panel.dev" ExtensionBundleVersion="4.9.1"
+                   ExtensionBundleName="AirBoard Dev" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <ExtensionList>
-        <Extension Id="com.airboard.panel" Version="1.0.0" />
+        <Extension Id="com.airboard.panel.dev" Version="1.0.0" />
     </ExtensionList>
     
     <ExecutionEnvironment>
@@ -26,7 +26,7 @@
     </ExecutionEnvironment>
     
     <DispatchInfoList>
-        <Extension Id="com.airboard.panel">
+        <Extension Id="com.airboard.panel.dev">
             <DispatchInfo>
                 <Resources>
                     <MainPath>./client/index.html</MainPath>
@@ -39,7 +39,7 @@
                 
                 <UI>
                     <Type>Panel</Type>
-                    <Menu>AirBoard</Menu>
+                    <Menu>AirBoard Dev</Menu>
                     <Geometry>
                         <Size>
                             <Height>400</Height>

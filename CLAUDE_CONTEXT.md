@@ -1,7 +1,18 @@
 # AirBoard Plugin - Claude Code Context
 
 ## 🎯 Project Overview
-**AirBoard After Effects Plugin v2.8.6** - Professional device mockup and gesture animation tools for Adobe After Effects
+**AirBoard After Effects Plugin v4.9.0** - Professional device mockup and gesture animation tools for Adobe After Effects
+
+## 🚨 CRITICAL: ZXP Build Warning
+
+**When user requests ZXP build - ALWAYS use production build script:**
+
+**WRONG** ❌: `./ZXPSignCmd` (creates dev version with debug features - DON'T share this!)
+**RIGHT** ✅: `./build-latest.sh` (creates production version for sharing)
+
+**Differences:**
+- **Dev ZXP**: "AirBoard Dev", debug features, [DEV MODE] labels  
+- **Production ZXP**: "AirBoard", clean UI, no debug elements
 
 ## 🏆 Critical Technical Knowledge
 
@@ -111,11 +122,20 @@ git push origin main
 - Version number in commit message
 
 ## 📚 Essential Documentation Files
-- **DEVELOPMENT_GUIDE.md**: Complete technical patterns and scaling logic
+- **DEVELOPMENT_GUIDE.md**: Complete technical patterns, scaling logic, and **component addition guide**
 - **UI_PATTERNS.md**: Adding sections and maintaining consistency  
 - **VERSION_GUIDE.md**: Release process and semantic versioning
 - **CHANGELOG.md**: Comprehensive version history
 - **README.md**: Current project overview and features
+
+## 🧩 Adding Components Quick Reference
+
+**Two component types available:**
+1. **Composition-Based** (iPhone UI): Adds entire composition as precomp layer
+2. **Layer-Based** (Dot Loader, Ms Counter): Copies specific layer from composition
+
+**Steps**: HTML dropdown → JSX mapping → Logic update (if comp-based) → Test
+**Full guide**: See DEVELOPMENT_GUIDE.md "Adding New Components to Dropdown" section
 
 ## 🎯 Recent Major Work Completed
 - **Documentation Overhaul**: All .md files updated to reflect current state

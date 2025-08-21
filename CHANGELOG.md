@@ -12,7 +12,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Additional Components**: Progress bars, buttons, icons
 - **Performance Optimizations**: Enhanced template caching
 
-## [4.7.0] - 2025-08-20 ✨ **CURRENT RELEASE**
+## [4.9.1] - 2025-08-21 ✨ **CURRENT RELEASE**
+### 🎨 UI Improvements
+- **Enhanced Section Hover Effect**: Section stroke opacity increases from 10% to 16% on hover for better visual feedback
+- **Smooth Animation**: Professional easing curve (cubic-bezier) matching other UI elements
+- **Associated with AirBoard_v4.9.1.zxp**
+
+## [4.9.0] - 2025-08-21
+### ✨ Added - iPhone UI Component
+- **iPhone UI Component**: Added new composition-based component to Components dropdown
+- **Full Composition Support**: iPhone UI adds entire "iPhone 14 UI" composition as precomp layer, not individual layers
+- **Smart Positioning**: iPhone UI components center automatically while maintaining internal layer relationships
+- **Resolution Scaling**: Full scaling support (1x-6x) following established resolution multiplier system
+- **Template Integration**: Seamlessly integrated with AirBoard Templates.aep file structure
+
+### 🔧 Technical Improvements
+- **Clean Component Architecture**: Established clear patterns for composition-based vs layer-based components
+- **Enhanced Error Handling**: Improved component import and layer targeting reliability
+- **Code Optimization**: Streamlined component addition logic with proper fallback handling
+
+### 📝 Documentation Enhanced
+- **Complete Component Guide**: Added comprehensive documentation for adding new components to dropdown
+- **Component Types Explained**: Clear distinction between composition-based (iPhone UI) and layer-based (Dot Loader) components
+- **Step-by-Step Instructions**: HTML dropdown → JSX mapping → Logic updates → Testing workflow
+- **Real Examples**: Practical examples for both component types with code snippets
+- **Associated with AirBoard_v4.9.0.zxp**
+
+## [4.7.0] - 2025-08-20
 ### ✨ Added - COMPLETE SHIMMER ANIMATION SYSTEM
 - **New Shimmer Section**: Added "Shimmer" subsection to Presets with two powerful shimmer tools
 - **Add Overlay Button**: Creates new shimmer rectangle layers with customizable color, opacity, and stagger timing

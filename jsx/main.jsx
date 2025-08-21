@@ -1590,6 +1590,11 @@ function addComponentFromPanel(componentType, multiplier) {
                 compName: "Belo - Continuous Loop",
                 layerName: "Belo Spin", // This will be the name after copying
                 templateFile: "Belo Spin.aep"
+            },
+            "iphone-ui": {
+                compName: "iPhone 14 UI",
+                layerName: "iPhone 14 UI",
+                templateFile: "AirBoard Templates.aep"
             }
         };
         
@@ -1661,23 +1666,24 @@ function addComponentFromPanel(componentType, multiplier) {
             return "error";
         }
         
-        // Find the specific layer in the component comp
+        // Find the specific layer in the component comp (for layer-based components)
         var sourceLayer = null;
-        for (var k = 1; k <= componentComp.layers.length; k++) {
-            var layer = componentComp.layers[k];
-            if (layer.name === data.layerName) {
-                sourceLayer = layer;
-                break;
+        if (componentType !== "iphone-ui") {
+            for (var k = 1; k <= componentComp.layers.length; k++) {
+                var layer = componentComp.layers[k];
+                if (layer.name === data.layerName) {
+                    sourceLayer = layer;
+                    break;
+                }
+            }
+            
+            // If exact layer name not found, try to use the first layer as fallback
+            if (!sourceLayer && componentComp.layers.length > 0) {
+                sourceLayer = componentComp.layers[1];
             }
         }
         
-        // If exact layer name not found, try to use the first layer as fallback
-        if (!sourceLayer && componentComp.layers.length > 0) {
-            sourceLayer = componentComp.layers[1];
-            $.writeln("Layer '" + data.layerName + "' not found, using first layer: " + sourceLayer.name);
-        }
-        
-        if (!sourceLayer) {
+        if (!sourceLayer && componentType !== "iphone-ui") {
             alert("Cannot find any layers in " + data.compName);
             // app.endUndoGroup();
             return "error";
@@ -1695,18 +1701,30 @@ function addComponentFromPanel(componentType, multiplier) {
             // Non-critical if selection clearing fails
         }
         
-        // Copy the source layer to the current comp
-        sourceLayer.copyToComp(comp);
-        
-        // Verify a new layer was added
-        if (comp.numLayers <= layerCountBefore) {
-            alert("Error: Component layer was not added to the composition.");
-            // app.endUndoGroup();
-            return "error";
+        // Add component to composition
+        var componentLayer;
+        if (componentType === "iphone-ui") {
+            // For iPhone UI, add the entire composition as a precomp layer
+            componentLayer = comp.layers.add(componentComp);
+            
+            if (!componentLayer) {
+                alert("Error: iPhone UI composition could not be added as layer.");
+                return "error";
+            }
+        } else {
+            // For other components, copy individual layers from the composition
+            sourceLayer.copyToComp(comp);
+            
+            // Verify a new layer was added
+            if (comp.numLayers <= layerCountBefore) {
+                alert("Error: Component layer was not added to the composition.");
+                // app.endUndoGroup();
+                return "error";
+            }
+            
+            // The new layer is always at index 1 per AE scripting behavior
+            componentLayer = comp.layers[1];
         }
-        
-        // The new layer is always at index 1 per AE scripting behavior; no need for name check to avoid false errors
-        var componentLayer = comp.layers[1];
         
         // Keep the original layer names so expressions work properly
         // Don't rename the layer since expressions depend on the original name
@@ -1766,7 +1784,7 @@ function addComponentFromPanel(componentType, multiplier) {
                     targetX = 60; // 60px padding from left edge
                     targetY = 60; // 60px padding from top edge
                 } else {
-                    // Center for other components
+                    // Center for other components (Dot Loader, Belo Spin, iPhone UI)
                     targetX = comp.width / 2;
                     targetY = comp.height / 2;
                 }
@@ -1786,7 +1804,7 @@ function addComponentFromPanel(componentType, multiplier) {
                     // Top-left for timer
                     componentLayer.transform.position.setValue([60, 60]);
                 } else {
-                    // Center for other components
+                    // Center for other components (Dot Loader, Belo Spin, iPhone UI)
                     componentLayer.transform.position.setValue([comp.width/2, comp.height/2]);
                 }
             }

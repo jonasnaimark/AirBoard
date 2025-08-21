@@ -388,6 +388,171 @@ ls -la dist/AirBoard_v[VERSION].zxp
 - Reference the v2.0.5 commit for scaling solution implementation
 - Follow existing error handling and user feedback patterns
 
+## 🧩 Adding New Components to Dropdown
+
+### Component Types Overview
+
+There are **two types** of components you can add:
+
+1. **Composition-Based Components** (like iPhone UI)
+   - Adds the entire composition as a precomp layer
+   - Use when you want the full composition with all its layers
+   - Example: iPhone UI, complex animated elements
+
+2. **Layer-Based Components** (like Dot Loader, Ms Counter)  
+   - Copies a specific layer from inside a composition
+   - Use when you want just one layer from a composition
+   - Example: Individual animations, simple elements
+
+### Step-by-Step Guide
+
+#### 1. Add to HTML Dropdown
+
+**File**: `client/index.html`
+
+```html
+<select id="componentType" class="dropdown">
+    <option value="dot-loader">Dot Loader</option>
+    <option value="timer">Ms Counter</option>
+    <option value="belo-spin">Belo Spin</option>
+    <option value="iphone-ui">iPhone UI</option>
+    <option value="your-component">Your Component Name</option> <!-- Add this -->
+</select>
+```
+
+#### 2. Add to Component Data Mapping
+
+**File**: `jsx/main.jsx` (around line 1578)
+
+**For Composition-Based Components** (adds entire comp):
+```javascript
+var componentData = {
+    // ... existing components ...
+    "your-component": {
+        compName: "Your Composition Name",     // Exact name in .aep file
+        layerName: "unused",                   // Not used for comp-based
+        templateFile: "AirBoard Templates.aep" // Template file name
+    }
+};
+```
+
+**For Layer-Based Components** (copies specific layer):
+```javascript
+var componentData = {
+    // ... existing components ...
+    "your-component": {
+        compName: "Your Composition Name",     // Composition containing the layer
+        layerName: "Your Layer Name",          // Exact layer name to copy
+        templateFile: "AirBoard Templates.aep" // Template file name
+    }
+};
+```
+
+#### 3. Update Component Logic (if composition-based)
+
+**File**: `jsx/main.jsx` (around line 1706)
+
+If your component should be added as a **full composition** (like iPhone UI):
+
+```javascript
+// Add component to composition
+var componentLayer;
+if (componentType === "iphone-ui" || componentType === "your-component") {
+    // For composition-based components, add entire composition as precomp layer
+    componentLayer = comp.layers.add(componentComp);
+    // ...
+}
+```
+
+**Note**: Layer-based components work automatically - no changes needed.
+
+#### 4. Update Positioning Logic (if needed)
+
+**File**: `jsx/main.jsx` (around line 1762)
+
+Default behavior:
+- **Timer**: Top-left corner (60, 60)
+- **All others**: Center of composition
+
+To add custom positioning:
+```javascript
+var isTimer = (componentType === "timer");
+var isCustomPosition = (componentType === "your-component");
+
+if (isTimer) {
+    // Top-left for timer
+    targetX = 60; targetY = 60;
+} else if (isCustomPosition) {
+    // Custom position for your component
+    targetX = 100; targetY = 200;
+} else {
+    // Center for other components
+    targetX = comp.width / 2; targetY = comp.height / 2;
+}
+```
+
+### Real Examples
+
+#### Example 1: Adding "Button UI" (Composition-Based)
+
+1. **HTML**: 
+   ```html
+   <option value="button-ui">Button UI</option>
+   ```
+
+2. **JSX Mapping**:
+   ```javascript
+   "button-ui": {
+       compName: "Button Collection",
+       layerName: "unused",
+       templateFile: "AirBoard Templates.aep"
+   }
+   ```
+
+3. **Logic Update**:
+   ```javascript
+   if (componentType === "iphone-ui" || componentType === "button-ui") {
+   ```
+
+#### Example 2: Adding "Loading Spinner" (Layer-Based)
+
+1. **HTML**:
+   ```html
+   <option value="spinner">Loading Spinner</option>
+   ```
+
+2. **JSX Mapping**:
+   ```javascript
+   "spinner": {
+       compName: "Loaders Collection",
+       layerName: "Spinner Animation",
+       templateFile: "AirBoard Templates.aep"
+   }
+   ```
+
+3. **No logic changes needed** - works automatically!
+
+### Template File Requirements
+
+Your template file must contain:
+- **Composition** with exact name matching `compName`
+- **Layer** with exact name matching `layerName` (for layer-based components)
+- File must be in `assets/templates/` folder
+
+### Testing Your New Component
+
+1. **Restart After Effects** (JSX changes require restart)
+2. **Open "AirBoard Dev"** extension  
+3. **Select your component** from dropdown
+4. **Set resolution multiplier**
+5. **Click "Add Component"**
+
+Should result in:
+- ✅ Component added to composition
+- ✅ Scaled according to resolution multiplier
+- ✅ Positioned correctly (center or custom)
+- ✅ Starts at current playhead time
+
 ---
 
 **Remember: The scaling system took significant effort to perfect. When in doubt, follow the established patterns exactly. They have been battle-tested and proven to work reliably.**

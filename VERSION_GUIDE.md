@@ -189,36 +189,93 @@ ls -la dist/AirBoard_v2.8.6.zxp
 #### Step 1: Update Version in Manifest
 ```bash
 # Edit CSXS/manifest.xml
-# Change: ExtensionBundleVersion="2.8.6" 
-# To:     ExtensionBundleVersion="2.8.7"
+# Change: ExtensionBundleVersion="4.8.0" 
+# To:     ExtensionBundleVersion="4.9.0"
 ```
 
-#### Step 2: Build ZXP with Incremented Version
+#### Step 2: Update build-latest.sh Script
 ```bash
-# Create clean build environment
-rm -rf temp-package && mkdir temp-package
-
-# Copy all plugin files
-cp -r CSXS client jsx assets temp-package/
-
-# Build ZXP with NEW version number
-./ZXPSignCmd -sign temp-package dist/AirBoard_v2.8.7.zxp new-cert.p12 mypassword
-
-# Clean up
-rm -rf temp-package
+# Edit build-latest.sh
+# Update ZXP filename to new version:
+# Change: AirBoard-v4.8.0.zxp
+# To:     AirBoard-v4.9.0.zxp
 ```
 
-#### Step 3: Verify Build
+#### Step 3: Build Production ZXP (for sharing)
+```bash
+# Use the production build script (RECOMMENDED for sharing)
+./build-latest.sh
+
+# This automatically:
+# - Removes [DEV MODE] markers from HTML
+# - Removes debug button from production build
+# - Converts com.airboard.panel.dev → com.airboard.panel
+# - Changes "AirBoard Dev" → "AirBoard"
+# - Creates: dist/AirBoard-v4.9.0.zxp
+```
+
+#### Alternative: Manual Dev Build (for testing)
+```bash
+# Only use this for development testing, NOT for sharing
+rm -rf temp-package && mkdir temp-package
+cp -r CSXS client jsx assets temp-package/
+./ZXPSignCmd -sign temp-package dist/AirBoard_v4.9.0.zxp new-cert.p12 mypassword
+rm -rf temp-package
+# Creates: dist/AirBoard_v4.9.0.zxp (keeps dev settings)
+```
+
+#### Step 4: Verify Build
 ```bash
 # Check the new ZXP exists in dist folder
-ls -la dist/AirBoard_v2.8.7.zxp
+ls -la dist/AirBoard-v4.9.0.zxp
 
 # Should show file with current timestamp
 ```
 
+## 🚨 CRITICAL: Production vs Development ZXP
+
+### ⚠️ DON'T BUILD DEV ZXP FOR SHARING!
+
+**WRONG** ❌ - Building dev ZXP for sharing:
+```bash
+# This creates a DEV ZXP with debug features - DON'T share this!
+./ZXPSignCmd -sign temp-package dist/AirBoard_v4.9.0.zxp new-cert.p12 mypassword
+```
+
+**RIGHT** ✅ - Building production ZXP for sharing:
+```bash
+# This creates a PRODUCTION ZXP for public sharing
+./build-latest.sh
+```
+
+### Key Differences
+
+| Feature | Development ZXP | Production ZXP |
+|---------|-----------------|----------------|
+| **Extension Name** | "AirBoard Dev" | "AirBoard" |
+| **Extension ID** | com.airboard.panel.dev | com.airboard.panel |
+| **Debug Button** | ✅ Visible | ❌ Removed |
+| **[DEV MODE] Labels** | ✅ Shown | ❌ Removed |
+| **Intended Use** | Testing/Development | Public Sharing |
+
+### When to Use Each
+
+**Development ZXP** (`AirBoard_v4.9.0.zxp`):
+- Testing new features locally
+- Development and debugging
+- Internal use only
+- Installs alongside production version
+
+**Production ZXP** (`AirBoard-v4.9.0.zxp`):
+- Public distribution and sharing
+- Clean UI without debug elements  
+- Final release version
+- Replaces any previous production installs
+
 ### ZXP Naming Convention
 
-**Format**: `AirBoard_v[MAJOR].[MINOR].[PATCH].zxp`
+**Development Format**: `AirBoard_v[MAJOR].[MINOR].[PATCH].zxp` (underscore, keeps dev features)
+**Production Format**: `AirBoard-v[MAJOR].[MINOR].[PATCH].zxp` (hyphen, clean for sharing)
 
 **Examples**:
 - `AirBoard_v2.8.6.zxp` → `AirBoard_v2.8.7.zxp` (patch increment)

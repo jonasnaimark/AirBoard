@@ -174,8 +174,49 @@ DEBUG.log('Checkpoint 2 - made it here too');
 DEBUG.log('Checkpoint 3 - if you see this, problem is after here');
 ```
 
+## Debugging with Plugin Debug Panel
+
+### Using the Built-in Debug Panel
+
+**AirBoard Dev mode includes a built-in debug panel for debugging:**
+
+1. **Open the debug panel**: Click the 🐛 Debug button in the "Device Templates [DEV MODE]" section header
+2. **The debug panel will show**:
+   - All console.log output from the plugin
+   - Debug information from ExtendScript functions
+   - Component search results and issues
+3. **Debug panel features**:
+   - **Clear**: Remove all debug messages
+   - **Copy**: Copy debug log to clipboard
+   - **Close**: Hide the debug panel
+
+### No After Effects Info Panel Required
+
+**Important**: There is no "After Effects Info panel" - all debugging should use the plugin's built-in debug panel. This ensures:
+- All debug output is captured in one place
+- Debug info is formatted and readable
+- Easy to copy/paste debug information
+- No need to search through AE's scattered debugging tools
+
+### Example: Debugging iPhone UI Component Issues
+
+When iPhone UI component adds wrong layer:
+
+1. **Click 🐛 Debug button** to open debug panel
+2. **Try adding iPhone UI component**
+3. **Debug panel will show**:
+   ```
+   === iPhone UI COMPONENT DEBUG ===
+   Looking for composition: iPhone 14 UI
+   Found: 'Dynamic Island' (type: Other)
+   Found: 'iPhone 14 UI' (type: CompItem)
+   ✅ MATCH FOUND: iPhone 14 UI
+   ```
+4. **If it shows wrong matches**, you'll see exactly what's being found vs. what's expected
+
 ## Troubleshooting
 - If extension doesn't appear: restart AE completely
 - If changes don't show: verify you're using "AirBoard Dev" not "AirBoard"
 - If issues persist: run `./dev-sync.sh` again
 - **Chrome DevTools not showing extension**: Make sure debug mode is enabled and restart AE
+- **Always use the plugin debug panel** instead of AE console for debugging

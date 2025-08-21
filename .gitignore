@@ -28,3 +28,6 @@ node_modules/
 *.aep Logs/
 *.aep SampleData/
 *.aep.meta
+
+# Development environment backups
+CSXS/manifest.xml.dev-backup
