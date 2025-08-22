@@ -107,6 +107,9 @@ function loadAccordionStates() {
 // NEW: Smart keyframe reader (cross-property OR single-property)
 function readKeyframesSmart() {
     try {
+        // Reset baseline cache when reading keyframes fresh
+        BASELINE_CACHE.reset();
+        
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             return "error|No composition selected";
@@ -1148,6 +1151,33 @@ function checkCrossPropertyMode() {
     return result;
 }
 
+// Global cache for original baseline to persist across multiple nudge operations
+var BASELINE_CACHE = {
+    originalEarliestTime: null,
+    originalBaselineProperty: null,
+    isInitialized: false,
+    
+    reset: function() {
+        this.originalEarliestTime = null;
+        this.originalBaselineProperty = null;
+        this.isInitialized = false;
+        DEBUG_JSX.log("BASELINE_CACHE reset");
+    },
+    
+    initialize: function(earliestTime, baselineProperty) {
+        if (!this.isInitialized) {
+            this.originalEarliestTime = earliestTime;
+            this.originalBaselineProperty = baselineProperty;
+            this.isInitialized = true;
+            DEBUG_JSX.log("BASELINE_CACHE initialized: " + baselineProperty + " at " + earliestTime + "s");
+        }
+        return {
+            earliestTime: this.originalEarliestTime,
+            baselineProperty: this.originalBaselineProperty
+        };
+    }
+};
+
 // Delay nudging functions using same 50ms snapping logic as duration
 function nudgeDelayForward() {
     return nudgeDelay(1); // +1 for forward direction
@@ -1243,19 +1273,26 @@ function nudgeDelay(direction) {
         debugInfo.push("Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
         
         var propertyDelays = [];
-        var earliestTime = Number.MAX_VALUE;
+        var scanEarliestTime = Number.MAX_VALUE;
+        var scanBaselineProperty = null;
         
-        // First pass: find the earliest time to identify original baseline
+        // Scan current timeline state to detect baseline (but may not use it if cache exists)
         for (var propName in propertyMap) {
             var propData = propertyMap[propName];
             var keyframes = propData.keyframes;
             keyframes.sort(function(a, b) { return a.time - b.time; });
             var firstTime = keyframes[0].time;
             
-            if (firstTime < earliestTime) {
-                earliestTime = firstTime;
+            if (firstTime < scanEarliestTime) {
+                scanEarliestTime = firstTime;
+                scanBaselineProperty = propName;
             }
         }
+        
+        // Use cached baseline if available, otherwise initialize cache with current scan
+        var baselineData = BASELINE_CACHE.initialize(scanEarliestTime, scanBaselineProperty);
+        var originalEarliestTime = baselineData.earliestTime;
+        var originalBaselineProperty = baselineData.baselineProperty;
         
         // Second pass: build property delays with original baseline tracking
         for (var propName in propertyMap) {
@@ -1269,8 +1306,8 @@ function nudgeDelay(direction) {
             
             debugInfo.push("First time for " + propName + ": " + firstTime + "s");
             
-            // Track if this is the original baseline property
-            var isOriginalBaseline = Math.abs(firstTime - earliestTime) < 0.001;
+            // Track if this is the TRUE original baseline property (FIXED - no longer recalculated)
+            var isOriginalBaseline = (propName === originalBaselineProperty);
             
             propertyDelays.push({
                 property: propName,
@@ -1282,16 +1319,19 @@ function nudgeDelay(direction) {
             });
             
             if (isOriginalBaseline) {
-                debugInfo.push(propName + " is ORIGINAL baseline (never moves)");
+                debugInfo.push(propName + " is TRUE ORIGINAL baseline (never moves) - FIXED");
             }
         }
         
-        debugInfo.push("Earliest time: " + earliestTime + "s");
+        debugInfo.push("LOCKED Original Earliest time: " + originalEarliestTime + "s");
+        debugInfo.push("LOCKED Original Baseline property: " + originalBaselineProperty);
+        debugInfo.push("Cache initialized: " + BASELINE_CACHE.isInitialized);
+        debugInfo.push("Current scan found: " + scanBaselineProperty + " at " + scanEarliestTime + "s");
         
-        // Calculate delays relative to earliest time (baseline = 0ms)
+        // Calculate delays relative to LOCKED ORIGINAL earliest time (baseline = 0ms)
         try {
             for (var i = 0; i < propertyDelays.length; i++) {
-                var timeDiff = propertyDelays[i].currentDelay - earliestTime;
+                var timeDiff = propertyDelays[i].currentDelay - originalEarliestTime;
                 var delayMs = timeDiff * 1000;
                 
                 if (isNaN(delayMs) || !isFinite(delayMs)) {
@@ -1374,7 +1414,7 @@ function nudgeDelay(direction) {
                 if (useIndividualDelays) {
                     // Multiple delays mode - each property has its own target
                     var targetDelaySeconds = propData.targetDelay / 1000;
-                    var targetTime = earliestTime + targetDelaySeconds;
+                    var targetTime = originalEarliestTime + targetDelaySeconds; // Use LOCKED baseline time
                     timeOffset = targetTime - currentTime;
                     debugInfo.push("Property " + propData.property + " individual: target=" + propData.targetDelay + "ms, offset=" + timeOffset + "s");
                     
@@ -1391,7 +1431,7 @@ function nudgeDelay(direction) {
                         throw new Error("Invalid targetDelaySeconds: " + targetDelaySeconds + " from targetDelayMs: " + targetDelayMs);
                     }
                     
-                    var targetTime = earliestTime + targetDelaySeconds;
+                    var targetTime = originalEarliestTime + targetDelaySeconds; // Use LOCKED baseline time
                     
                     // Handle original baseline property - recreate keyframes at same positions to maintain selection
                     if (propData.isOriginalBaseline) {
