@@ -8,11 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### 🚧 In Development
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
-- **Material Blur Feature**: Add Blur button functionality for Material 1-5 presets
 - **Additional Components**: Progress bars, buttons, icons
-- **Performance Optimizations**: Enhanced template caching
 
-## [4.9.1] - 2025-08-21 ✨ **CURRENT RELEASE**
+## [4.9.2] - 2025-08-22 ✨ **CURRENT RELEASE**
+### ✨ Added - Cross-Property Delay Reading & Frame Notation
+- **Cross-Property Delay Detection**: Keyframe Reader now detects delays between keyframes on different properties (e.g., Position vs Opacity)
+- **Smart Mode Detection**: Automatically switches between "Duration" mode (single property, multiple keyframes) and "Delay" mode (multiple properties)
+- **Multiple Property Logic**: Shows "Delay: Multiple" when 3+ properties have different delays, or "Delay: 50ms / 3f" when all delays match
+- **Frame Notation Enhancement**: All delay displays now show both milliseconds and frames (e.g., "Delay: 117ms / 7f")
+- **Updated Placeholder Text**: Changed from "Duration" to "Duration or Delay" to reflect dual functionality
+- **Generic Property Support**: Works with any layer properties through recursive property traversal, not hardcoded to specific properties
+
+### 🔧 Technical Implementation
+- **New `readKeyframesSmart()` Function**: Replaces complex rewrite attempt with clean, simple routing system
+- **Cross-Property Priority Logic**: Uses earliest keyframe time as baseline (0ms delay), calculates others relative to it
+- **Generic Property Traversal**: Recursive search through all layer properties (`PropertyType.INDEXED_GROUP`, `PropertyType.NAMED_GROUP`)
+- **Enhanced Display Logic**: JavaScript handles both cross-property and single-property modes with proper frame notation
+- **Robust Multiple-Property Detection**: Compares delays between different properties while ignoring baseline (0ms) keyframe
+
+### 🎯 User Experience Improvements
+- **Intuitive Mode Detection**: System automatically determines whether you're working with single property (duration) or multiple properties (delay)
+- **Clear Visual Feedback**: "Delay: Multiple" vs "Delay: 50ms / 3f" provides immediate understanding of timing relationships
+- **Consistent Frame Display**: All timing displays now include frame notation for easier timeline reference
+- **Universal Property Support**: Works with Position, Opacity, Scale, Rotation, Effects, Masks - any animatable property
+- **Associated with AirBoard_v4.9.2.zxp**
+
+## [4.9.1] - 2025-08-21
 ### 🎨 UI Improvements
 - **Enhanced Section Hover Effect**: Section stroke opacity increases from 10% to 16% on hover for better visual feedback
 - **Smooth Animation**: Professional easing curve (cubic-bezier) matching other UI elements

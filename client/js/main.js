@@ -567,10 +567,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (status === 'success') {
                         var durationMs = parseInt(parts[1]);
                         var durationFrames = parseInt(parts[2]);
+                        var isCrossPropertyMode = parts.length > 3 ? (parts[3] === '1') : false;
                         
                         // Update the duration value and display
                         durationValue.value = durationMs;
-                        durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        if (durationMs === -1) {
+                            durationText.textContent = 'Delay: Multiple';
+                        } else if (isCrossPropertyMode) {
+                            if (durationMs === 0) {
+                                durationText.textContent = 'Delay: 0ms / 0f';
+                            } else {
+                                durationText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            }
+                        } else {
+                            durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        }
                         durationText.style.opacity = '1';
                         
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
@@ -616,10 +627,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (status === 'success') {
                         var durationMs = parseInt(parts[1]);
                         var durationFrames = parseInt(parts[2]);
+                        var isCrossPropertyMode = parts.length > 3 ? (parts[3] === '1') : false;
                         
                         // Update the duration value and display
                         durationValue.value = durationMs;
-                        durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        if (durationMs === -1) {
+                            durationText.textContent = 'Delay: Multiple';
+                        } else if (isCrossPropertyMode) {
+                            if (durationMs === 0) {
+                                durationText.textContent = 'Delay: 0ms / 0f';
+                            } else {
+                                durationText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            }
+                        } else {
+                            durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        }
                         durationText.style.opacity = '1';
                         
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
@@ -660,7 +682,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Call the After Effects script to read keyframe duration
         DEBUG.log('About to call readKeyframesDuration() in After Effects...');
-        csInterface.evalScript('readKeyframesDuration()', function(result) {
+        csInterface.evalScript('readKeyframesSmart()', function(result) {
             DEBUG.log('Got result from After Effects:', result);
             
             if (result && result.indexOf('|') !== -1) {
@@ -677,10 +699,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     var yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
                     var hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
                     var hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
+                    var isCrossPropertyMode = parts.length > 10 ? (parts[10] === '1') : false;
                     
                     // Update the duration value and display
                     durationValue.value = durationMs;
-                    durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                    if (durationMs === -1) {
+                        durationText.textContent = 'Delay: Multiple';
+                    } else if (isCrossPropertyMode) {
+                        if (durationMs === 0) {
+                            durationText.textContent = 'Delay: 0ms / 0f';
+                        } else {
+                            durationText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        }
+                    } else {
+                        durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                    }
                     durationText.style.opacity = '1';
                     
                     // Show duration buttons when we have valid data

@@ -17,6 +17,7 @@ var DEBUG_JSX = {
 // User Preferences - Save/Load resolution multiplier
 function saveResolutionPreference(multiplier) {
     try {
+        $.writeln("=== JSX DEBUG TEST in saveResolutionPreference ===");
         app.settings.saveSetting("AirBoard", "resolutionMultiplier", multiplier.toString());
         return "success";
     } catch(e) {
@@ -103,9 +104,233 @@ function loadAccordionStates() {
     }
 }
 
+// NEW: Smart keyframe reader (cross-property OR single-property)
+function readKeyframesSmart() {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "error|No composition selected";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "error|No layers selected";
+        }
+        
+        var layer = selectedLayers[0];
+        var propertyTimes = [];
+        
+        // Generic function to recursively search for selected keyframes
+        function searchAllProperties(propGroup) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
+                
+                // Check if this property has keyframes and selected keyframes
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (prop.keySelected(j)) {
+                            propertyTimes.push({
+                                name: prop.name,
+                                property: prop,
+                                time: prop.keyTime(j),
+                                keyIndex: j
+                            });
+                            break; // Only need first selected keyframe for cross-property
+                        }
+                    }
+                }
+                
+                // Recurse into property groups
+                if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                           prop.propertyType === PropertyType.NAMED_GROUP)) {
+                    searchAllProperties(prop);
+                }
+            }
+        }
+        
+        // Search all layer properties
+        searchAllProperties(layer);
+        
+        // Also check special properties that might not be in the main layer group
+        try {
+            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                    if (layer.timeRemap.keySelected(j)) {
+                        propertyTimes.push({
+                            name: "Time Remap",
+                            property: layer.timeRemap,
+                            time: layer.timeRemap.keyTime(j),
+                            keyIndex: j
+                        });
+                        break;
+                    }
+                }
+            }
+        } catch(e) {
+            // Time remap might not be available
+        }
+        
+        // CROSS-PROPERTY MODE: Multiple properties with selected keyframes
+        if (propertyTimes.length >= 2) {
+            // Sort by time and calculate delays from earliest
+            propertyTimes.sort(function(a, b) { return a.time - b.time; });
+            var earliestTime = propertyTimes[0].time;
+            
+            // Calculate all delays from earliest keyframe
+            var delays = [];
+            for (var k = 0; k < propertyTimes.length; k++) {
+                var delayMs = Math.round((propertyTimes[k].time - earliestTime) * 1000);
+                delays.push(delayMs);
+            }
+            
+            // Check if all delays are the same (find unique delays)
+            var uniqueDelays = [];
+            for (var k = 0; k < delays.length; k++) {
+                var found = false;
+                for (var j = 0; j < uniqueDelays.length; j++) {
+                    if (uniqueDelays[j] === delays[k]) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    uniqueDelays.push(delays[k]);
+                }
+            }
+            
+            var resultDelayMs, resultDelayFrames;
+            var frameRate = comp.frameRate || 30;
+            
+            if (propertyTimes.length === 2) {
+                // Only 2 properties - show the delay between them
+                resultDelayMs = delays[1]; // Second property's delay from first
+                resultDelayFrames = Math.round((resultDelayMs / 1000) * frameRate);
+            } else {
+                // 3+ properties - check if all non-zero delays are the same
+                var nonZeroDelays = [];
+                for (var k = 1; k < delays.length; k++) { // Skip first delay (always 0)
+                    if (delays[k] > 0) {
+                        nonZeroDelays.push(delays[k]);
+                    }
+                }
+                
+                // Find unique non-zero delays
+                var uniqueNonZeroDelays = [];
+                for (var k = 0; k < nonZeroDelays.length; k++) {
+                    var found = false;
+                    for (var j = 0; j < uniqueNonZeroDelays.length; j++) {
+                        if (uniqueNonZeroDelays[j] === nonZeroDelays[k]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        uniqueNonZeroDelays.push(nonZeroDelays[k]);
+                    }
+                }
+                
+                if (uniqueNonZeroDelays.length === 0) {
+                    // All keyframes at same time
+                    resultDelayMs = 0;
+                    resultDelayFrames = 0;
+                } else if (uniqueNonZeroDelays.length === 1) {
+                    // All non-zero delays are the same
+                    resultDelayMs = uniqueNonZeroDelays[0];
+                    resultDelayFrames = Math.round((resultDelayMs / 1000) * frameRate);
+                } else {
+                    // Different non-zero delays - show "Multiple"
+                    resultDelayMs = -1; // Special flag for "Multiple"
+                    resultDelayFrames = -1;
+                }
+            }
+            
+            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|1|1|1|0|0|0|0|1";
+        }
+        
+        // SINGLE-PROPERTY MODE: Multiple keyframes on one property
+        // Check if any property has multiple selected keyframes
+        var singlePropertyData = null;
+        
+        // Generic function to recursively search for properties with multiple selected keyframes
+        function searchForMultipleKeyframes(propGroup) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
+                
+                // Check if this property has multiple selected keyframes
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    var selectedKeys = [];
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (prop.keySelected(j)) {
+                            selectedKeys.push(j);
+                        }
+                    }
+                    if (selectedKeys.length >= 2) {
+                        return {
+                            property: prop,
+                            keys: selectedKeys
+                        };
+                    }
+                }
+                
+                // Recurse into property groups
+                if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                           prop.propertyType === PropertyType.NAMED_GROUP)) {
+                    var result = searchForMultipleKeyframes(prop);
+                    if (result) return result;
+                }
+            }
+            return null;
+        }
+        
+        // Search all layer properties for multiple selected keyframes
+        singlePropertyData = searchForMultipleKeyframes(layer);
+        
+        // Also check Time Remap for multiple keyframes
+        if (!singlePropertyData) {
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    var selectedKeys = [];
+                    for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                        if (layer.timeRemap.keySelected(j)) {
+                            selectedKeys.push(j);
+                        }
+                    }
+                    if (selectedKeys.length >= 2) {
+                        singlePropertyData = {
+                            property: layer.timeRemap,
+                            keys: selectedKeys
+                        };
+                    }
+                }
+            } catch(e) {
+                // Time remap might not be available
+            }
+        }
+        
+        if (singlePropertyData) {
+            // Calculate duration between first and last keyframes
+            var firstKeyIndex = singlePropertyData.keys[0];
+            var lastKeyIndex = singlePropertyData.keys[singlePropertyData.keys.length - 1];
+            var time1 = singlePropertyData.property.keyTime(firstKeyIndex);
+            var time2 = singlePropertyData.property.keyTime(lastKeyIndex);
+            var durationSeconds = Math.abs(time2 - time1);
+            var durationMs = Math.round(durationSeconds * 1000);
+            var frameRate = comp.frameRate || 30;
+            var durationFrames = Math.round(durationSeconds * frameRate);
+            
+            return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|1|0|0|0|0|0";
+        }
+        
+        return "error|Please select more than 1 keyframe";
+        
+    } catch(e) {
+        return "error|" + e.toString();
+    }
+}
+
 // Read Keyframes - Calculate duration between selected keyframes
 function readKeyframesDuration() {
-    DEBUG_JSX.log("readKeyframesDuration() called");
+    DEBUG_JSX.log("=== ORIGINAL FUNCTION TEST ===");
     try {
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
