@@ -956,7 +956,14 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
 // Wrapper functions for +/- buttons (using Grok's approach)
 function stretchKeyframesForward() {
     try {
-        return stretchKeyframesGrokApproach(3); // forward 3 frames
+        // Check if we're in cross-property mode first
+        var crossPropertyResult = checkCrossPropertyMode();
+        
+        if (crossPropertyResult.isCrossProperty) {
+            return nudgeDelayForward();
+        } else {
+            return stretchKeyframesGrokApproach(3); // forward 3 frames
+        }
     } catch(e) {
         return "error|Failed to stretch keyframes forward: " + e.toString();
     }
@@ -964,9 +971,656 @@ function stretchKeyframesForward() {
 
 function stretchKeyframesBackward() {
     try {
-        return stretchKeyframesGrokApproach(-3); // backward 3 frames
+        // Check if we're in cross-property mode first
+        var crossPropertyResult = checkCrossPropertyMode();
+        
+        if (crossPropertyResult.isCrossProperty) {
+            return nudgeDelayBackward();
+        } else {
+            return stretchKeyframesGrokApproach(-3); // backward 3 frames
+        }
     } catch(e) {
         return "error|Failed to stretch keyframes backward: " + e.toString();
+    }
+}
+
+// Function for cross-property detection (first keyframe per property only - same as readKeyframesSmart)
+function searchPropertiesForCrossPropertyDetection(layer, propertyTimes) {
+    // Search main layer properties
+    function searchPropertyGroup(propGroup) {
+        for (var i = 1; i <= propGroup.numProperties; i++) {
+            var prop = propGroup.property(i);
+            
+            // Check if this property has keyframes and selected keyframes
+            if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    if (prop.keySelected(j)) {
+                        propertyTimes.push({
+                            name: prop.name,
+                            property: prop,
+                            time: prop.keyTime(j),
+                            keyIndex: j
+                        });
+                        break; // Only need first selected keyframe for cross-property detection (same as readKeyframesSmart)
+                    }
+                }
+            }
+            
+            // Recurse into property groups
+            if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                       prop.propertyType === PropertyType.NAMED_GROUP)) {
+                searchPropertyGroup(prop);
+            }
+        }
+    }
+    
+    // Search all layer properties
+    searchPropertyGroup(layer);
+    
+    // Also check special properties that might not be in the main layer group
+    try {
+        if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+            for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                if (layer.timeRemap.keySelected(j)) {
+                    propertyTimes.push({
+                        name: "Time Remap",
+                        property: layer.timeRemap,
+                        time: layer.timeRemap.keyTime(j),
+                        keyIndex: j
+                    });
+                    break; // Only first for detection
+                }
+            }
+        }
+    } catch(e) {
+        // Time remap might not be available
+    }
+}
+
+// Function to search ALL selected keyframes for delay nudging
+function searchAllPropertiesForDelay(layer, propertyTimes) {
+    // Search main layer properties
+    function searchPropertyGroup(propGroup) {
+        for (var i = 1; i <= propGroup.numProperties; i++) {
+            var prop = propGroup.property(i);
+            
+            // Check if this property has keyframes and selected keyframes
+            if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    if (prop.keySelected(j)) {
+                        propertyTimes.push({
+                            name: prop.name,
+                            property: prop,
+                            time: prop.keyTime(j),
+                            keyIndex: j
+                        });
+                        // Get ALL selected keyframes for delay nudging
+                    }
+                }
+            }
+            
+            // Recurse into property groups
+            if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                       prop.propertyType === PropertyType.NAMED_GROUP)) {
+                searchPropertyGroup(prop);
+            }
+        }
+    }
+    
+    // Search all layer properties
+    searchPropertyGroup(layer);
+    
+    // Also check special properties that might not be in the main layer group
+    try {
+        if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+            for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                if (layer.timeRemap.keySelected(j)) {
+                    propertyTimes.push({
+                        name: "Time Remap",
+                        property: layer.timeRemap,
+                        time: layer.timeRemap.keyTime(j),
+                        keyIndex: j
+                    });
+                    // Get all selected for delay nudging
+                }
+            }
+        }
+    } catch(e) {
+        // Time remap might not be available
+    }
+}
+
+// Cross-property mode detection function (using same logic as readKeyframesSmart)
+function checkCrossPropertyMode() {
+    var comp = app.project.activeItem;
+    if (!(comp && comp instanceof CompItem)) {
+        return { isCrossProperty: false };
+    }
+    
+    var selectedLayers = comp.selectedLayers;
+    if (selectedLayers.length === 0) {
+        return { isCrossProperty: false };
+    }
+    
+    var propertyTimes = [];
+    
+    for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+        var layer = selectedLayers[layerIdx];
+        
+        // Use same property search as readKeyframesSmart for detection only (first keyframe per property)
+        searchPropertiesForCrossPropertyDetection(layer, propertyTimes);
+    }
+    
+    if (propertyTimes.length === 0) {
+        return { isCrossProperty: false };
+    }
+    
+    // Group by property (same grouping logic as readKeyframesSmart)
+    var propertyGroups = {};
+    for (var i = 0; i < propertyTimes.length; i++) {
+        var item = propertyTimes[i];
+        var propName = item.name;
+        if (!propertyGroups[propName]) {
+            propertyGroups[propName] = [];
+        }
+        propertyGroups[propName].push(item);
+    }
+    
+    var propertyNames = [];
+    for (var propName in propertyGroups) {
+        propertyNames.push(propName);
+    }
+    
+    DEBUG_JSX.log("checkCrossPropertyMode: Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
+    
+    // Cross-property mode: multiple properties with selected keyframes
+    var result = { isCrossProperty: propertyNames.length > 1 };
+    
+    // Add debug info to help troubleshoot
+    if (propertyNames.length === 0) {
+        DEBUG_JSX.log("No properties found with selected keyframes!");
+    } else if (propertyNames.length === 1) {
+        DEBUG_JSX.log("Only one property found: " + propertyNames[0] + " - using duration mode");
+    } else {
+        DEBUG_JSX.log("Multiple properties found - using delay mode");
+    }
+    
+    return result;
+}
+
+// Delay nudging functions using same 50ms snapping logic as duration
+function nudgeDelayForward() {
+    return nudgeDelay(1); // +1 for forward direction
+}
+
+function nudgeDelayBackward() {
+    return nudgeDelay(-1); // -1 for backward direction
+}
+
+function nudgeDelay(direction) {
+    try {
+        DEBUG_JSX.log("nudgeDelay called with direction: " + direction);
+        app.beginUndoGroup("Nudge Delay");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|No composition selected";
+        }
+        
+        // Early safety check for frame rate
+        var frameRate = comp.frameRate;
+        if (!frameRate || frameRate <= 0 || isNaN(frameRate)) {
+            app.endUndoGroup();
+            return "error|Invalid frame rate: " + frameRate;
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            return "error|No layers selected";
+        }
+        
+        var propertyTimes = [];
+        
+        // Collect all selected keyframes from all properties (using same approach as duration stretching)
+        var propertyMap = {};
+        try {
+            for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                var layer = selectedLayers[layerIdx];
+                var selectedProps = layer.selectedProperties;
+                
+                for (var j = 0; j < selectedProps.length; j++) {
+                    var prop = selectedProps[j];
+                    if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys === 0) continue;
+                    
+                    var selKeys = prop.selectedKeys;
+                    if (selKeys.length === 0) continue;
+                    
+                    // Store property with its selected keyframes
+                    var propName = prop.name;
+                    if (!propertyMap[propName]) {
+                        propertyMap[propName] = {
+                            property: prop,
+                            keyframes: []
+                        };
+                    }
+                    
+                    // Add all selected keyframes for this property
+                    for (var k = 0; k < selKeys.length; k++) {
+                        var keyIndex = selKeys[k];
+                        propertyMap[propName].keyframes.push({
+                            index: keyIndex,
+                            time: prop.keyTime(keyIndex)
+                        });
+                    }
+                }
+            }
+        } catch(searchError) {
+            app.endUndoGroup();
+            return "error|Error searching properties: " + searchError.toString();
+        }
+        
+        var propertyNames = [];
+        for (var propName in propertyMap) {
+            propertyNames.push(propName);
+        }
+        
+        DEBUG_JSX.log("Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
+        
+        if (propertyNames.length === 0) {
+            app.endUndoGroup();
+            return "error|No selected keyframes found";
+        }
+        
+        if (propertyNames.length <= 1) {
+            app.endUndoGroup();
+            return "error|Need multiple properties for delay nudging - found " + propertyNames.length + " properties: " + propertyNames.join(", ");
+        }
+        
+        // DEBUG: Return debug info to see what's being processed
+        var debugInfo = [];
+        debugInfo.push("Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
+        
+        var propertyDelays = [];
+        var earliestTime = Number.MAX_VALUE;
+        
+        // First pass: find the earliest time to identify original baseline
+        for (var propName in propertyMap) {
+            var propData = propertyMap[propName];
+            var keyframes = propData.keyframes;
+            keyframes.sort(function(a, b) { return a.time - b.time; });
+            var firstTime = keyframes[0].time;
+            
+            if (firstTime < earliestTime) {
+                earliestTime = firstTime;
+            }
+        }
+        
+        // Second pass: build property delays with original baseline tracking
+        for (var propName in propertyMap) {
+            var propData = propertyMap[propName];
+            var keyframes = propData.keyframes;
+            debugInfo.push("Property '" + propName + "' has " + keyframes.length + " keyframes");
+            
+            // Sort by time to get first keyframe
+            keyframes.sort(function(a, b) { return a.time - b.time; });
+            var firstTime = keyframes[0].time;
+            
+            debugInfo.push("First time for " + propName + ": " + firstTime + "s");
+            
+            // Track if this is the original baseline property
+            var isOriginalBaseline = Math.abs(firstTime - earliestTime) < 0.001;
+            
+            propertyDelays.push({
+                property: propName,
+                propObject: propData.property,
+                keyframes: keyframes,
+                currentDelay: firstTime,
+                timeOffset: 0,
+                isOriginalBaseline: isOriginalBaseline
+            });
+            
+            if (isOriginalBaseline) {
+                debugInfo.push(propName + " is ORIGINAL baseline (never moves)");
+            }
+        }
+        
+        debugInfo.push("Earliest time: " + earliestTime + "s");
+        
+        // Calculate delays relative to earliest time (baseline = 0ms)
+        try {
+            for (var i = 0; i < propertyDelays.length; i++) {
+                var timeDiff = propertyDelays[i].currentDelay - earliestTime;
+                var delayMs = timeDiff * 1000;
+                
+                if (isNaN(delayMs) || !isFinite(delayMs)) {
+                    throw new Error("Invalid delay calculation for " + propertyDelays[i].property + ": timeDiff=" + timeDiff + ", delayMs=" + delayMs);
+                }
+                
+                propertyDelays[i].relativeDelay = delayMs;
+                debugInfo.push(propertyDelays[i].property + " delay: " + delayMs + "ms");
+            }
+        } catch(calcError) {
+            app.endUndoGroup();
+            return "error|Delay calculation error: " + calcError.toString() + " | " + debugInfo.join(" | ");
+        }
+        
+        // Check if all delays are the same (unified) or different (multiple)
+        var firstDelay = propertyDelays[0].relativeDelay;
+        var allSameDelay = true;
+        DEBUG_JSX.log("First delay: " + firstDelay + "ms");
+        
+        for (var i = 1; i < propertyDelays.length; i++) {
+            DEBUG_JSX.log("Comparing delay " + i + ": " + propertyDelays[i].relativeDelay + "ms vs " + firstDelay + "ms");
+            if (Math.abs(propertyDelays[i].relativeDelay - firstDelay) > 1) { // 1ms tolerance
+                allSameDelay = false;
+                break;
+            }
+        }
+        
+        DEBUG_JSX.log("All same delay: " + allSameDelay);
+        
+        var targetDelayMs;
+        
+        try {
+            if (allSameDelay) {
+                // All delays are the same - apply 50ms snapping to the unified delay
+                debugInfo.push("Unified delay: " + firstDelay + "ms");
+                targetDelayMs = calculateDelaySnap(firstDelay, direction);
+                debugInfo.push("Target after snapping: " + targetDelayMs + "ms");
+            } else {
+                // Multiple different delays - nudge each property individually
+                debugInfo.push("Multiple delays - nudging each property individually");
+                
+                // Calculate target delay for each property individually
+                for (var i = 0; i < propertyDelays.length; i++) {
+                    var propDelay = propertyDelays[i];
+                    var currentDelay = propDelay.relativeDelay;
+                    
+                    if (propDelay.isOriginalBaseline) {
+                        // Original baseline property - never moves
+                        propDelay.targetDelay = 0;
+                        debugInfo.push(propDelay.property + ": original baseline, never moves");
+                    } else {
+                        // Apply individual 50ms snapping to this property (even if currently at 0ms)
+                        var targetDelay = calculateDelaySnap(currentDelay, direction);
+                        propDelay.targetDelay = targetDelay;
+                        debugInfo.push(propDelay.property + ": " + currentDelay + "ms → " + targetDelay + "ms (snap result)");
+                        
+                        // Extra debug for 0ms case
+                        if (Math.abs(currentDelay) < 1) {
+                            debugInfo.push("DEBUG: Property at 0ms, direction=" + direction + ", snap result=" + targetDelay);
+                        }
+                    }
+                }
+                
+                // Set a flag to indicate individual processing
+                var useIndividualDelays = true;
+            }
+        } catch(snapError) {
+            app.endUndoGroup();
+            return "error|Snapping error: " + snapError.toString() + " | " + debugInfo.join(" | ");
+        }
+        
+        // Apply time offsets to move properties to their target delays
+        try {
+            var movedCount = 0;
+            for (var i = 0; i < propertyDelays.length; i++) {
+                var propData = propertyDelays[i];
+                var currentTime = propData.currentDelay;
+                
+                var timeOffset;
+                if (useIndividualDelays) {
+                    // Multiple delays mode - each property has its own target
+                    var targetDelaySeconds = propData.targetDelay / 1000;
+                    var targetTime = earliestTime + targetDelaySeconds;
+                    timeOffset = targetTime - currentTime;
+                    debugInfo.push("Property " + propData.property + " individual: target=" + propData.targetDelay + "ms, offset=" + timeOffset + "s");
+                    
+                    // Extra debug for problematic case
+                    if (Math.abs(propData.relativeDelay) < 1 && Math.abs(propData.targetDelay - 50) < 1) {
+                        debugInfo.push("DEBUG: 0ms→50ms case: current=" + currentTime + "s, target=" + targetTime + "s, offset=" + timeOffset + "s");
+                    }
+                } else {
+                    // Unified delay mode - all properties move to same target
+                    var targetDelaySeconds = targetDelayMs / 1000;
+                    
+                    // Safety check for divide by zero
+                    if (isNaN(targetDelaySeconds) || !isFinite(targetDelaySeconds)) {
+                        throw new Error("Invalid targetDelaySeconds: " + targetDelaySeconds + " from targetDelayMs: " + targetDelayMs);
+                    }
+                    
+                    var targetTime = earliestTime + targetDelaySeconds;
+                    
+                    // Handle original baseline property - recreate keyframes at same positions to maintain selection
+                    if (propData.isOriginalBaseline) {
+                        timeOffset = 0; // No time offset for original baseline property
+                        debugInfo.push("Original baseline property " + propData.property + " - no offset");
+                    } else {
+                        timeOffset = targetTime - currentTime;
+                        debugInfo.push("Property " + propData.property + " unified offset: " + timeOffset + "s");
+                    }
+                }
+                
+                // Move all selected keyframes of this property by the time offset using remove/recreate approach
+                var prop = propData.propObject;
+                var keyframesToMove = [];
+                
+                // First, collect all keyframe data
+                for (var k = 0; k < propData.keyframes.length; k++) {
+                    var keyframe = propData.keyframes[k];
+                    var keyIndex = keyframe.index;
+                    
+                    try {
+                        var keyData = {
+                            oldIndex: keyIndex,
+                            time: keyframe.time,
+                            newTime: keyframe.time + timeOffset,
+                            value: prop.keyValue(keyIndex),
+                            inInterp: prop.keyInInterpolationType(keyIndex),
+                            outInterp: prop.keyOutInterpolationType(keyIndex),
+                            temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                        };
+                        
+                        // Only collect temporal ease if bezier interpolation
+                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        }
+                        
+                        // Handle spatial properties if applicable
+                        if (prop.isSpatial) {
+                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                        }
+                        
+                        keyframesToMove.push(keyData);
+                    } catch(collectError) {
+                        throw new Error("Failed to collect keyframe data for index " + keyIndex + ": " + collectError.toString());
+                    }
+                }
+                
+                // Remove old keyframes in reverse order to avoid index shifts
+                var indices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    indices.push(keyframesToMove[k].oldIndex);
+                }
+                indices.sort(function(a, b) { return b - a; }); // Reverse order
+                
+                for (var k = 0; k < indices.length; k++) {
+                    prop.removeKey(indices[k]);
+                }
+                
+                // Create new keyframes at new times (collect new indices for later selection)
+                var newSelIndices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var keyData = keyframesToMove[k];
+                    var newIdx = prop.addKey(keyData.newTime);
+                    
+                    // Restore all attributes
+                    prop.setValueAtKey(newIdx, keyData.value);
+                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
+                    
+                    // Only set temporal ease if it was bezier
+                    if (keyData.inEase !== undefined) {
+                        prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                    }
+                    
+                    prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
+                    prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
+                    
+                    if (keyData.spatialContinuous !== undefined) {
+                        prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
+                        prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
+                        prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                    }
+                    
+                    // Store new index for later selection
+                    newSelIndices.push(newIdx);
+                    movedCount++;
+                    debugInfo.push("Recreated " + propData.property + " keyframe: " + keyData.time + "s → " + keyData.newTime + "s");
+                    
+                    // Extra debug for 0ms→50ms case
+                    if (Math.abs(keyData.time) < 0.001 && Math.abs(keyData.newTime - 0.05) < 0.001) {
+                        debugInfo.push("DEBUG: Moving keyframe from 0s to 0.05s (0ms→50ms)");
+                    }
+                }
+                
+                // Store new indices for later selection
+                propData.newSelIndices = newSelIndices;
+            }
+            
+            debugInfo.push("Total keyframes moved: " + movedCount);
+            
+        } catch(moveError) {
+            app.endUndoGroup();
+            return "error|Keyframe moving error: " + moveError.toString() + " | " + debugInfo.join(" | ");
+        }
+        
+        // Final pass: Select all the new keyframes after all adjustments are complete
+        try {
+            for (var i = 0; i < propertyDelays.length; i++) {
+                var propData = propertyDelays[i];
+                if (propData.newSelIndices) {
+                    var prop = propData.propObject;
+                    for (var k = 0; k < propData.newSelIndices.length; k++) {
+                        prop.setSelectedAtKey(propData.newSelIndices[k], true);
+                    }
+                    debugInfo.push("Selected " + propData.newSelIndices.length + " keyframes on " + propData.property);
+                }
+            }
+        } catch(selectionError) {
+            // Don't fail the entire operation if selection fails
+            debugInfo.push("Selection error: " + selectionError.toString());
+        }
+        
+        app.endUndoGroup();
+        
+        // Return the result in the same format as readKeyframesSmart
+        var frameRate = comp.frameRate || 29.97;
+        var isCrossPropertyMode = 1;
+        var returnDelayMs, returnFrames;
+        
+        if (useIndividualDelays) {
+            // Multiple delays - check if they're all the same now
+            var newDelays = [];
+            for (var i = 0; i < propertyDelays.length; i++) {
+                if (propertyDelays[i].targetDelay > 0) { // Skip baseline (0ms)
+                    newDelays.push(propertyDelays[i].targetDelay);
+                }
+            }
+            
+            if (newDelays.length === 0) {
+                returnDelayMs = 0;
+            } else {
+                var firstNewDelay = newDelays[0];
+                var allSameNewDelay = true;
+                for (var i = 1; i < newDelays.length; i++) {
+                    if (Math.abs(newDelays[i] - firstNewDelay) > 1) {
+                        allSameNewDelay = false;
+                        break;
+                    }
+                }
+                
+                if (allSameNewDelay) {
+                    returnDelayMs = firstNewDelay;
+                } else {
+                    returnDelayMs = -1; // Still multiple different delays
+                }
+            }
+        } else {
+            // Unified delay mode
+            returnDelayMs = targetDelayMs;
+        }
+        
+        returnFrames = Math.round(returnDelayMs * frameRate / 1000);
+        
+        var result = "success|" + returnDelayMs + "|" + returnFrames + "|" + isCrossPropertyMode;
+        DEBUG_JSX.log("Returning result: " + result);
+        
+        return result;
+        
+    } catch(e) {
+        app.endUndoGroup();
+        var errorMsg = e.toString();
+        if (errorMsg.indexOf("divide by zero") !== -1) {
+            return "error|Divide by zero in delay nudging. Debug: propertyTimes=" + (typeof propertyTimes !== 'undefined' ? propertyTimes.length : 'undefined') + ", direction=" + direction + ". Error: " + errorMsg;
+        } else {
+            return "error|Failed to nudge delay: " + errorMsg;
+        }
+    }
+}
+
+// 50ms delay snapping logic (same as duration snapping)
+function calculateDelaySnap(currentDelayMs, direction) {
+    // Safety check for divide by zero
+    if (typeof currentDelayMs !== 'number' || isNaN(currentDelayMs) || !isFinite(currentDelayMs)) {
+        throw new Error("calculateDelaySnap: currentDelayMs is not a valid number: " + currentDelayMs);
+    }
+    
+    if (typeof direction !== 'number' || isNaN(direction)) {
+        throw new Error("calculateDelaySnap: direction is not a valid number: " + direction);
+    }
+    
+    // Handle edge cases
+    if (currentDelayMs < 0) {
+        currentDelayMs = 0;
+    }
+    
+    // Check if current delay is already a multiple of 50ms (within 1ms tolerance)
+    var remainder = Math.abs(currentDelayMs) % 50;
+    var isAlreadySnapped = (remainder < 1) || (remainder > 49);
+    
+    DEBUG_JSX.log("Remainder: " + remainder + ", isAlreadySnapped: " + isAlreadySnapped);
+    
+    if (isAlreadySnapped) {
+        // Already snapped to 50ms boundary - increment by exactly 50ms
+        if (direction > 0) {
+            var result = currentDelayMs + 50;
+            DEBUG_JSX.log("Already snapped, direction +, result: " + result);
+            return result;
+        } else {
+            var result = Math.max(0, currentDelayMs - 50); // Don't go below 0
+            DEBUG_JSX.log("Already snapped, direction -, result: " + result);
+            return result;
+        }
+    } else {
+        // Not snapped yet - snap to nearest 50ms multiple
+        if (direction > 0) {
+            // + button: snap to next 50ms increment
+            var result = Math.ceil(currentDelayMs / 50) * 50;
+            DEBUG_JSX.log("Not snapped, direction +, result: " + result);
+            return result;
+        } else {
+            // - button: snap to previous 50ms increment
+            var result = Math.max(0, Math.floor(currentDelayMs / 50) * 50);
+            DEBUG_JSX.log("Not snapped, direction -, result: " + result);
+            return result;
+        }
     }
 }
 
