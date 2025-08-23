@@ -1987,6 +1987,10 @@ function calculateDelaySnap(currentDelayMs, direction) {
             return result;
         } else {
             var result = Math.max(0, currentDelayMs - 50); // Don't go below 0
+            // Handle floating-point precision: round very small values to exactly 0
+            if (result < 1) {
+                result = 0;
+            }
             DEBUG_JSX.log("Already snapped, direction -, result: " + result);
             return result;
         }
@@ -2000,6 +2004,10 @@ function calculateDelaySnap(currentDelayMs, direction) {
         } else {
             // - button: snap to previous 50ms increment
             var result = Math.max(0, Math.floor(currentDelayMs / 50) * 50);
+            // Handle floating-point precision: round very small values to exactly 0
+            if (result < 1) {
+                result = 0;
+            }
             DEBUG_JSX.log("Not snapped, direction -, result: " + result);
             return result;
         }
