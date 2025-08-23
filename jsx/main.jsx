@@ -247,6 +247,59 @@ function readKeyframesSmart() {
                 }
             }
             
+            // Calculate durations for each property in cross-property mode
+            var propertyDurations = [];
+            var resultDurationMs = 0, resultDurationFrames = 0;
+            
+            // First, calculate duration for each property
+            for (var k = 0; k < propertyTimes.length; k++) {
+                var propInfo = propertyTimes[k];
+                var prop = propInfo.property;
+                
+                // Collect ALL selected keyframes for this property
+                var allSelectedKeys = [];
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    if (prop.keySelected(j)) {
+                        allSelectedKeys.push(j);
+                    }
+                }
+                
+                if (allSelectedKeys.length >= 2) {
+                    // Calculate duration by finding time span of selected keyframes
+                    var times = [];
+                    for (var j = 0; j < allSelectedKeys.length; j++) {
+                        times.push(prop.keyTime(allSelectedKeys[j]));
+                    }
+                    times.sort(function(a, b) { return a - b; });
+                    var durationSeconds = times[times.length - 1] - times[0];
+                    var durationMs = Math.round(durationSeconds * 1000);
+                    propertyDurations.push(durationMs);
+                    DEBUG_JSX.log("Property " + propInfo.name + " duration: " + durationMs + "ms");
+                }
+            }
+            
+            // Check if all properties have the same duration
+            if (propertyDurations.length > 0) {
+                var allSameDuration = true;
+                var firstDuration = propertyDurations[0];
+                for (var k = 1; k < propertyDurations.length; k++) {
+                    if (Math.abs(propertyDurations[k] - firstDuration) > 1) { // 1ms tolerance
+                        allSameDuration = false;
+                        break;
+                    }
+                }
+                
+                if (allSameDuration) {
+                    resultDurationMs = firstDuration;
+                    resultDurationFrames = Math.round((resultDurationMs / 1000) * frameRate);
+                    DEBUG_JSX.log("All properties have same duration: " + resultDurationMs + "ms");
+                } else {
+                    resultDurationMs = -1; // Flag for "Multiple" durations
+                    resultDurationFrames = -1;
+                    DEBUG_JSX.log("Properties have different durations");
+                }
+            }
+            
             // Calculate position distances from the propertyTimes array
             var xDistance = 0, yDistance = 0, hasXDistance = false, hasYDistance = false;
             try {
@@ -294,7 +347,7 @@ function readKeyframesSmart() {
                 DEBUG_JSX.log("Position calculation failed: " + posError.toString());
             }
             
-            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|1|1|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1"; // Add |1 to indicate cross-property mode
+            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1"; // Add |1 to indicate cross-property mode
         }
         
         // SINGLE-PROPERTY MODE: Multiple keyframes on one property

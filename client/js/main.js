@@ -556,9 +556,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable button while working
             durationIncrementBtn.disabled = true;
             
-            // Check if duration display shows "Duration: Mixed" to determine which function to call
+            // Check if duration display shows "Duration: Multiple" to determine which function to call
             var durationText = document.getElementById('durationText');
-            var isMultiPropertyMode = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+            var isMultiPropertyMode = durationText.textContent.indexOf('Duration: Multiple') !== -1;
             var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationForward()' : 'stretchKeyframesForward()';
             
             console.log('Calling script function:', scriptFunction);
@@ -581,13 +581,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         var isCrossPropertyMode = parts.length > 3 ? (parts[3] === '1') : false;
                         
                         // Check if we called multi-property function (need to check before updating display)
-                        var wasMultiPropertyCall = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+                        var wasMultiPropertyCall = durationText.textContent.indexOf('Duration: Multiple') !== -1;
                         
                         // Update the duration value and display based on which function was called
                         durationValue.value = durationMs;
                         if (wasMultiPropertyCall) {
-                            // Keep showing "Duration: Mixed" for multi-property mode to maintain consistency
-                            durationText.textContent = 'Duration: Mixed';
+                            // Keep showing "Duration: Multiple" for multi-property mode to maintain consistency
+                            durationText.textContent = 'Duration: Multiple';
                         } else if (isCrossPropertyMode) {
                             // This shouldn't happen for duration buttons, but handle delay case
                             if (durationMs === -1) {
@@ -631,9 +631,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable button while working
             durationDecrementBtn.disabled = true;
             
-            // Check if duration display shows "Duration: Mixed" to determine which function to call
+            // Check if duration display shows "Duration: Multiple" to determine which function to call
             var durationText = document.getElementById('durationText');
-            var isMultiPropertyMode = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+            var isMultiPropertyMode = durationText.textContent.indexOf('Duration: Multiple') !== -1;
             var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationBackward()' : 'stretchKeyframesBackward()';
             
             console.log('Calling script function:', scriptFunction);
@@ -656,13 +656,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         var isCrossPropertyMode = parts.length > 3 ? (parts[3] === '1') : false;
                         
                         // Check if we called multi-property function (need to check before updating display)
-                        var wasMultiPropertyCall = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+                        var wasMultiPropertyCall = durationText.textContent.indexOf('Duration: Multiple') !== -1;
                         
                         // Update the duration value and display based on which function was called
                         durationValue.value = durationMs;
                         if (wasMultiPropertyCall) {
-                            // Keep showing "Duration: Mixed" for multi-property mode to maintain consistency
-                            durationText.textContent = 'Duration: Mixed';
+                            // Keep showing "Duration: Multiple" for multi-property mode to maintain consistency
+                            durationText.textContent = 'Duration: Multiple';
                         } else if (isCrossPropertyMode) {
                             // This shouldn't happen for duration buttons, but handle delay case
                             if (durationMs === -1) {
@@ -811,36 +811,63 @@ document.addEventListener('DOMContentLoaded', function() {
                 var status = parts[0];
                 
                 if (status === 'success') {
-                    var durationMs = parseInt(parts[1]);
-                    var durationFrames = parseInt(parts[2]);
-                    DEBUG.log('Successfully parsed duration:', durationMs + 'ms, ' + durationFrames + ' frames');
+                    // Check if this is cross-property mode first to determine parsing format
+                    var isCrossPropertyMode = parts[parts.length - 1] === '1';
                     
-                    // Parse position distance data (new format)
-                    var xDistance = parts.length > 6 ? parseInt(parts[6]) : 0;
-                    var yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
-                    var hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
-                    var hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
-                    var isCrossPropertyMode = parts.length > 10 ? (parts[10] === '1') : false;
+                    var delayMs, delayFrames, durationMs, durationFrames;
+                    var xDistance, yDistance, hasXDistance, hasYDistance;
+                    
+                    if (isCrossPropertyMode) {
+                        // Cross-property format: success|delayMs|delayFrames|durationMs|durationFrames|1|xDistance|yDistance|hasX|hasY|1
+                        delayMs = parseInt(parts[1]);
+                        delayFrames = parseInt(parts[2]);
+                        durationMs = parseInt(parts[3]);
+                        durationFrames = parseInt(parts[4]);
+                        xDistance = parts.length > 6 ? parseInt(parts[6]) : 0;
+                        yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
+                        hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
+                        hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
+                    } else {
+                        // Single-property format: success|durationMs|durationFrames|...|xDistance|yDistance|hasX|hasY|0
+                        durationMs = parseInt(parts[1]);
+                        durationFrames = parseInt(parts[2]);
+                        delayMs = 0; // No delay concept in single-property mode
+                        delayFrames = 0;
+                        xDistance = parts.length > 6 ? parseInt(parts[6]) : 0;
+                        yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
+                        hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
+                        hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
+                    }
+                    
+                    DEBUG.log('Successfully parsed delay:', delayMs + 'ms, ' + delayFrames + ' frames');
+                    DEBUG.log('Successfully parsed duration:', durationMs + 'ms, ' + durationFrames + ' frames');
                     
                     // Update displays based on mode
                     var delayText = document.getElementById('delayText');
                     
                     if (isCrossPropertyMode) {
-                        // Cross-property mode: show delay info in delay row AND duration mixed in duration row
-                        durationText.textContent = 'Duration: Mixed';
+                        // Cross-property mode: show delay info in delay row AND duration info in duration row
+                        
+                        // Handle duration display
+                        if (durationMs === -1) {
+                            durationText.textContent = 'Duration: Multiple';
+                        } else {
+                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        }
                         durationText.style.opacity = '1';
                         
-                        if (durationMs === -1) {
+                        // Handle delay display
+                        if (delayMs === -1) {
                             delayText.textContent = 'Delay: Multiple';
-                        } else if (durationMs === 0) {
+                        } else if (delayMs === 0) {
                             delayText.textContent = 'Delay: 0ms / 0f';
                         } else {
-                            delayText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            delayText.textContent = 'Delay: ' + delayMs + 'ms / ' + delayFrames + 'f';
                         }
                         delayText.style.opacity = '1';
                         
                         // Store for delay nudging
-                        document.getElementById('delayValue').value = durationMs;
+                        document.getElementById('delayValue').value = delayMs;
                     } else {
                         // Single-property mode: show duration info in duration row
                         delayText.textContent = 'Delay';
