@@ -247,7 +247,54 @@ function readKeyframesSmart() {
                 }
             }
             
-            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|1|1|1|0|0|0|0|1";
+            // Calculate position distances from the propertyTimes array
+            var xDistance = 0, yDistance = 0, hasXDistance = false, hasYDistance = false;
+            try {
+                DEBUG_JSX.log("CROSS-PROPERTY DEBUG: Searching propertyTimes for position data");
+                DEBUG_JSX.log("PropertyTimes length: " + propertyTimes.length);
+                
+                // Search through propertyTimes for position properties
+                for (var k = 0; k < propertyTimes.length; k++) {
+                    var propInfo = propertyTimes[k];
+                    var prop = propInfo.property;
+                    
+                    DEBUG_JSX.log("Checking property: " + propInfo.name + " (isPosition: " + isPositionProperty(prop) + ")");
+                    
+                    if (isPositionProperty(prop)) {
+                        // Collect ALL selected keyframes for this position property, not just the first one
+                        var allSelectedKeys = [];
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (prop.keySelected(j)) {
+                                allSelectedKeys.push(j);
+                            }
+                        }
+                        
+                        if (allSelectedKeys.length >= 2) {
+                            DEBUG_JSX.log("Found position property " + propInfo.name + " with " + allSelectedKeys.length + " selected keyframes");
+                            
+                            var distance = calculatePositionDistance(prop, allSelectedKeys);
+                            DEBUG_JSX.log("Position distance calculated: x=" + distance.x + ", y=" + distance.y + ", hasX=" + distance.hasX + ", hasY=" + distance.hasY);
+                            
+                            if (distance.hasX) {
+                                xDistance += distance.x;
+                                hasXDistance = true;
+                            }
+                            if (distance.hasY) {
+                                yDistance += distance.y;
+                                hasYDistance = true;
+                            }
+                        }
+                    }
+                }
+                
+                DEBUG_JSX.log("Final position results: x=" + xDistance + ", y=" + yDistance + ", hasX=" + hasXDistance + ", hasY=" + hasYDistance);
+                
+            } catch(posError) {
+                // Position calculation failed, use defaults
+                DEBUG_JSX.log("Position calculation failed: " + posError.toString());
+            }
+            
+            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|1|1|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1"; // Add |1 to indicate cross-property mode
         }
         
         // SINGLE-PROPERTY MODE: Multiple keyframes on one property
@@ -311,17 +358,15 @@ function readKeyframesSmart() {
         }
         
         if (singlePropertyData) {
-            // Calculate duration between first and last keyframes
-            var firstKeyIndex = singlePropertyData.keys[0];
-            var lastKeyIndex = singlePropertyData.keys[singlePropertyData.keys.length - 1];
-            var time1 = singlePropertyData.property.keyTime(firstKeyIndex);
-            var time2 = singlePropertyData.property.keyTime(lastKeyIndex);
-            var durationSeconds = Math.abs(time2 - time1);
-            var durationMs = Math.round(durationSeconds * 1000);
-            var frameRate = comp.frameRate || 30;
-            var durationFrames = Math.round(durationSeconds * frameRate);
+            // For single-property mode, delegate to the original working function
+            DEBUG_JSX.log("Single property mode detected - delegating to readKeyframesDuration()");
+            var result = readKeyframesDuration();
             
-            return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|1|0|0|0|0|0";
+            // Add cross-property mode flag (false for single-property mode)
+            if (result && result.indexOf('success|') === 0) {
+                return result + "|0"; // Add |0 to indicate single-property mode
+            }
+            return result;
         }
         
         return "error|Please select more than 1 keyframe";
@@ -471,8 +516,12 @@ function readKeyframesDuration() {
         function searchForPositionKeyframes(propGroup) {
             var results = { x: 0, y: 0, hasX: false, hasY: false };
             
+            DEBUG_JSX.log("searchForPositionKeyframes: Searching " + propGroup.numProperties + " properties in " + propGroup.name);
+            
             for (var i = 1; i <= propGroup.numProperties; i++) {
                 var prop = propGroup.property(i);
+                
+                DEBUG_JSX.log("Checking property " + i + ": " + prop.name + " (isPosition: " + isPositionProperty(prop) + ")");
                 
                 // Check if this is a position property with selected keyframes
                 if (isPositionProperty(prop)) {
@@ -483,8 +532,11 @@ function readKeyframesDuration() {
                         }
                     }
                     
+                    DEBUG_JSX.log("Position property " + prop.name + " has " + selectedKeys.length + " selected keyframes");
+                    
                     if (selectedKeys.length >= 2) {
                         var distance = calculatePositionDistance(prop, selectedKeys);
+                        DEBUG_JSX.log("Calculated position distance: x=" + distance.x + ", y=" + distance.y + ", hasX=" + distance.hasX + ", hasY=" + distance.hasY);
                         if (distance.hasX) {
                             results.x += distance.x;
                             results.hasX = true;
@@ -1136,16 +1188,45 @@ function checkCrossPropertyMode() {
     
     DEBUG_JSX.log("checkCrossPropertyMode: Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
     
-    // Cross-property mode: multiple properties with selected keyframes
-    var result = { isCrossProperty: propertyNames.length > 1 };
+    // Only use delay mode if there are multiple properties AND they have different timing
+    var isCrossProperty = false;
+    
+    if (propertyNames.length > 1) {
+        // Check if properties have keyframes at different times (indicating delay differences)
+        var firstTimes = [];
+        for (var propName in propertyGroups) {
+            var keyframes = propertyGroups[propName];
+            // Sort keyframes by time and get the first one
+            keyframes.sort(function(a, b) { return a.time - b.time; });
+            firstTimes.push(keyframes[0].time);
+        }
+        
+        // Check if all first keyframes are at the same time (within 1ms tolerance)
+        var earliestTime = Math.min.apply(Math, firstTimes);
+        var hasDelayDifferences = false;
+        for (var i = 0; i < firstTimes.length; i++) {
+            if (Math.abs(firstTimes[i] - earliestTime) > 0.001) { // > 1ms difference
+                hasDelayDifferences = true;
+                break;
+            }
+        }
+        
+        isCrossProperty = hasDelayDifferences;
+        DEBUG_JSX.log("First times: " + firstTimes.join(", ") + " seconds");
+        DEBUG_JSX.log("Earliest time: " + earliestTime + ", hasDelayDifferences: " + hasDelayDifferences);
+    }
+    
+    var result = { isCrossProperty: isCrossProperty };
     
     // Add debug info to help troubleshoot
     if (propertyNames.length === 0) {
         DEBUG_JSX.log("No properties found with selected keyframes!");
     } else if (propertyNames.length === 1) {
         DEBUG_JSX.log("Only one property found: " + propertyNames[0] + " - using duration mode");
+    } else if (!isCrossProperty) {
+        DEBUG_JSX.log("Multiple properties found but all start at same time - using duration mode");
     } else {
-        DEBUG_JSX.log("Multiple properties found - using delay mode");
+        DEBUG_JSX.log("Multiple properties found with different start times - using delay mode");
     }
     
     return result;
@@ -1177,6 +1258,214 @@ var BASELINE_CACHE = {
         };
     }
 };
+
+// Duration stretching functions for multi-property mode (50ms increments)
+function stretchMultiPropertyDurationForward() {
+    return stretchMultiPropertyDuration(1); // +1 for forward direction (same as delay nudging)
+}
+
+function stretchMultiPropertyDurationBackward() {
+    return stretchMultiPropertyDuration(-1); // -1 for backward direction (same as delay nudging)
+}
+
+function stretchMultiPropertyDuration(direction) {
+    try {
+        DEBUG_JSX.log("stretchMultiPropertyDuration called with direction: " + direction);
+        app.beginUndoGroup("Stretch Multi-Property Duration");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|No composition selected";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            return "error|No layers selected";
+        }
+        
+        var frameRate = comp.frameRate || 30;
+        var movedCount = 0;
+        var allProcessedProperties = []; // Store all properties for global selection restoration
+        
+        // Build property map upfront (same approach as delay nudging to avoid selection issues)
+        var propertyMap = {};
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
+            var selectedProps = layer.selectedProperties;
+            
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys === 0) continue;
+                
+                var selKeys = prop.selectedKeys;
+                if (selKeys.length < 2) continue; // Need at least 2 keyframes to stretch duration
+                
+                // Store property with its selected keyframes (same as delay nudging)
+                var propName = prop.name + "_" + layerIdx + "_" + j; // Make unique key
+                propertyMap[propName] = {
+                    property: prop,
+                    selectedKeys: selKeys
+                };
+            }
+        }
+        
+        // Process all properties from the map using smart snapping for each property
+        for (var propName in propertyMap) {
+            var propData = propertyMap[propName];
+            var prop = propData.property;
+            var selKeys = propData.selectedKeys;
+            
+            // Calculate current duration for this property
+            var times = [];
+            for (var k = 0; k < selKeys.length; k++) {
+                times.push(prop.keyTime(selKeys[k]));
+            }
+            times.sort(function(a, b) { return a - b; });
+            var currentDurationMs = Math.round((times[times.length - 1] - times[0]) * 1000);
+            
+            // Apply smart snapping to find target duration
+            var targetDurationMs = calculateDelaySnap(currentDurationMs, direction);
+            var deltaMs = targetDurationMs - currentDurationMs;
+            var deltaSeconds = deltaMs / 1000;
+            
+            DEBUG_JSX.log("Property " + prop.name + ": current=" + currentDurationMs + "ms, target=" + targetDurationMs + "ms, delta=" + deltaMs + "ms");
+            
+            // Skip if no change needed
+            if (Math.abs(deltaMs) < 1) {
+                continue;
+            }
+            
+            // Use same remove/recreate approach as delay nudging for consistency
+            var keyframesToMove = [];
+            
+            // Collect keyframe data
+            for (var k = 0; k < selKeys.length; k++) {
+                    var keyIndex = selKeys[k];
+                    var keyData = {
+                        oldIndex: keyIndex,
+                        time: prop.keyTime(keyIndex),
+                        value: prop.keyValue(keyIndex),
+                        inInterp: prop.keyInInterpolationType(keyIndex),
+                        outInterp: prop.keyOutInterpolationType(keyIndex),
+                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                    };
+                    
+                    // Only collect temporal ease if bezier interpolation
+                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                        keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                    }
+                    
+                    // Handle spatial properties if applicable
+                    if (prop.isSpatial) {
+                        keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                        keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                        keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                        keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                    }
+                    
+                    keyframesToMove.push(keyData);
+                }
+                
+                // Sort by time to identify first and last keyframes
+                keyframesToMove.sort(function(a, b) { return a.time - b.time; });
+                var firstTime = keyframesToMove[0].time;
+                var lastTime = keyframesToMove[keyframesToMove.length - 1].time;
+                
+                // Calculate new times - stretch duration by deltaMs
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var keyData = keyframesToMove[k];
+                    if (k === 0) {
+                        // First keyframe stays at same time
+                        keyData.newTime = keyData.time;
+                    } else {
+                        // Other keyframes get stretched proportionally
+                        var progress = (keyData.time - firstTime) / (lastTime - firstTime);
+                        var newDuration = (lastTime - firstTime) + deltaSeconds;
+                        if (newDuration < 0) newDuration = 0; // Don't allow negative duration
+                        keyData.newTime = firstTime + (progress * newDuration);
+                    }
+                }
+                
+                // Remove old keyframes in reverse order
+                var indices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    indices.push(keyframesToMove[k].oldIndex);
+                }
+                indices.sort(function(a, b) { return b - a; }); // Reverse order
+                
+                for (var k = 0; k < indices.length; k++) {
+                    prop.removeKey(indices[k]);
+                }
+                
+                // Create new keyframes at new times
+                var newSelIndices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var keyData = keyframesToMove[k];
+                    var newIdx = prop.addKey(keyData.newTime);
+                    
+                    // Restore all attributes
+                    prop.setValueAtKey(newIdx, keyData.value);
+                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
+                    
+                    // Only set temporal ease if it was bezier
+                    if (keyData.inEase !== undefined) {
+                        prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                    }
+                    
+                    prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
+                    prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
+                    
+                    if (keyData.spatialContinuous !== undefined) {
+                        prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
+                        prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
+                        prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                    }
+                    
+                    newSelIndices.push(newIdx);
+                    movedCount++;
+                }
+                
+            // Store property data for global selection restoration (same as delay nudging)
+            allProcessedProperties.push({
+                propObject: prop,
+                newSelIndices: newSelIndices
+            });
+        }
+        
+        // Global selection restoration phase (same as delay nudging)
+        try {
+            for (var i = 0; i < allProcessedProperties.length; i++) {
+                var propData = allProcessedProperties[i];
+                if (propData.newSelIndices) {
+                    var prop = propData.propObject;
+                    for (var k = 0; k < propData.newSelIndices.length; k++) {
+                        prop.setSelectedAtKey(propData.newSelIndices[k], true);
+                    }
+                }
+            }
+        } catch(selectionError) {
+            // Don't fail the entire operation if selection fails
+            DEBUG_JSX.log("Selection restoration error: " + selectionError.toString());
+        }
+        
+        app.endUndoGroup();
+        
+        if (movedCount === 0) {
+            return "error|No properties were processed";
+        }
+        
+        // Return generic success for cross-property duration stretching
+        return "success|50|1|1"; // Return |1 to indicate cross-property mode for client detection
+        
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Failed to stretch multi-property duration: " + e.toString();
+    }
+}
 
 // Delay nudging functions using same 50ms snapping logic as duration
 function nudgeDelayForward() {
@@ -1306,8 +1595,8 @@ function nudgeDelay(direction) {
             
             debugInfo.push("First time for " + propName + ": " + firstTime + "s");
             
-            // Track if this is the TRUE original baseline property (FIXED - no longer recalculated)
-            var isOriginalBaseline = (propName === originalBaselineProperty);
+            // Track if this is a baseline property (ANY property at the earliest time)
+            var isOriginalBaseline = (Math.abs(firstTime - originalEarliestTime) < 0.001); // Use small tolerance for time comparison
             
             propertyDelays.push({
                 property: propName,
@@ -1319,7 +1608,7 @@ function nudgeDelay(direction) {
             });
             
             if (isOriginalBaseline) {
-                debugInfo.push(propName + " is TRUE ORIGINAL baseline (never moves) - FIXED");
+                debugInfo.push(propName + " is baseline property at " + firstTime + "s (never moves)");
             }
         }
         
@@ -1698,148 +1987,179 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         var finalDistance = 0;
         var hasDistance = false;
         
-        for (var i = 0; i < selectedLayers.length; i++) {
-            var layer = selectedLayers[i];
-            var selectedProps = layer.selectedProperties;
-            
-            for (var j = 0; j < selectedProps.length; j++) {
-                var prop = selectedProps[j];
-                if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys < 2) continue;
+        // Use the same property searching approach as readKeyframesSmart()
+        var layer = selectedLayers[0]; // Use first selected layer
+        
+        // Function to recursively search for selected keyframes with matching axis
+        function findAxisProperty(propGroup, targetAxis) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
                 
-                var selKeys = prop.selectedKeys;
-                if (selKeys.length < 2) continue;
-                
-                // Check if this is a position-related property and if it matches the axis
-                if (!isPositionProperty(prop)) continue;
-                
-                // Check axis compatibility
-                var propName = prop.name.toLowerCase();
-                var isValidAxis = false;
-                
-                if (axis === 'x') {
-                    // X axis: works with Position or X Position
-                    isValidAxis = (propName === "position" || propName === "x position");
-                } else {
-                    // Y axis: works with Position or Y Position  
-                    isValidAxis = (propName === "position" || propName === "y position");
-                }
-                
-                if (!isValidAxis) {
-                    // Return axis mismatch error
-                    app.endUndoGroup();
-                    return "error|Select " + axis.toUpperCase() + " position keyframes";
-                }
-                
-                processedAny = true;
-                
-                // Sort selected key indices
-                selKeys.sort(function(a, b) { return a - b; });
-                
-                // Get the first and last keyframes for distance calculation
-                var firstKeyIndex = selKeys[0];
-                var lastKeyIndex = selKeys[selKeys.length - 1];
-                
-                var firstValue = prop.keyValue(firstKeyIndex);
-                var lastValue = prop.keyValue(lastKeyIndex);
-                
-                // Extract the coordinate values for the specified axis
-                var firstCoord, lastCoord;
-                
-                if (firstValue instanceof Array && lastValue instanceof Array) {
-                    // 2D Position case [x, y]
-                    if (firstValue.length >= 2 && lastValue.length >= 2) {
-                        firstCoord = axis === 'x' ? firstValue[0] : firstValue[1];
-                        lastCoord = axis === 'x' ? lastValue[0] : lastValue[1];
-                    } else {
-                        continue;
-                    }
-                } else if (typeof firstValue === "number" && typeof lastValue === "number") {
-                    // 1D Position case
-                    firstCoord = firstValue;
-                    lastCoord = lastValue;
-                } else {
-                    continue;
-                }
-                
-                // Calculate current distance
-                var currentDistance = Math.abs(lastCoord - firstCoord);
-                
-                // Get the current resolution multiplier
-                var resolutionMultiplier = 2; // Default to 2x
-                try {
-                    var saved = app.settings.getSetting("AirBoard", "resolutionMultiplier");
-                    if (saved !== "") {
-                        var value = parseInt(saved);
-                        if (value >= 1 && value <= 6) {
-                            resolutionMultiplier = value;
+                // Check if this property has keyframes and selected keyframes
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    // Count selected keyframes
+                    var selectedKeys = [];
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (prop.keySelected(j)) {
+                            selectedKeys.push(j);
                         }
                     }
-                } catch(e) {
-                    // Use default 2x if we can't read the setting
-                }
-                
-                // Calculate target distance using smart 5px snapping (resolution-aware)
-                var targetDistance = calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolutionMultiplier);
-                
-                // Calculate the adjustment needed
-                var distanceDifference = targetDistance - currentDistance;
-                
-                // Determine which keyframe to move and in which direction
-                var keyIndexToMove, newCoord;
-                
-                if (direction === 'in') {
-                    // "In" mode: move first keyframe to achieve target distance
-                    keyIndexToMove = firstKeyIndex;
-                    if (lastCoord >= firstCoord) {
-                        // Normal case: last > first, move first towards/away from last
-                        newCoord = firstCoord - distanceDifference;
-                    } else {
-                        // Reverse case: first > last, move first towards/away from last
-                        newCoord = firstCoord + distanceDifference;
-                    }
-                } else {
-                    // "Out" mode: move last keyframe to achieve target distance  
-                    keyIndexToMove = lastKeyIndex;
-                    if (lastCoord >= firstCoord) {
-                        // Normal case: last > first, move last towards/away from first
-                        newCoord = lastCoord + distanceDifference;
-                    } else {
-                        // Reverse case: first > last, move last towards/away from first
-                        newCoord = lastCoord - distanceDifference;
+                    
+                    if (selectedKeys.length >= 2 && isPositionProperty(prop)) {
+                        // Check axis compatibility
+                        var propName = prop.name.toLowerCase();
+                        var isValidAxis = false;
+                        
+                        if (targetAxis === 'x') {
+                            // X axis: works with Position or X Position
+                            isValidAxis = (propName === "position" || propName === "x position");
+                        } else {
+                            // Y axis: works with Position or Y Position  
+                            isValidAxis = (propName === "position" || propName === "y position");
+                        }
+                        
+                        if (isValidAxis) {
+                            return { property: prop, keys: selectedKeys };
+                        }
                     }
                 }
                 
-                // Apply the new value
-                var currentValue = prop.keyValue(keyIndexToMove);
-                var newValue;
-                
-                if (currentValue instanceof Array && currentValue.length >= 2) {
-                    // 2D Position case [x, y]
-                    newValue = [currentValue[0], currentValue[1]];
-                    if (axis === 'x') {
-                        newValue[0] = newCoord;
-                    } else {
-                        newValue[1] = newCoord;
-                    }
-                } else if (typeof currentValue === "number") {
-                    // 1D Position case
-                    newValue = newCoord;
-                } else {
-                    continue;
+                // Recurse into property groups
+                if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                           prop.propertyType === PropertyType.NAMED_GROUP)) {
+                    var result = findAxisProperty(prop, targetAxis);
+                    if (result) return result;
                 }
-                
-                // Apply the new keyframe value
-                try {
-                    prop.setValueAtKey(keyIndexToMove, newValue);
-                } catch(e) {
-                    $.writeln("Failed to set keyframe value: " + e.toString());
+            }
+            return null;
+        }
+        
+        // Find the property for this axis
+        var axisPropertyData = findAxisProperty(layer, axis);
+        if (!axisPropertyData) {
+            app.endUndoGroup();
+            return "error|Select " + axis.toUpperCase() + " position keyframes";
+        }
+        
+        var prop = axisPropertyData.property;
+        var selKeys = axisPropertyData.keys;
+        
+        if (selKeys.length < 2) {
+            app.endUndoGroup();
+            return "error|Select " + axis.toUpperCase() + " position keyframes";
+        }
+        
+        processedAny = true;
+        
+        // Sort selected key indices
+        selKeys.sort(function(a, b) { return a - b; });
+        
+        // Get the first and last keyframes for distance calculation
+        var firstKeyIndex = selKeys[0];
+        var lastKeyIndex = selKeys[selKeys.length - 1];
+        
+        var firstValue = prop.keyValue(firstKeyIndex);
+        var lastValue = prop.keyValue(lastKeyIndex);
+        
+        // Extract the coordinate values for the specified axis
+        var firstCoord, lastCoord;
+        
+        if (firstValue instanceof Array && lastValue instanceof Array) {
+            // 2D Position case [x, y]
+            if (firstValue.length >= 2 && lastValue.length >= 2) {
+                firstCoord = axis === 'x' ? firstValue[0] : firstValue[1];
+                lastCoord = axis === 'x' ? lastValue[0] : lastValue[1];
+            } else {
+                app.endUndoGroup();
+                return "error|Invalid position values";
+            }
+        } else if (typeof firstValue === "number" && typeof lastValue === "number") {
+            // 1D Position case
+            firstCoord = firstValue;
+            lastCoord = lastValue;
+        } else {
+            app.endUndoGroup();
+            return "error|Invalid position values";
+        }
+        
+        // Calculate current distance
+        var currentDistance = Math.abs(lastCoord - firstCoord);
+        
+        // Get the current resolution multiplier
+        var resolutionMultiplier = 2; // Default to 2x
+        try {
+            var saved = app.settings.getSetting("AirBoard", "resolutionMultiplier");
+            if (saved !== "") {
+                var value = parseInt(saved);
+                if (value >= 1 && value <= 6) {
+                    resolutionMultiplier = value;
                 }
-                
-                // Store the final distance for return
-                finalDistance = targetDistance;
-                hasDistance = true;
+            }
+        } catch(e) {
+            // Use default 2x if we can't read the setting
+        }
+        
+        // Calculate target distance using smart 5px snapping (resolution-aware)
+        var targetDistance = calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolutionMultiplier);
+        
+        // Calculate the adjustment needed
+        var distanceDifference = targetDistance - currentDistance;
+        
+        // Determine which keyframe to move and in which direction
+        var keyIndexToMove, newCoord;
+        
+        if (direction === 'in') {
+            // "In" mode: move first keyframe to achieve target distance
+            keyIndexToMove = firstKeyIndex;
+            if (lastCoord >= firstCoord) {
+                // Normal case: last > first, move first towards/away from last
+                newCoord = firstCoord - distanceDifference;
+            } else {
+                // Reverse case: first > last, move first towards/away from last
+                newCoord = firstCoord + distanceDifference;
+            }
+        } else {
+            // "Out" mode: move last keyframe to achieve target distance  
+            keyIndexToMove = lastKeyIndex;
+            if (lastCoord >= firstCoord) {
+                // Normal case: last > first, move last towards/away from first
+                newCoord = lastCoord + distanceDifference;
+            } else {
+                // Reverse case: first > last, move last towards/away from first
+                newCoord = lastCoord - distanceDifference;
             }
         }
+        
+        // Apply the new value
+        var currentValue = prop.keyValue(keyIndexToMove);
+        var newValue;
+        
+        if (currentValue instanceof Array && currentValue.length >= 2) {
+            // 2D Position case [x, y]
+            newValue = [currentValue[0], currentValue[1]];
+            if (axis === 'x') {
+                newValue[0] = newCoord;
+            } else {
+                newValue[1] = newCoord;
+            }
+        } else if (typeof currentValue === "number") {
+            // 1D Position case
+            newValue = newCoord;
+        } else {
+            app.endUndoGroup();
+            return "error|Invalid position value type";
+        }
+        
+        // Apply the new keyframe value
+        try {
+            prop.setValueAtKey(keyIndexToMove, newValue);
+        } catch(e) {
+            $.writeln("Failed to set keyframe value: " + e.toString());
+        }
+        
+        // Store the final distance for return
+        finalDistance = targetDistance;
+        hasDistance = true;
         
         app.endUndoGroup();
         
@@ -1850,7 +2170,7 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         // Recalculate total distance for display (in case of multi-keyframe paths)
         if (processedAny) {
             // Re-read to get accurate total distance through all keyframes
-            var readResult = readKeyframesDuration();
+            var readResult = readKeyframesSmart();
             if (readResult && readResult.indexOf('success|') === 0) {
                 var parts = readResult.split('|');
                 var xDistance = parseFloat(parts[6]) || 0;

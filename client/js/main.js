@@ -534,12 +534,16 @@ document.addEventListener('DOMContentLoaded', function() {
     var durationValue = document.getElementById('durationValue');
     var durationText = document.getElementById('durationText');
     
-    // Duration +/- buttons (StackOverflow record/delete/recreate approach)
-    var durationIncrementBtn = document.querySelector('#durationDisplay .number-btn.increment');
-    var durationDecrementBtn = document.querySelector('#durationDisplay .number-btn.decrement');
+    // Duration +/- buttons (StackOverflow record/delete/recreate approach) 
+    var durationIncrementBtn = document.getElementById('durationIncrementBtn');
+    var durationDecrementBtn = document.getElementById('durationDecrementBtn');
+    
+    // Delay +/- buttons
+    var delayIncrementBtn = document.getElementById('delayIncrementBtn');
+    var delayDecrementBtn = document.getElementById('delayDecrementBtn');
     
     if (durationIncrementBtn && durationDecrementBtn) {
-        // + button: Stretch keyframes forward by 3 frames
+        // + button: Stretch keyframes forward by 3 frames OR multi-property duration by 50ms
         durationIncrementBtn.addEventListener('click', function() {
             console.log('Duration increment (stretch forward) clicked');
             
@@ -552,8 +556,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable button while working
             durationIncrementBtn.disabled = true;
             
-            // Call the ExtendScript function
-            csInterface.evalScript('stretchKeyframesForward()', function(result) {
+            // Check if duration display shows "Duration: Mixed" to determine which function to call
+            var durationText = document.getElementById('durationText');
+            var isMultiPropertyMode = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+            var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationForward()' : 'stretchKeyframesForward()';
+            
+            console.log('Calling script function:', scriptFunction);
+            
+            // Call the appropriate ExtendScript function
+            csInterface.evalScript(scriptFunction, function(result) {
                 console.log('Stretch forward result:', result);
                 
                 // Re-enable button
@@ -569,18 +580,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         var durationFrames = parseInt(parts[2]);
                         var isCrossPropertyMode = parts.length > 3 ? (parts[3] === '1') : false;
                         
-                        // Update the duration value and display
+                        // Check if we called multi-property function (need to check before updating display)
+                        var wasMultiPropertyCall = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+                        
+                        // Update the duration value and display based on which function was called
                         durationValue.value = durationMs;
-                        if (durationMs === -1) {
-                            durationText.textContent = 'Delay: Multiple';
+                        if (wasMultiPropertyCall) {
+                            // Keep showing "Duration: Mixed" for multi-property mode to maintain consistency
+                            durationText.textContent = 'Duration: Mixed';
                         } else if (isCrossPropertyMode) {
-                            if (durationMs === 0) {
+                            // This shouldn't happen for duration buttons, but handle delay case
+                            if (durationMs === -1) {
+                                durationText.textContent = 'Delay: Multiple';
+                            } else if (durationMs === 0) {
                                 durationText.textContent = 'Delay: 0ms / 0f';
                             } else {
                                 durationText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
                             }
                         } else {
-                            durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                            // Single-property mode
+                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                         }
                         durationText.style.opacity = '1';
                         
@@ -599,7 +618,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // - button: Shrink keyframes backward by 3 frames
+        // - button: Shrink keyframes backward by 3 frames OR multi-property duration by 50ms
         durationDecrementBtn.addEventListener('click', function() {
             console.log('Duration decrement (stretch backward) clicked');
             
@@ -612,8 +631,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable button while working
             durationDecrementBtn.disabled = true;
             
-            // Call the ExtendScript function
-            csInterface.evalScript('stretchKeyframesBackward()', function(result) {
+            // Check if duration display shows "Duration: Mixed" to determine which function to call
+            var durationText = document.getElementById('durationText');
+            var isMultiPropertyMode = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+            var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationBackward()' : 'stretchKeyframesBackward()';
+            
+            console.log('Calling script function:', scriptFunction);
+            
+            // Call the appropriate ExtendScript function
+            csInterface.evalScript(scriptFunction, function(result) {
                 console.log('Stretch backward result:', result);
                 
                 // Re-enable button
@@ -629,18 +655,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         var durationFrames = parseInt(parts[2]);
                         var isCrossPropertyMode = parts.length > 3 ? (parts[3] === '1') : false;
                         
-                        // Update the duration value and display
+                        // Check if we called multi-property function (need to check before updating display)
+                        var wasMultiPropertyCall = durationText.textContent.indexOf('Duration: Mixed') !== -1;
+                        
+                        // Update the duration value and display based on which function was called
                         durationValue.value = durationMs;
-                        if (durationMs === -1) {
-                            durationText.textContent = 'Delay: Multiple';
+                        if (wasMultiPropertyCall) {
+                            // Keep showing "Duration: Mixed" for multi-property mode to maintain consistency
+                            durationText.textContent = 'Duration: Mixed';
                         } else if (isCrossPropertyMode) {
-                            if (durationMs === 0) {
+                            // This shouldn't happen for duration buttons, but handle delay case
+                            if (durationMs === -1) {
+                                durationText.textContent = 'Delay: Multiple';
+                            } else if (durationMs === 0) {
                                 durationText.textContent = 'Delay: 0ms / 0f';
                             } else {
                                 durationText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
                             }
                         } else {
-                            durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                            // Single-property mode
+                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                         }
                         durationText.style.opacity = '1';
                         
@@ -660,14 +694,99 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Delay +/- buttons - call delay nudging functions directly
+    if (delayIncrementBtn && delayDecrementBtn) {
+        delayIncrementBtn.addEventListener('click', function() {
+            console.log('Delay increment (nudge forward) clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            delayIncrementBtn.disabled = true;
+            
+            csInterface.evalScript('nudgeDelayForward()', function(result) {
+                console.log('Delay nudge forward result:', result);
+                
+                delayIncrementBtn.disabled = false;
+                
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+                    
+                    if (status === 'success') {
+                        var delayMs = parseInt(parts[1]);
+                        var delayFrames = parseInt(parts[2]);
+                        
+                        // Update delay display
+                        var delayText = document.getElementById('delayText');
+                        if (delayMs === -1) {
+                            delayText.textContent = 'Delay: Multiple';
+                        } else {
+                            delayText.textContent = 'Delay: ' + delayMs + 'ms / ' + delayFrames + 'f';
+                        }
+                        delayText.style.opacity = '1';
+                        
+                        console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
+                    }
+                }
+            });
+        });
+        
+        delayDecrementBtn.addEventListener('click', function() {
+            console.log('Delay decrement (nudge backward) clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            delayDecrementBtn.disabled = true;
+            
+            csInterface.evalScript('nudgeDelayBackward()', function(result) {
+                console.log('Delay nudge backward result:', result);
+                
+                delayDecrementBtn.disabled = false;
+                
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+                    
+                    if (status === 'success') {
+                        var delayMs = parseInt(parts[1]);
+                        var delayFrames = parseInt(parts[2]);
+                        
+                        // Update delay display
+                        var delayText = document.getElementById('delayText');
+                        if (delayMs === -1) {
+                            delayText.textContent = 'Delay: Multiple';
+                        } else {
+                            delayText.textContent = 'Delay: ' + delayMs + 'ms / ' + delayFrames + 'f';
+                        }
+                        delayText.style.opacity = '1';
+                        
+                        console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
+                    }
+                }
+            });
+        });
+    }
+    
     // Read Keyframes button handler
     var readKeyframesButton = document.getElementById('readKeyframes');
     readKeyframesButton.addEventListener('click', function() {
         DEBUG.log('Read Keyframes clicked');
         
-        // Reset distance displays when starting read operation
+        // Reset all displays when starting read operation
+        var delayText = document.getElementById('delayText');
         var xDistanceText = document.getElementById('xDistanceText');
         var yDistanceText = document.getElementById('yDistanceText');
+        
+        durationText.textContent = 'Duration';
+        durationText.style.opacity = '0.5';
+        delayText.textContent = 'Delay';
+        delayText.style.opacity = '0.5';
         xDistanceText.textContent = 'Select > 1 keyframe';
         xDistanceText.style.opacity = '1';
         yDistanceText.textContent = 'Select > 1 keyframe';
@@ -675,8 +794,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Check if CSInterface is available
         if (!csInterface) {
-            durationText.textContent = 'Select > 1 keyframe';
-            durationText.style.opacity = '1';
+            durationText.textContent = 'Duration';
+            durationText.style.opacity = '0.5';
+            delayText.textContent = 'Delay';
+            delayText.style.opacity = '0.5';
             return;
         }
         
@@ -701,18 +822,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     var hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
                     var isCrossPropertyMode = parts.length > 10 ? (parts[10] === '1') : false;
                     
-                    // Update the duration value and display
-                    durationValue.value = durationMs;
-                    if (durationMs === -1) {
-                        durationText.textContent = 'Delay: Multiple';
-                    } else if (isCrossPropertyMode) {
-                        if (durationMs === 0) {
-                            durationText.textContent = 'Delay: 0ms / 0f';
+                    // Update displays based on mode
+                    var delayText = document.getElementById('delayText');
+                    
+                    if (isCrossPropertyMode) {
+                        // Cross-property mode: show delay info in delay row AND duration mixed in duration row
+                        durationText.textContent = 'Duration: Mixed';
+                        durationText.style.opacity = '1';
+                        
+                        if (durationMs === -1) {
+                            delayText.textContent = 'Delay: Multiple';
+                        } else if (durationMs === 0) {
+                            delayText.textContent = 'Delay: 0ms / 0f';
                         } else {
-                            durationText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            delayText.textContent = 'Delay: ' + durationMs + 'ms / ' + durationFrames + 'f';
                         }
+                        delayText.style.opacity = '1';
+                        
+                        // Store for delay nudging
+                        document.getElementById('delayValue').value = durationMs;
                     } else {
-                        durationText.textContent = durationMs + 'ms / ' + durationFrames + 'f';
+                        // Single-property mode: show duration info in duration row
+                        delayText.textContent = 'Delay';
+                        delayText.style.opacity = '0.5';
+                        
+                        durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        durationValue.value = durationMs;
                     }
                     durationText.style.opacity = '1';
                     
@@ -770,13 +905,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (status === 'error') {
                     var errorMsg = parts[1] || 'Unknown error';
                     
-                    // Update duration text label with error message
-                    durationText.textContent = 'Select > 1 keyframe';
-                    durationText.style.opacity = '1';
+                    // Reset both duration and delay displays
+                    durationText.textContent = 'Duration';
+                    durationText.style.opacity = '0.5';
+                    delayText.textContent = 'Delay';
+                    delayText.style.opacity = '0.5';
                     
                     // Reset X and Y distance displays to error state and hide buttons
-                    var xDistanceText = document.getElementById('xDistanceText');
-                    var yDistanceText = document.getElementById('yDistanceText');
                     xDistanceText.textContent = 'Select > 1 keyframe';
                     xDistanceText.style.opacity = '1';
                     hideXButtons();
@@ -787,12 +922,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     DEBUG.error('Keyframe reading failed:', errorMsg);
                 }
             } else {
-                durationText.textContent = 'Select > 1 keyframe';
-                durationText.style.opacity = '1';
+                // Reset both duration and delay displays  
+                durationText.textContent = 'Duration';
+                durationText.style.opacity = '0.5';
+                delayText.textContent = 'Delay';
+                delayText.style.opacity = '0.5';
                 
                 // Reset X and Y distance displays to error state and hide buttons
-                var xDistanceText = document.getElementById('xDistanceText');
-                var yDistanceText = document.getElementById('yDistanceText');
                 xDistanceText.textContent = 'Select > 1 keyframe';
                 xDistanceText.style.opacity = '1';
                 hideXButtons();
