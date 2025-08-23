@@ -10,7 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.9.2] - 2025-08-22 ✨ **CURRENT RELEASE**
+## [4.9.3] - 2025-08-23 ✨ **CURRENT RELEASE**
+### 🎯 Added - TIMELINE POSITION NUDGING SYSTEM
+- **Timeline Position Nudging**: When ALL selected keyframes have the same baseline time, Delay +/- buttons now move ALL keyframes together by 50ms increments in the timeline
+- **Smart Mode Detection**: Automatically switches between Timeline Mode (all keyframes at same baseline) and Baseline Mode (different baseline times)
+- **Perfect Easing Preservation**: Maintains all temporal and spatial curve properties (ease curves, bezier handles, continuity settings)
+- **Full Keyframe Selection**: All originally selected keyframes remain selected after timeline nudging operations
+- **Universal Property Support**: Works for single properties (multiple keyframes on one property) and multiple properties (keyframes across different properties)
+- **Animation Timing Preserved**: Relative spacing between keyframes maintained during timeline shifts
+- **50ms Timeline Increments**: Consistent timeline positioning with 0ms minimum clamping for backward nudging
+
+### 🔧 Technical Implementation - ROBUST KEYFRAME SYSTEM
+- **Intelligent Detection Logic**: Detects when first keyframes across all properties are at same baseline time
+- **Keyframe Recreation Approach**: Uses After Effects-compatible addKey/removeKey system instead of problematic setKeyTime()  
+- **Comprehensive Property Preservation**: Preserves temporal ease, spatial tangents, interpolation types, continuity, and auto-bezier settings
+- **Deferred Selection System**: Uses proven baseline-mode selection approach for reliable keyframe selection preservation
+- **Timeline Offset Calculation**: Maintains relative keyframe spacing while shifting entire animation timeline
+- **Error Handling**: Graceful fallbacks with proper undo group management for reliable operation
+
+### 🎮 User Experience - SEAMLESS INTEGRATION
+- **Context-Aware Behavior**: Same Delay +/- buttons intelligently switch between timeline nudging and baseline delay adjustment
+- **Visual Feedback**: Clear indication of timeline vs baseline modes through consistent UI patterns  
+- **Non-Destructive Operation**: Original animation curves and timing relationships perfectly preserved
+- **Workflow Integration**: Seamlessly integrates with existing keyframe reading and delay adjustment workflows
+- **Cross-Property Timeline Control**: Move keyframes across Position, Opacity, Scale, Rotation and any animatable properties simultaneously
+- **Associated with AirBoard-v4.9.3.zxp**
+
+## [4.9.2] - 2025-08-22
 ### ✨ Added - Cross-Property Delay Reading & Frame Notation
 - **Cross-Property Delay Detection**: Keyframe Reader now detects delays between keyframes on different properties (e.g., Position vs Opacity)
 - **Smart Mode Detection**: Automatically switches between "Duration" mode (single property, multiple keyframes) and "Delay" mode (multiple properties)
