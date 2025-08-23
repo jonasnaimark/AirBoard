@@ -422,7 +422,7 @@ function readKeyframesSmart() {
             return result;
         }
         
-        return "error|Please select more than 1 keyframe";
+        return "error|Select > 1 Keyframe";
         
     } catch(e) {
         return "error|" + e.toString();
@@ -535,7 +535,7 @@ function readKeyframesDuration() {
         }
         
         if (!keyframeData) {
-            return "error|Please select more than 1 keyframe";
+            return "error|Select > 1 Keyframe";
         }
         
         var selectedKeys = keyframeData.keys;
@@ -1046,7 +1046,7 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
         app.endUndoGroup();
         
         if (!processedAny) {
-            return "error|Please select more than 1 keyframe";
+            return "error|Select > 1 Keyframe";
         }
         
         // Return success with new duration
@@ -2107,7 +2107,11 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         
         if (selKeys.length < 2) {
             app.endUndoGroup();
-            return "error|Select " + axis.toUpperCase() + " position keyframes";
+            if (selKeys.length === 1) {
+                return "error|Select > 1 " + axis.toUpperCase() + " position keyframe";
+            } else {
+                return "error|Select " + axis.toUpperCase() + " position keyframes";
+            }
         }
         
         processedAny = true;

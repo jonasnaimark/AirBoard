@@ -1,14 +1,17 @@
 // This file connects the HTML panel to After Effects
 
-// Hide control buttons on startup - only show after "Read Keyframes" is clicked
+// Always show all control buttons - per user request for consistency
 setTimeout(function() {
     var durationControls = document.querySelector('#durationDisplay .number-controls');
+    var delayControls = document.querySelector('#delayDisplay .number-controls');
     var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
     var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
     
-    if (durationControls) durationControls.style.display = 'none';
-    if (xControls) xControls.style.display = 'none';
-    if (yControls) yControls.style.display = 'none';
+    // Always show all buttons for consistency
+    if (durationControls) durationControls.style.display = 'flex';
+    if (delayControls) delayControls.style.display = 'flex';
+    if (xControls) xControls.style.display = 'flex';
+    if (yControls) yControls.style.display = 'flex';
 }, 1000); // Wait for DOM to be ready
 
 // Debug utilities for Chrome DevTools
@@ -622,9 +625,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Show error briefly, then revert to selection message
                         durationText.textContent = 'Select > 1 Keyframe';
+                        durationText.style.opacity = '1';
                     }
                 } else {
                     durationText.textContent = 'Select > 1 Keyframe';
+                    durationText.style.opacity = '1';
                     console.log('Unexpected result:', result);
                 }
             });
@@ -709,9 +714,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Show error briefly, then revert to selection message
                         durationText.textContent = 'Select > 1 Keyframe';
+                        durationText.style.opacity = '1';
                     }
                 } else {
                     durationText.textContent = 'Select > 1 Keyframe';
+                    durationText.style.opacity = '1';
                     console.log('Unexpected result:', result);
                 }
             });
@@ -753,7 +760,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         delayText.style.opacity = '1';
                         
                         console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
+                    } else if (status === 'error') {
+                        // Use consistent error message for delay buttons
+                        var delayText = document.getElementById('delayText');
+                        delayText.textContent = 'Select > 1 Keyframe';
+                        delayText.style.opacity = '1';
                     }
+                } else {
+                    // Unexpected result format
+                    var delayText = document.getElementById('delayText');
+                    delayText.textContent = 'Select > 1 Keyframe';
+                    delayText.style.opacity = '1';
                 }
             });
         });
@@ -791,7 +808,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         delayText.style.opacity = '1';
                         
                         console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
+                    } else if (status === 'error') {
+                        // Use consistent error message for delay buttons
+                        var delayText = document.getElementById('delayText');
+                        delayText.textContent = 'Select > 1 Keyframe';
+                        delayText.style.opacity = '1';
                     }
+                } else {
+                    // Unexpected result format
+                    var delayText = document.getElementById('delayText');
+                    delayText.textContent = 'Select > 1 Keyframe';
+                    delayText.style.opacity = '1';
                 }
             });
         });
@@ -802,7 +829,7 @@ document.addEventListener('DOMContentLoaded', function() {
     readKeyframesButton.addEventListener('click', function() {
         DEBUG.log('Read Keyframes clicked');
         
-        // Reset all displays when starting read operation
+        // Reset all displays to default text when starting read operation
         var delayText = document.getElementById('delayText');
         var xDistanceText = document.getElementById('xDistanceText');
         var yDistanceText = document.getElementById('yDistanceText');
@@ -811,10 +838,10 @@ document.addEventListener('DOMContentLoaded', function() {
         durationText.style.opacity = '0.5';
         delayText.textContent = 'Delay';
         delayText.style.opacity = '0.5';
-        xDistanceText.textContent = 'Select > 1 keyframe';
-        xDistanceText.style.opacity = '1';
-        yDistanceText.textContent = 'Select > 1 keyframe';
-        yDistanceText.style.opacity = '1';
+        xDistanceText.textContent = 'X distance';
+        xDistanceText.style.opacity = '0.5';
+        yDistanceText.textContent = 'Y distance';
+        yDistanceText.style.opacity = '0.5';
         
         // Check if CSInterface is available
         if (!csInterface) {
@@ -822,6 +849,10 @@ document.addEventListener('DOMContentLoaded', function() {
             durationText.style.opacity = '0.5';
             delayText.textContent = 'Delay';
             delayText.style.opacity = '0.5';
+            xDistanceText.textContent = 'X distance';
+            xDistanceText.style.opacity = '0.5';
+            yDistanceText.textContent = 'Y distance';
+            yDistanceText.style.opacity = '0.5';
             return;
         }
         
@@ -834,7 +865,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 var parts = result.split('|');
                 var status = parts[0];
                 
-                if (status === 'success') {
+                if (status === 'error') {
+                    var errorMsg = parts[1] || 'Unknown error';
+                    
+                    // Get all text elements
+                    var delayText = document.getElementById('delayText');
+                    var xDistanceText = document.getElementById('xDistanceText');
+                    var yDistanceText = document.getElementById('yDistanceText');
+                    
+                    // Simple logic: if error is "Select > 1 Keyframe", show this message in all 4 rows
+                    if (errorMsg === 'Select > 1 Keyframe') {
+                        // Show "Select > 1 Keyframe" in all 4 rows
+                        durationText.textContent = 'Select > 1 Keyframe';
+                        durationText.style.opacity = '1';
+                        delayText.textContent = 'Select > 1 Keyframe';
+                        delayText.style.opacity = '1';
+                        xDistanceText.textContent = 'Select > 1 Keyframe';
+                        xDistanceText.style.opacity = '1';
+                        yDistanceText.textContent = 'Select > 1 Keyframe';
+                        yDistanceText.style.opacity = '1';
+                    } else {
+                        // Other errors: reset to default text
+                        durationText.textContent = 'Duration';
+                        durationText.style.opacity = '0.5';
+                        delayText.textContent = 'Delay';
+                        delayText.style.opacity = '0.5';
+                        xDistanceText.textContent = 'X distance';
+                        xDistanceText.style.opacity = '0.5';
+                        yDistanceText.textContent = 'Y distance';
+                        yDistanceText.style.opacity = '0.5';
+                    }
+                    
+                    DEBUG.error('Keyframe reading failed:', errorMsg);
+                } else if (status === 'success') {
                     // Check if this is cross-property mode first to determine parsing format
                     var isCrossPropertyMode = parts[parts.length - 1] === '1';
                     
@@ -905,8 +968,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     durationText.style.opacity = '1';
                     
-                    // Show duration buttons when we have valid data
+                    // Always show all buttons for consistency
                     showDurationButtons();
+                    showPositionButtons();
                     
                     // Get current resolution multiplier for scaling
                     var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
@@ -918,18 +982,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
                             xDistanceText.textContent = 'X: ' + scaledXDistance + 'px @1x';
                             xDistanceText.style.opacity = '1';
-                            showXButtons();
                         } else {
                             // Has X position keyframes but no distance change
                             xDistanceText.textContent = 'No change in X position';
                             xDistanceText.style.opacity = '1';
-                            hideXButtons();
                         }
                     } else {
-                        // No X position keyframes selected
-                        xDistanceText.textContent = 'Select X position keyframe';
-                        xDistanceText.style.opacity = '1';
-                        hideXButtons();
+                        // No X position keyframes selected - return to default text
+                        xDistanceText.textContent = 'X distance';
+                        xDistanceText.style.opacity = '0.5';
                     }
                     
                     // Update Y Distance display
@@ -939,56 +1000,33 @@ document.addEventListener('DOMContentLoaded', function() {
                             var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
                             yDistanceText.textContent = 'Y: ' + scaledYDistance + 'px @1x';
                             yDistanceText.style.opacity = '1';
-                            showYButtons();
                         } else {
                             // Has Y position keyframes but no distance change
                             yDistanceText.textContent = 'No change in Y position';
                             yDistanceText.style.opacity = '1';
-                            hideYButtons();
                         }
                     } else {
-                        // No Y position keyframes selected
-                        yDistanceText.textContent = 'Select Y position keyframe';
-                        yDistanceText.style.opacity = '1';
-                        hideYButtons();
+                        // No Y position keyframes selected - return to default text
+                        yDistanceText.textContent = 'Y distance';
+                        yDistanceText.style.opacity = '0.5';
                     }
                     
                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                     console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
                     console.log('Y Distance:', hasYDistance ? scaledYDistance + 'px @1x (raw: ' + yDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
-                } else if (status === 'error') {
-                    var errorMsg = parts[1] || 'Unknown error';
-                    
-                    // Reset both duration and delay displays
-                    durationText.textContent = 'Duration';
-                    durationText.style.opacity = '0.5';
-                    delayText.textContent = 'Delay';
-                    delayText.style.opacity = '0.5';
-                    
-                    // Reset X and Y distance displays to error state and hide buttons
-                    xDistanceText.textContent = 'Select > 1 keyframe';
-                    xDistanceText.style.opacity = '1';
-                    hideXButtons();
-                    yDistanceText.textContent = 'Select > 1 keyframe';
-                    yDistanceText.style.opacity = '1';
-                    hideYButtons();
-                    
-                    DEBUG.error('Keyframe reading failed:', errorMsg);
                 }
             } else {
-                // Reset both duration and delay displays  
+                // Reset all displays to default text  
                 durationText.textContent = 'Duration';
                 durationText.style.opacity = '0.5';
                 delayText.textContent = 'Delay';
                 delayText.style.opacity = '0.5';
                 
-                // Reset X and Y distance displays to error state and hide buttons
-                xDistanceText.textContent = 'Select > 1 keyframe';
-                xDistanceText.style.opacity = '1';
-                hideXButtons();
-                yDistanceText.textContent = 'Select > 1 keyframe';
-                yDistanceText.style.opacity = '1';
-                hideYButtons();
+                // Reset X and Y distance displays to default text
+                xDistanceText.textContent = 'X distance';
+                xDistanceText.style.opacity = '0.5';
+                yDistanceText.textContent = 'Y distance';
+                yDistanceText.style.opacity = '0.5';
                 
                 console.log('Unexpected result:', result);
             }
@@ -1138,16 +1176,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     textElement.style.opacity = '1';
                 } else {
                     textElement.textContent = 'Select > 1 Keyframe';
-                    textElement.style.opacity = '0.5';
+                    textElement.style.opacity = '1';
                 }
             } else if (status === 'error') {
-                var errorMsg = parts[1] || 'Select > 1 Keyframe';
-                textElement.textContent = errorMsg;
-                textElement.style.opacity = '0.5';
+                // Use consistent error message for all distance buttons
+                textElement.textContent = 'Select > 1 Keyframe';
+                textElement.style.opacity = '1';
             }
         } else {
             textElement.textContent = 'Select > 1 Keyframe';
-            textElement.style.opacity = '0.5';
+            textElement.style.opacity = '1';
         }
     }
     

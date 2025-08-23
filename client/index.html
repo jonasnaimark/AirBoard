@@ -177,13 +177,23 @@
                 </div>
                 <div class="control-row">
                     <div class="resolution-display" id="durationDisplay">
-                        <span id="durationText" style="opacity: 0.5;">Duration or Delay</span>
+                        <span id="durationText" style="opacity: 0.5;">Duration</span>
                         <div class="number-controls">
-                            <button class="number-btn decrement" type="button">−</button>
-                            <button class="number-btn increment" type="button">+</button>
+                            <button class="number-btn decrement" id="durationDecrementBtn" type="button">−</button>
+                            <button class="number-btn increment" id="durationIncrementBtn" type="button">+</button>
                         </div>
                     </div>
                     <input type="hidden" id="durationValue" value="500">
+                </div>
+                <div class="control-row">
+                    <div class="resolution-display" id="delayDisplay">
+                        <span id="delayText" style="opacity: 0.5;">Delay</span>
+                        <div class="number-controls">
+                            <button class="number-btn decrement" id="delayDecrementBtn" type="button">−</button>
+                            <button class="number-btn increment" id="delayIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                    <input type="hidden" id="delayValue" value="0">
                 </div>
                 <div class="control-row">
                     <div class="keyframe-display" id="xDistanceDisplay">
