@@ -1574,7 +1574,8 @@ function nudgeDelay(direction) {
                     if (!propertyMap[propName]) {
                         propertyMap[propName] = {
                             property: prop,
-                            keyframes: []
+                            keyframes: [],
+                            selectedKeys: []
                         };
                     }
                     
@@ -1585,6 +1586,7 @@ function nudgeDelay(direction) {
                             index: keyIndex,
                             time: prop.keyTime(keyIndex)
                         });
+                        propertyMap[propName].selectedKeys.push(keyIndex);
                     }
                 }
             }
@@ -1605,9 +1607,10 @@ function nudgeDelay(direction) {
             return "error|No selected keyframes found";
         }
         
-        if (propertyNames.length <= 1) {
+        // Allow single properties for timeline position nudging when all keyframes have same baseline
+        if (propertyNames.length === 0) {
             app.endUndoGroup();
-            return "error|Need multiple properties for delay nudging - found " + propertyNames.length + " properties: " + propertyNames.join(", ");
+            return "error|No selected keyframes found";
         }
         
         // DEBUG: Return debug info to see what's being processed
@@ -1631,7 +1634,9 @@ function nudgeDelay(direction) {
             }
         }
         
-        // Use cached baseline if available, otherwise initialize cache with current scan
+        // IMPORTANT: Reset baseline cache each time to ensure fresh detection of current state
+        // This ensures we always detect baseline vs delayed properties correctly
+        BASELINE_CACHE.reset();
         var baselineData = BASELINE_CACHE.initialize(scanEarliestTime, scanBaselineProperty);
         var originalEarliestTime = baselineData.earliestTime;
         var originalBaselineProperty = baselineData.baselineProperty;
@@ -1670,6 +1675,12 @@ function nudgeDelay(direction) {
         debugInfo.push("Cache initialized: " + BASELINE_CACHE.isInitialized);
         debugInfo.push("Current scan found: " + scanBaselineProperty + " at " + scanEarliestTime + "s");
         
+        // Debug each property's baseline status
+        for (var i = 0; i < propertyDelays.length; i++) {
+            var propDelay = propertyDelays[i];
+            debugInfo.push("Property " + propDelay.property + ": currentDelay=" + propDelay.currentDelay + "s, isOriginalBaseline=" + propDelay.isOriginalBaseline);
+        }
+        
         // Calculate delays relative to LOCKED ORIGINAL earliest time (baseline = 0ms)
         try {
             for (var i = 0; i < propertyDelays.length; i++) {
@@ -1693,11 +1704,29 @@ function nudgeDelay(direction) {
         var allSameDelay = true;
         DEBUG_JSX.log("First delay: " + firstDelay + "ms");
         
-        for (var i = 1; i < propertyDelays.length; i++) {
-            DEBUG_JSX.log("Comparing delay " + i + ": " + propertyDelays[i].relativeDelay + "ms vs " + firstDelay + "ms");
-            if (Math.abs(propertyDelays[i].relativeDelay - firstDelay) > 1) { // 1ms tolerance
-                allSameDelay = false;
-                break;
+        if (propertyNames.length === 1) {
+            // Single property mode: check if ALL selected keyframes within the property have the same time
+            var singlePropData = propertyDelays[0];
+            var keyframes = singlePropData.keyframes;
+            
+            if (keyframes.length > 1) {
+                var firstKeyTime = keyframes[0].time;
+                for (var k = 1; k < keyframes.length; k++) {
+                    if (Math.abs(keyframes[k].time - firstKeyTime) > 0.001) { // 1ms tolerance in seconds
+                        allSameDelay = false;
+                        break;
+                    }
+                }
+                DEBUG_JSX.log("Single property: checking " + keyframes.length + " keyframes, all same time: " + allSameDelay);
+            }
+        } else {
+            // Multi-property mode: check if all properties have the same delay
+            for (var i = 1; i < propertyDelays.length; i++) {
+                DEBUG_JSX.log("Comparing delay " + i + ": " + propertyDelays[i].relativeDelay + "ms vs " + firstDelay + "ms");
+                if (Math.abs(propertyDelays[i].relativeDelay - firstDelay) > 1) { // 1ms tolerance
+                    allSameDelay = false;
+                    break;
+                }
             }
         }
         
@@ -1706,6 +1735,287 @@ function nudgeDelay(direction) {
         var targetDelayMs;
         
         try {
+            // NEW SPECIAL CASE: Timeline position nudging when ALL **FIRST** keyframes are at the exact same time
+            // This should only check the FIRST keyframe of each property (the baseline), not all keyframes
+            var allFirstKeyframesAtSameTime = true;
+            var firstKeyframeTime = null;
+            var totalPropertiesCount = 0;
+            
+            debugInfo.push("=== TIMELINE MODE DETECTION (First keyframes only) ===");
+            for (var propName in propertyMap) {
+                var keyframes = propertyMap[propName].keyframes;
+                debugInfo.push("Property " + propName + " has " + keyframes.length + " keyframes");
+                
+                if (keyframes.length > 0) {
+                    totalPropertiesCount++;
+                    // Only check the FIRST keyframe of each property
+                    var firstKeyTime = keyframes[0].time;
+                    debugInfo.push("  First keyframe at " + (firstKeyTime * 1000) + "ms");
+                    
+                    if (firstKeyframeTime === null) {
+                        firstKeyframeTime = firstKeyTime;
+                        debugInfo.push("  Reference time set to: " + (firstKeyframeTime * 1000) + "ms");
+                    } else if (Math.abs(firstKeyTime - firstKeyframeTime) > 0.001) { // 1ms tolerance in seconds
+                        debugInfo.push("  Time difference detected: " + (firstKeyTime * 1000) + "ms vs " + (firstKeyframeTime * 1000) + "ms = " + Math.abs(firstKeyTime - firstKeyframeTime) + "s");
+                        allFirstKeyframesAtSameTime = false;
+                        break;
+                    }
+                }
+            }
+            
+            debugInfo.push("Timeline detection result: allFirstKeyframesAtSameTime=" + allFirstKeyframesAtSameTime + ", totalProperties=" + totalPropertiesCount + ", firstTime=" + (firstKeyframeTime ? (firstKeyframeTime * 1000) + "ms" : "null"));
+            
+            // Force timeline mode when properties are at baseline (0ms delay) - works for single OR multiple properties
+            debugInfo.push("FORCED CHECK: properties=" + propertyDelays.length + ", allSameDelay=" + allSameDelay + ", firstDelay=" + propertyDelays[0].relativeDelay + "ms");
+            // For single properties, force timeline mode regardless of allSameDelay if at baseline
+            // For multiple properties, require allSameDelay
+            var shouldForceTimeline = (propertyDelays.length === 1 && Math.abs(propertyDelays[0].relativeDelay) < 1) ||
+                                    (propertyDelays.length >= 2 && allSameDelay && Math.abs(propertyDelays[0].relativeDelay) < 1);
+            if (shouldForceTimeline) {
+                debugInfo.push("FORCED TIMELINE: Properties at 0ms delay, forcing timeline mode for " + propertyDelays.length + " properties");
+                try {
+                    var timelineNudgeSeconds = (direction > 0 ? 50 : -50) / 1000.0;
+                    var newTimelineTime = Math.max(0, originalEarliestTime + timelineNudgeSeconds);
+                    
+                    // Move all keyframes using the same approach as baseline mode
+                    var timelinePropertyData = [];
+                    for (var i = 0; i < propertyDelays.length; i++) {
+                        var propData = propertyDelays[i];
+                        var prop = propData.propObject;
+                        var keyframesToMove = [];
+                        
+                        // Calculate the timeline offset to apply to all keyframes
+                        var timelineOffset = newTimelineTime - originalEarliestTime;
+                        
+                        // Collect keyframe data - maintain relative spacing
+                        for (var k = 0; k < propData.keyframes.length; k++) {
+                            var keyIndex = propData.keyframes[k].index;
+                            var oldTime = propData.keyframes[k].time;
+                            var newTime = oldTime + timelineOffset; // Maintain relative spacing
+                            
+                            var keyData = {
+                                oldIndex: keyIndex,
+                                time: oldTime,
+                                newTime: Math.max(0, newTime), // Clamp to 0
+                                value: prop.keyValue(keyIndex),
+                                inInterp: prop.keyInInterpolationType(keyIndex),
+                                outInterp: prop.keyOutInterpolationType(keyIndex),
+                                temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                            };
+                            
+                            // Only collect temporal ease if bezier interpolation
+                            if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                                try {
+                                    keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                                    keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                                } catch(e) {
+                                    // Temporal ease might not be available for some properties
+                                }
+                            }
+                            
+                            // Handle spatial properties if applicable (Position, etc.)
+                            if (prop.isSpatial) {
+                                keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                                keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                                keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                                keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                            }
+                            
+                            keyframesToMove.push(keyData);
+                        }
+                        
+                        // Remove old keyframes (in reverse order to maintain indices)
+                        keyframesToMove.sort(function(a, b) { return b.oldIndex - a.oldIndex; });
+                        for (var k = 0; k < keyframesToMove.length; k++) {
+                            prop.removeKey(keyframesToMove[k].oldIndex);
+                        }
+                        
+                        // Add new keyframes at timeline position and collect new indices
+                        var newSelIndices = [];
+                        // Sort keyframes by time to ensure they're added in chronological order
+                        keyframesToMove.sort(function(a, b) { return a.newTime - b.newTime; });
+                        
+                        for (var k = 0; k < keyframesToMove.length; k++) {
+                            var data = keyframesToMove[k];
+                            var newIdx = prop.addKey(data.newTime);
+                            prop.setValueAtKey(newIdx, data.value);
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                            
+                            // Apply easing if it exists (same as duration/baseline modes)
+                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            }
+                            
+                            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                            
+                            // Apply spatial properties if they exist (Position, etc.)
+                            if (data.spatialContinuous !== undefined) {
+                                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            }
+                            
+                            newSelIndices.push(newIdx);
+                            debugInfo.push("FORCED: Added keyframe at " + (data.newTime * 1000) + "ms, got index " + newIdx);
+                        }
+                        
+                        // Store for later selection
+                        timelinePropertyData.push({
+                            property: prop,
+                            newSelIndices: newSelIndices,
+                            propName: propData.property
+                        });
+                    }
+                    
+                    // Select all new keyframes at the end (same as baseline mode)
+                    for (var i = 0; i < timelinePropertyData.length; i++) {
+                        var propInfo = timelinePropertyData[i];
+                        var prop = propInfo.property;
+                        
+                        // First deselect all keyframes on this property
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            prop.setSelectedAtKey(j, false);
+                        }
+                        
+                        // Then select our new keyframes
+                        for (var k = 0; k < propInfo.newSelIndices.length; k++) {
+                            var idx = propInfo.newSelIndices[k];
+                            prop.setSelectedAtKey(idx, true);
+                            debugInfo.push("FORCED: Selecting keyframe at index " + idx + " on " + propInfo.propName);
+                        }
+                    }
+                    
+                    var newTimelinePositionMs = newTimelineTime * 1000;
+                    var newTimelinePositionFrames = Math.round(newTimelineTime * frameRate);
+                    
+                    app.endUndoGroup();
+                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE-FORCED|" + debugInfo.join(" | ");
+                } catch(forcedError) {
+                    debugInfo.push("FORCED TIMELINE ERROR: " + forcedError.toString());
+                }
+            }
+            
+            if (allFirstKeyframesAtSameTime && firstKeyframeTime !== null) {
+                try {
+                    debugInfo.push("TIMELINE MODE: Moving all keyframes from " + (firstKeyframeTime * 1000) + "ms");
+                    
+                    // Timeline position nudging: move all keyframes by 50ms in timeline
+                    var timelineNudgeSeconds = (direction > 0 ? 50 : -50) / 1000.0;
+                    var newTimelineTime = firstKeyframeTime + timelineNudgeSeconds;
+                    
+                    // Handle negative times
+                    if (newTimelineTime < 0) {
+                        if (Math.abs(firstKeyframeTime) < 0.001 && direction < 0) {
+                            app.endUndoGroup();
+                            return "success|0|0|TIMELINE"; 
+                        }
+                        newTimelineTime = 0;
+                    }
+                    
+                    // Move all keyframes using recreate approach
+                    var timelinePropertyData = [];
+                    for (var propName in propertyMap) {
+                        var propData = propertyMap[propName];
+                        var prop = propData.property;
+                        var keyframesToMove = [];
+                        
+                        // Calculate timeline offset
+                        var timelineOffset = newTimelineTime - firstKeyframeTime;
+                        
+                        // Collect keyframe data - maintain relative spacing
+                        for (var k = 0; k < propData.keyframes.length; k++) {
+                            var keyIndex = propData.keyframes[k].index;
+                            var oldTime = propData.keyframes[k].time;
+                            var newTime = oldTime + timelineOffset; // Maintain relative spacing
+                            
+                            var keyData = {
+                                oldIndex: keyIndex,
+                                time: oldTime,
+                                newTime: Math.max(0, newTime), // Clamp to 0
+                                value: prop.keyValue(keyIndex),
+                                inInterp: prop.keyInInterpolationType(keyIndex),
+                                outInterp: prop.keyOutInterpolationType(keyIndex),
+                                temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                            };
+                            
+                            // Only collect temporal ease if bezier interpolation
+                            if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                                try {
+                                    keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                                    keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                                } catch(e) {
+                                    // Temporal ease might not be available for some properties
+                                }
+                            }
+                            
+                            // Handle spatial properties if applicable (Position, etc.)
+                            if (prop.isSpatial) {
+                                keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                                keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                                keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                                keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                            }
+                            
+                            keyframesToMove.push(keyData);
+                        }
+                        
+                        // Remove old keyframes (reverse order)
+                        keyframesToMove.sort(function(a, b) { return b.oldIndex - a.oldIndex; });
+                        for (var k = 0; k < keyframesToMove.length; k++) {
+                            prop.removeKey(keyframesToMove[k].oldIndex);
+                        }
+                        
+                        // Add new keyframes at timeline position and collect indices
+                        var newSelIndices = [];
+                        for (var k = 0; k < keyframesToMove.length; k++) {
+                            var data = keyframesToMove[k];
+                            var newIdx = prop.addKey(data.newTime);
+                            prop.setValueAtKey(newIdx, data.value);
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                            newSelIndices.push(newIdx);
+                        }
+                        
+                        // Store for later selection
+                        timelinePropertyData.push({
+                            property: prop,
+                            newSelIndices: newSelIndices,
+                            propName: propName
+                        });
+                    }
+                    
+                    // Select all new keyframes at the end
+                    for (var i = 0; i < timelinePropertyData.length; i++) {
+                        var propInfo = timelinePropertyData[i];
+                        var prop = propInfo.property;
+                        
+                        // First deselect all keyframes on this property
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            prop.setSelectedAtKey(j, false);
+                        }
+                        
+                        // Then select our new keyframes
+                        for (var k = 0; k < propInfo.newSelIndices.length; k++) {
+                            var idx = propInfo.newSelIndices[k];
+                            prop.setSelectedAtKey(idx, true);
+                            debugInfo.push("FORCED: Selecting keyframe at index " + idx + " on " + propInfo.propName);
+                        }
+                    }
+                    
+                    var newTimelinePositionMs = newTimelineTime * 1000;
+                    var newTimelinePositionFrames = Math.round(newTimelineTime * frameRate);
+                    
+                    app.endUndoGroup();
+                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE|" + debugInfo.join(" | ");
+                } catch(timelineError) {
+                    debugInfo.push("TIMELINE ERROR: " + timelineError.toString());
+                    // Fall through to baseline mode
+                }
+            }
+            
+            // EXISTING LOGIC: Normal delay adjustment (restore original baseline behavior)
             if (allSameDelay) {
                 // All delays are the same - apply 50ms snapping to the unified delay
                 debugInfo.push("Unified delay: " + firstDelay + "ms");
@@ -1944,7 +2254,7 @@ function nudgeDelay(direction) {
         var result = "success|" + returnDelayMs + "|" + returnFrames + "|" + isCrossPropertyMode;
         DEBUG_JSX.log("Returning result: " + result);
         
-        return result;
+        return result + "|BASELINE|" + debugInfo.join(" | ");
         
     } catch(e) {
         app.endUndoGroup();
