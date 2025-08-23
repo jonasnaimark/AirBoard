@@ -186,12 +186,12 @@ function readKeyframesSmart() {
                 delays.push(delayMs);
             }
             
-            // Check if all delays are the same (find unique delays)
+            // Check if all delays are the same (find unique delays with tolerance)
             var uniqueDelays = [];
             for (var k = 0; k < delays.length; k++) {
                 var found = false;
                 for (var j = 0; j < uniqueDelays.length; j++) {
-                    if (uniqueDelays[j] === delays[k]) {
+                    if (Math.abs(uniqueDelays[j] - delays[k]) < 1) { // 1ms tolerance
                         found = true;
                         break;
                     }
@@ -217,12 +217,12 @@ function readKeyframesSmart() {
                     }
                 }
                 
-                // Find unique non-zero delays
+                // Find unique non-zero delays (with tolerance)
                 var uniqueNonZeroDelays = [];
                 for (var k = 0; k < nonZeroDelays.length; k++) {
                     var found = false;
                     for (var j = 0; j < uniqueNonZeroDelays.length; j++) {
-                        if (uniqueNonZeroDelays[j] === nonZeroDelays[k]) {
+                        if (Math.abs(uniqueNonZeroDelays[j] - nonZeroDelays[k]) < 1) { // 1ms tolerance
                             found = true;
                             break;
                         }
