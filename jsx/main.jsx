@@ -4740,8 +4740,10 @@ function createShimmerControlsLayer(comp) {
     opacity.setValueAtTime(currentTime, 0);
     
     // Set all keyframes to use custom bezier easing (0.40, 0.00, 0.20, 1.00)
-    var easeIn = new KeyframeEase(0.40, 40);
-    var easeOut = new KeyframeEase(0.20, 80);
+    // Current: 0.40, 0.00, 0.25, 1.00 - First handle PERFECT! Just need second 0.25→0.20
+    // Keep easeIn exactly the same, slightly increase easeOut speed for -0.05
+    var easeIn = new KeyframeEase(0.04, 75);   // PERFECT - don't change!
+    var easeOut = new KeyframeEase(0.94, 35);  // Revert to working values
     
     for (var k = 1; k <= opacity.numKeys; k++) {
         opacity.setInterpolationTypeAtKey(k, KeyframeInterpolationType.BEZIER);
@@ -4956,8 +4958,10 @@ function createShimmerEffectControlsLayer(comp) {
     opacity.setValueAtTime(currentTime, 100);
     
     // Set all keyframes to use custom bezier easing (0.40, 0.00, 0.20, 1.00)
-    var easeIn = new KeyframeEase(0.40, 40);
-    var easeOut = new KeyframeEase(0.20, 80);
+    // Current: 0.40, 0.00, 0.25, 1.00 - First handle PERFECT! Just need second 0.25→0.20
+    // Keep easeIn exactly the same, slightly increase easeOut speed for -0.05
+    var easeIn = new KeyframeEase(0.04, 75);   // PERFECT - don't change!
+    var easeOut = new KeyframeEase(0.94, 35);  // Revert to working values
     
     for (var k = 1; k <= opacity.numKeys; k++) {
         opacity.setInterpolationTypeAtKey(k, KeyframeInterpolationType.BEZIER);

@@ -345,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateResolutionDisplay() {
         var currentValue = resolutionInput.value;
         console.log('Updating display to:', currentValue);
-        resolutionText.textContent = 'Resolution @' + currentValue + 'x';
+        resolutionText.textContent = 'Resolution: ' + currentValue + 'x';
         console.log('Display updated to:', resolutionText.textContent);
     }
     
