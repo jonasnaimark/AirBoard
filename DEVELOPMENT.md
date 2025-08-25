@@ -207,10 +207,10 @@ When iPhone UI component adds wrong layer:
 3. **Debug panel will show**:
    ```
    === iPhone UI COMPONENT DEBUG ===
-   Looking for composition: iPhone 14 UI
+   Looking for composition: iPhone UI - 393
    Found: 'Dynamic Island' (type: Other)
-   Found: 'iPhone 14 UI' (type: CompItem)
-   ✅ MATCH FOUND: iPhone 14 UI
+   Found: 'iPhone UI - 393' (type: CompItem)
+   ✅ MATCH FOUND: iPhone UI - 393
    ```
 4. **If it shows wrong matches**, you'll see exactly what's being found vs. what's expected
 

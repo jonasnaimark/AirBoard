@@ -1227,6 +1227,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         csInterface.evalScript(script, function(result) {
             console.log('Device creation result:', result);
+            
+            // Parse debug information if present
+            if (result && result.indexOf('|') !== -1) {
+                var parts = result.split('|');
+                var status = parts[0]; // success or error
+                var debugInfo = parts.slice(1); // everything after first pipe
+                
+                if (debugInfo.length > 0) {
+                    // Show debug info in debug panel if it exists
+                    var debugContent = document.getElementById('debug-log');
+                    if (debugContent) {
+                        debugContent.innerHTML += '<h3>=== DEVICE CREATION DEBUG ===</h3>';
+                        for (var i = 0; i < debugInfo.length; i++) {
+                            debugContent.innerHTML += '<div>' + debugInfo[i] + '</div>';
+                        }
+                        debugContent.scrollTop = debugContent.scrollHeight;
+                    }
+                    
+                    // Also log to console for backup
+                    DEBUG.log('=== DEVICE CREATION DEBUG ===');
+                    for (var i = 0; i < debugInfo.length; i++) {
+                        console.log(debugInfo[i]);
+                    }
+                }
+            }
+            
             // Re-enable button
             addDeviceButton.disabled = false;
         });

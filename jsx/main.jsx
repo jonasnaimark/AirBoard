@@ -2662,7 +2662,10 @@ function moveCompositionToFolder(comp, deviceType) {
         // Define folder structure mapping
         var folderMapping = {
             "iphone": "01 - Compositions > Native",
-            "desktop": "01 - Compositions > Desktop"
+            "desktop": "01 - Compositions > Desktop",
+            "iphone15": "01 - Compositions > Native",
+            "iphone-simple": "01 - Compositions > Native",
+            "web-chrome": "01 - Compositions > Desktop"
         };
         
         var targetFolderPath = folderMapping[deviceType];
@@ -2767,73 +2770,130 @@ function getOrCreateImportedProjectsFolder() {
 
 // Device Templates functionality
 function createDeviceComposition(deviceType, multiplier) {
+    var debugInfo = [];
     // app.beginUndoGroup("Create Device Composition");
     
     try {
+        debugInfo.push("=== DEVICE CREATION START ===");
+        debugInfo.push("Device type: " + deviceType);
+        debugInfo.push("Multiplier: " + multiplier);
+        
         // Base device specifications (1x scale)
         var baseSpecs = {
             iphone: { width: 393, height: 852 },
-            desktop: { width: 1440, height: 1028 }
+            desktop: { width: 1440, height: 1028 },
+            iphone15: { width: 475, height: 934 },
+            "iphone-simple": { width: 475, height: 934 },
+            "web-chrome": { width: 1728, height: 1391.5 }
         };
         
         // Get base dimensions for selected device
         var baseDimensions = baseSpecs[deviceType];
         if (!baseDimensions) {
-            alert("Invalid device type");
-            // app.endUndoGroup();
-            return "error";
+            debugInfo.push("❌ Invalid device type: " + deviceType);
+            return "error|Invalid device type|" + debugInfo.join("|");
         }
         
-        // Calculate dimensions based on multiplier
+        debugInfo.push("Base dimensions: " + baseDimensions.width + "x" + baseDimensions.height);
+        
+        // Calculate dimensions based on multiplier (rounded to integers for AE compatibility)
         var dimensions = {
-            width: baseDimensions.width * multiplier,
-            height: baseDimensions.height * multiplier
+            width: Math.round(baseDimensions.width * multiplier),
+            height: Math.round(baseDimensions.height * multiplier)
         };
+        
+        debugInfo.push("Calculated dimensions: " + dimensions.width + "x" + dimensions.height + " (rounded from " + (baseDimensions.width * multiplier) + "x" + (baseDimensions.height * multiplier) + ")");
         
         // Create composition name
         var compName = deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + " @" + multiplier + "x";
+        debugInfo.push("Creating composition: " + compName);
         
-        // Create new composition
-        var comp = app.project.items.addComp(
-            compName,                    // name
-            dimensions.width,            // width
-            dimensions.height,           // height
-            1.0,                        // pixel aspect ratio
-            10.0,                       // duration (10 seconds)
-            60                          // frame rate (60fps)
-        );
+        try {
+            // Create new composition
+            var comp = app.project.items.addComp(
+                compName,                    // name
+                dimensions.width,            // width
+                dimensions.height,           // height
+                1.0,                        // pixel aspect ratio
+                10.0,                       // duration (10 seconds)
+                60                          // frame rate (60fps)
+            );
+            debugInfo.push("Composition created successfully");
+        } catch(compError) {
+            debugInfo.push("❌ Error creating composition: " + compError.toString());
+            return "error|Composition creation failed|" + debugInfo.join("|");
+        }
         
         // Set background color to white
         comp.bgColor = [1, 1, 1];
         
-        // If it's an iPhone, import and add the iPhone UI template
-        if (deviceType === "iphone") {
+        // If it's an iPhone type or Web Chrome, import and add the template
+        if (deviceType === "iphone" || deviceType === "iphone15" || deviceType === "iphone-simple" || deviceType === "web-chrome") {
+            debugInfo.push("=== TEMPLATE IMPORT START ===");
+            debugInfo.push("Extension root: " + extensionRoot);
+            
             try {
                 // Build path to the template file
                 var templatePath = extensionRoot + "/assets/templates/AirBoard Templates.aep";
+                debugInfo.push("Template path: " + templatePath);
                 var templateFile = new File(templatePath);
                 
                 // Check alternate path separator
                 if (!templateFile.exists) {
+                    debugInfo.push("Template file not found at first path, trying alternate...");
                     templatePath = extensionRoot + "\\assets\\templates\\AirBoard Templates.aep";
+                    debugInfo.push("Alternate template path: " + templatePath);
                     templateFile = new File(templatePath);
                 }
                 
+                debugInfo.push("Template file exists: " + templateFile.exists);
+                
                 if (templateFile.exists) {
+                    debugInfo.push("Template file found: " + templateFile.fsName);
+                    
                     // First check if the template composition already exists in the project
                     var templateComp = null;
+                    var templateName;
+                    if (deviceType === "iphone15") {
+                        templateName = "iPhone 15 - 393";
+                    } else if (deviceType === "iphone-simple") {
+                        templateName = "iPhone Simple - 393";
+                    } else if (deviceType === "web-chrome") {
+                        templateName = "Web Chrome - 1440";
+                    } else {
+                        templateName = "iPhone UI - 393";
+                    }
+                    debugInfo.push("Looking for template composition: '" + templateName + "'");
+                    
+                    // Look for exact match first, then partial match for iPhone 15
                     for (var i = 1; i <= app.project.items.length; i++) {
                         var item = app.project.items[i];
-                        if (item instanceof CompItem && item.name === "iPhone 14 UI") {
-                            templateComp = item;
-                            break;
+                        if (item instanceof CompItem) {
+                            debugInfo.push("Found comp: '" + item.name + "'");
+                            // Exact match
+                            if (item.name === templateName) {
+                                templateComp = item;
+                                debugInfo.push("✓ Exact match found!");
+                                break;
+                            }
+                            // For iPhone 15, also try partial matches
+                            if (deviceType === "iphone15" && 
+                                (item.name.indexOf("iPhone 15") !== -1 || 
+                                 item.name.indexOf("iPhone15") !== -1 || 
+                                 item.name.indexOf("iphone15") !== -1)) {
+                                templateComp = item;
+                                debugInfo.push("✓ Partial match found: '" + item.name + "'");
+                                break;
+                            }
                         }
                     }
                     
                     // Only import if not already present
                     if (!templateComp) {
+                        debugInfo.push("Template comp not found, importing .aep file...");
                         var importOptions = new ImportOptions(templateFile);
                         var importedItems = app.project.importFile(importOptions);
+                        debugInfo.push("Import complete, organizing items...");
                         
                         // Move imported items to the zImported_projects folder
                         var importedFolder = getOrCreateImportedProjectsFolder();
@@ -2848,37 +2908,220 @@ function createDeviceComposition(deviceType, multiplier) {
                             }
                         }
                         
-                        // Find the imported composition first
+                        // Find the imported composition
+                        debugInfo.push("Searching for template comp after import...");
                         for (var j = 1; j <= app.project.items.length; j++) {
                             var item = app.project.items[j];
-                            if (item instanceof CompItem && item.name === "iPhone 14 UI") {
-                                templateComp = item;
-                                break;
+                            if (item instanceof CompItem) {
+                                debugInfo.push("Found comp after import: '" + item.name + "'");
+                                // Try exact match
+                                if (item.name === templateName) {
+                                    templateComp = item;
+                                    debugInfo.push("✓ Exact match found after import!");
+                                    break;
+                                }
+                                // Try partial match for iPhone 15
+                                if (deviceType === "iphone15" && 
+                                    (item.name.indexOf("iPhone 15") !== -1 || 
+                                     item.name.indexOf("iPhone15") !== -1 || 
+                                     item.name.indexOf("iphone15") !== -1)) {
+                                    templateComp = item;
+                                    debugInfo.push("✓ Partial match found after import: '" + item.name + "'");
+                                    break;
+                                }
                             }
                         }
-                        
+                    }
+                    
+                    if (!templateComp) {
+                        debugInfo.push("❌ Template composition not found even after import!");
                     }
                     
                     if (templateComp) {
-                        // Add the template comp as a layer to our new comp
-                        var templateLayer = comp.layers.add(templateComp);
-                        templateLayer.name = "iPhone UI";
+                        debugInfo.push("Template comp found: " + templateComp.name + " with " + templateComp.layers.length + " layers");
                         
-                        // Calculate scale factor based on the multiplier
-                        // The template is designed for @2x, so we need to scale relative to that
-                        var scaleFactor = (multiplier / 2) * 100;
-                        
-                        // Apply scaling
-                        templateLayer.transform.scale.setValue([scaleFactor, scaleFactor]);
-                        
-                        // Center the layer
-                        templateLayer.transform.position.setValue([comp.width/2, comp.height/2]);
-                        
-                        // Enable collapse transformations for crisp rendering
-                        templateLayer.collapseTransformation = true;
-                        
-                        // Move to bottom of layer stack
-                        templateLayer.moveToEnd();
+                        if (deviceType === "iphone15" || deviceType === "iphone-simple" || deviceType === "web-chrome") {
+                            // For iPhone 15, iPhone Simple, and Web Chrome, copy all layers from the template comp
+                            var deviceName = deviceType === "iphone15" ? "iPhone 15" : 
+                                           deviceType === "iphone-simple" ? "iPhone Simple" : 
+                                           "Web Chrome";
+                            debugInfo.push("=== " + deviceName + " Layer Copying Process ===");
+                            debugInfo.push("Total layers to copy: " + templateComp.layers.length);
+                            
+                            for (var layerIndex = templateComp.layers.length; layerIndex >= 1; layerIndex--) {
+                                try {
+                                    debugInfo.push("--- Processing layer " + layerIndex + " ---");
+                                    var sourceLayer = templateComp.layers[layerIndex];
+                                    debugInfo.push("Copying layer " + layerIndex + ": '" + sourceLayer.name + "'");
+                                    
+                                    // Copy layer to the new composition
+                                    sourceLayer.copyToComp(comp);
+                                    debugInfo.push("Layer copied, comp now has " + comp.layers.length + " layers");
+                                    
+                                    // Get the newly copied layer (always at index 1)
+                                    var newLayer = comp.layers[1];
+                                    debugInfo.push("New layer name: '" + newLayer.name + "'");
+                                    
+                                    // Calculate scale factor based on layer type
+                                    var scaleFactor;
+                                    if (newLayer.name.indexOf("iPhone 15 Pro Frame") !== -1) {
+                                        // Special scaling for iPhone 15 Pro Frame.png: 50.5% at 2x
+                                        scaleFactor = (multiplier / 2) * 50.5;
+                                        debugInfo.push("iPhone 15 Pro Frame detected, using special scale: " + scaleFactor + "%");
+                                    } else {
+                                        // Regular scaling for other layers (iPhone UI, Shadow)
+                                        scaleFactor = (multiplier / 2) * 100;
+                                        debugInfo.push("Regular layer, using standard scale: " + scaleFactor + "%");
+                                    }
+                                    
+                                    // Apply scaling
+                                    try {
+                                        newLayer.transform.scale.setValue([scaleFactor, scaleFactor]);
+                                        debugInfo.push("Scale applied successfully");
+                                    } catch(scaleError) {
+                                        debugInfo.push("❌ Error applying scale: " + scaleError.toString());
+                                    }
+                                    
+                                    // Center the layer using dot loader approach
+                                    try {
+                                        if (newLayer.transform.position.numKeys > 0) {
+                                            debugInfo.push("Layer has " + newLayer.transform.position.numKeys + " position keyframes - offsetting all keyframes");
+                                            // If there are keyframes, offset all keyframe values
+                                            var currentPos = newLayer.transform.position.value;
+                                            var targetX = comp.width / 2;
+                                            var targetY = comp.height / 2;
+                                            
+                                            // Add Y offset for Web Chrome layers (40px at 1x, 80px at 2x, etc.)
+                                            if (deviceType === "web-chrome") {
+                                                var yOffset = multiplier * 40;
+                                                targetY += yOffset;
+                                                debugInfo.push("Web Chrome Y offset applied: +" + yOffset + "px");
+                                            }
+                                            
+                                            var offsetX = targetX - currentPos[0];
+                                            var offsetY = targetY - currentPos[1];
+                                            
+                                            debugInfo.push("Current: [" + currentPos[0] + ", " + currentPos[1] + "], Target: [" + targetX + ", " + targetY + "], Offset: [" + offsetX + ", " + offsetY + "]");
+                                            
+                                            for (var p = 1; p <= newLayer.transform.position.numKeys; p++) {
+                                                var keyTime = newLayer.transform.position.keyTime(p);
+                                                var keyValue = newLayer.transform.position.keyValue(p);
+                                                var newValue = [keyValue[0] + offsetX, keyValue[1] + offsetY];
+                                                newLayer.transform.position.setValueAtTime(keyTime, newValue);
+                                            }
+                                            debugInfo.push("✓ All position keyframes offset successfully");
+                                        } else {
+                                            debugInfo.push("Layer has no position keyframes - setting static position");
+                                            // No keyframes, set static position
+                                            var targetX = comp.width/2;
+                                            var targetY = comp.height/2;
+                                            
+                                            // Add Y offset for Web Chrome layers (40px at 1x, 80px at 2x, etc.)
+                                            if (deviceType === "web-chrome") {
+                                                var yOffset = multiplier * 40;
+                                                targetY += yOffset;
+                                                debugInfo.push("Web Chrome Y offset applied: +" + yOffset + "px");
+                                            }
+                                            
+                                            newLayer.transform.position.setValue([targetX, targetY]);
+                                            debugInfo.push("✓ Static position set successfully at [" + targetX + ", " + targetY + "]");
+                                        }
+                                    } catch(posError) {
+                                        debugInfo.push("❌ Position placement failed: " + posError.toString());
+                                        var currentPos = newLayer.transform.position.value;
+                                        debugInfo.push("Layer current position: [" + currentPos[0] + ", " + currentPos[1] + "]");
+                                        debugInfo.push("Target position: [" + (comp.width/2) + ", " + (comp.height/2) + "]");
+                                    }
+                                    
+                                    // Layer positioning based on device type and layer name
+                                    if (deviceType === "iphone15") {
+                                        // iPhone 15: iPhone 15 Pro Frame goes to top, others to bottom
+                                        if (newLayer.name.indexOf("iPhone 15 Pro Frame") !== -1) {
+                                            // Keep iPhone 15 Pro Frame at the top (index 1)
+                                            debugInfo.push("Keeping iPhone 15 Pro Frame at top");
+                                        } else {
+                                            // Move other layers to bottom to preserve order
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        }
+                                    } else if (deviceType === "iphone-simple") {
+                                        // iPhone Simple: iPhone UI - 393 goes to top, Shadow goes to bottom
+                                        if (newLayer.name.indexOf("iPhone UI - 393") !== -1) {
+                                            // Keep iPhone UI at the top (index 1)
+                                            debugInfo.push("Keeping iPhone UI - 393 at top");
+                                        } else if (newLayer.name.indexOf("Shadow") !== -1) {
+                                            // Move Shadow layer to bottom
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        } else {
+                                            // Move other layers to bottom by default
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        }
+                                    } else if (deviceType === "web-chrome") {
+                                        // Web Chrome: Web - 1440 goes to top, Browser Chrome goes to bottom
+                                        if (newLayer.name.indexOf("Web - 1440") !== -1) {
+                                            // Keep Web - 1440 at the top (index 1)
+                                            debugInfo.push("Keeping Web - 1440 at top");
+                                        } else if (newLayer.name.indexOf("Browser Chrome") !== -1) {
+                                            // Move Browser Chrome layer to bottom
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        } else {
+                                            // Move other layers to bottom by default
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        }
+                                    }
+                                    
+                                    debugInfo.push("Layer processing complete for: " + newLayer.name);
+                                    debugInfo.push("--- Layer " + layerIndex + " done ---");
+                                } catch(layerError) {
+                                    debugInfo.push("❌ Error processing layer " + layerIndex + ": " + layerError.toString());
+                                    // Continue with next layer instead of breaking
+                                }
+                            }
+                            debugInfo.push("=== " + deviceName + " Layer Copying Complete ===");
+                        } else {
+                            // For regular iPhone UI, add the entire composition as a precomp layer
+                            var templateLayer = comp.layers.add(templateComp);
+                            templateLayer.name = "iPhone UI";
+                            
+                            // Calculate scale factor
+                            var scaleFactor = (multiplier / 2) * 100;
+                            
+                            // Apply scaling
+                            templateLayer.transform.scale.setValue([scaleFactor, scaleFactor]);
+                            
+                            // Center the layer
+                            templateLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+                            
+                            // Enable collapse transformations for crisp rendering
+                            templateLayer.collapseTransformation = true;
+                            
+                            // Move to bottom of layer stack
+                            templateLayer.moveToEnd();
+                        }
                     }
                 }
             } catch(templateError) {
@@ -2941,13 +3184,14 @@ function createDeviceComposition(deviceType, multiplier) {
             $.writeln("Composition organization failed: " + orgError.toString());
         }
         
+        debugInfo.push("=== DEVICE CREATION COMPLETE ===");
         // app.endUndoGroup();
-        return "success";
+        return "success|" + debugInfo.join("|");
         
     } catch(e) {
-        alert("Error creating device composition: " + e.toString());
+        debugInfo.push("❌ Error: " + e.toString());
         // app.endUndoGroup();
-        return "error";
+        return "error|" + debugInfo.join("|");
     }
 }
 
@@ -3206,8 +3450,8 @@ function addComponentFromPanel(componentType, multiplier) {
                 templateFile: "Belo Spin.aep"
             },
             "iphone-ui": {
-                compName: "iPhone 14 UI",
-                layerName: "iPhone 14 UI",
+                compName: "iPhone UI - 393",
+                layerName: "iPhone UI - 393",
                 templateFile: "AirBoard Templates.aep"
             }
         };

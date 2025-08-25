@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [4.9.0] - 2025-08-21
 ### ✨ Added - iPhone UI Component
 - **iPhone UI Component**: Added new composition-based component to Components dropdown
-- **Full Composition Support**: iPhone UI adds entire "iPhone 14 UI" composition as precomp layer, not individual layers
+- **Full Composition Support**: iPhone UI adds entire "iPhone UI - 393" composition as precomp layer, not individual layers
 - **Smart Positioning**: iPhone UI components center automatically while maintaining internal layer relationships
 - **Resolution Scaling**: Full scaling support (1x-6x) following established resolution multiplier system
 - **Template Integration**: Seamlessly integrated with AirBoard Templates.aep file structure
