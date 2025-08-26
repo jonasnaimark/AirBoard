@@ -1100,6 +1100,74 @@ document.addEventListener('DOMContentLoaded', function() {
     setupInOutToggle('xInBtn', 'xOutBtn');
     setupInOutToggle('yInBtn', 'yOutBtn');
     
+    // Setup stagger button toggle functionality
+    var staggerBtn = document.getElementById('staggerBtn');
+    var staggerInput = document.getElementById('staggerInput');
+    
+    if (staggerBtn && staggerInput) {
+        // Initially disable the input (stagger starts off)
+        staggerInput.disabled = true;
+        
+        staggerBtn.addEventListener('click', function() {
+            staggerBtn.classList.toggle('selected');
+            
+            // Enable/disable input based on stagger button state
+            if (staggerBtn.classList.contains('selected')) {
+                staggerInput.disabled = false;
+            } else {
+                staggerInput.disabled = true;
+            }
+        });
+        
+        // Create tooltip for stagger input using JavaScript
+        function createTooltip(element, text) {
+            var tooltip = null;
+            
+            element.addEventListener('mouseenter', function() {
+                tooltip = document.createElement('div');
+                tooltip.textContent = text;
+                tooltip.style.cssText = `
+                    position: absolute;
+                    background-color: #1a1a1a;
+                    color: #ffffff;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: 500;
+                    white-space: nowrap;
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                    z-index: 1000;
+                    pointer-events: none;
+                    opacity: 0;
+                    transition: opacity 0.2s ease-in-out;
+                `;
+                
+                document.body.appendChild(tooltip);
+                
+                var rect = element.getBoundingClientRect();
+                tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+                tooltip.style.top = (rect.top - tooltip.offsetHeight - 8) + 'px';
+                
+                setTimeout(() => tooltip.style.opacity = '1', 10);
+            });
+            
+            element.addEventListener('mouseleave', function() {
+                if (tooltip) {
+                    tooltip.style.opacity = '0';
+                    setTimeout(() => {
+                        if (tooltip && tooltip.parentNode) {
+                            tooltip.parentNode.removeChild(tooltip);
+                        }
+                        tooltip = null;
+                    }, 200);
+                }
+            });
+        }
+        
+        createTooltip(staggerInput, 'Stagger Frames');
+    }
+    
     // X Distance +/- buttons
     var xIncrementBtn = document.getElementById('xIncrementBtn');
     var xDecrementBtn = document.getElementById('xDecrementBtn');

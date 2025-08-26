@@ -162,7 +162,7 @@
         <div class="section-container">
             <section class="section">
                 <div class="section-header">
-                    <h2>Keyframe Reader</h2>
+                    <h2>Keyframe Nudger</h2>
                     <div class="section-controls">
                         <button class="section-btn move-up" title="Move Up">
                             <div class="control-arrow up"></div>
@@ -180,11 +180,15 @@
                     <button id="readKeyframes" class="main-button">Read Keyframes</button>
                 </div>
                 <div class="control-row">
-                    <div class="resolution-display" id="delayDisplay">
+                    <div class="keyframe-display" id="delayDisplay">
                         <span id="delayText" style="opacity: 0.5;">Delay</span>
-                        <div class="number-controls">
-                            <button class="number-btn decrement" id="delayDecrementBtn" type="button">−</button>
-                            <button class="number-btn increment" id="delayIncrementBtn" type="button">+</button>
+                        <div class="distance-controls">
+                            <input class="distance-input" id="staggerInput" type="number" value="3" min="1" max="99" data-tooltip="Frames">
+                            <button class="distance-btn in-out-btn" id="staggerBtn" type="button" data-tooltip="Stagger">
+                                <img src="../assets/icons/Stagger Icon.png" alt="Stagger" style="width: 16px; height: 16px;">
+                            </button>
+                            <button class="distance-btn nudge-btn decrement" id="delayDecrementBtn" type="button">−</button>
+                            <button class="distance-btn nudge-btn increment" id="delayIncrementBtn" type="button">+</button>
                         </div>
                     </div>
                     <input type="hidden" id="delayValue" value="0">

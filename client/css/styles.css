@@ -390,6 +390,89 @@ body {
     padding: 0;
 }
 
+.keyframe-display .distance-controls .distance-input {
+    flex: 1;
+    margin: 0;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 8px;
+    outline: none;
+    height: 26px;
+    text-align: center;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    position: relative;
+}
+
+/* Hide number input arrows */
+.keyframe-display .distance-controls .distance-input::-webkit-outer-spin-button,
+.keyframe-display .distance-controls .distance-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.keyframe-display .distance-controls .distance-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.keyframe-display .distance-controls .distance-input:hover {
+    border-color: #666666;
+}
+
+.keyframe-display .distance-controls .distance-input:focus {
+    border-color: #4a90e2;
+}
+
+.keyframe-display .distance-controls .distance-input:disabled {
+    background-color: #1a1a1a;
+    color: #666666;
+    border-color: rgba(255, 255, 255, 0.06);
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* Direct tooltip styling for input - higher specificity */
+input.distance-input[data-tooltip]:hover::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+    pointer-events: none;
+    z-index: 1000;
+    transition: opacity 0.2s ease-in-out;
+}
+
+input.distance-input[data-tooltip]:hover::after {
+    content: '';
+    position: absolute;
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 1;
+    pointer-events: none;
+    z-index: 1000;
+    transition: opacity 0.2s ease-in-out;
+}
+
 .keyframe-display .distance-controls .distance-btn {
     flex: 1; /* Each button takes equal space (25% of total controls area) */
     margin: 0;
@@ -418,6 +501,114 @@ body {
 
 .keyframe-display .distance-controls .distance-btn:focus {
     outline: none; /* Remove focus outline */
+}
+
+.keyframe-display .distance-controls .distance-btn.nudge-btn {
+    font-size: 13px; /* Slightly bigger - + icons for nudge buttons */
+}
+
+.keyframe-display .distance-controls .distance-btn img {
+    display: block;
+    margin: 0 auto;
+    vertical-align: middle;
+}
+
+/* Custom tooltips for stagger controls */
+.distance-input[data-tooltip], .distance-btn[data-tooltip] {
+    position: relative;
+}
+
+/* Ensure input tooltips work properly */
+.keyframe-display .distance-controls .distance-input[data-tooltip] {
+    position: relative;
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]:hover::before,
+.keyframe-display .distance-controls .distance-input[data-tooltip]:hover::after {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]::before,
+.keyframe-display .distance-controls .distance-input[data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]::before {
+    content: attr(data-tooltip);
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]::after {
+    content: '';
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.distance-input[data-tooltip]:hover::before,
+.distance-input[data-tooltip]:hover::after,
+.distance-btn[data-tooltip]:hover::before,
+.distance-btn[data-tooltip]:hover::after {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.distance-input[data-tooltip]::before,
+.distance-input[data-tooltip]::after,
+.distance-btn[data-tooltip]::before,
+.distance-btn[data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+/* Tooltip text bubble */
+.distance-input[data-tooltip]::before,
+.distance-btn[data-tooltip]::before {
+    content: attr(data-tooltip);
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Tooltip arrow */
+.distance-input[data-tooltip]::after,
+.distance-btn[data-tooltip]::after {
+    content: '';
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 /* In/Out radio-style selection states - subtle opacity-based selection */
