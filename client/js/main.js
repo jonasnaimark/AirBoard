@@ -1100,25 +1100,10 @@ document.addEventListener('DOMContentLoaded', function() {
     setupInOutToggle('xInBtn', 'xOutBtn');
     setupInOutToggle('yInBtn', 'yOutBtn');
     
-    // Setup stagger button toggle functionality
-    var staggerBtn = document.getElementById('staggerBtn');
+    // Setup stagger input tooltip functionality
     var staggerInput = document.getElementById('staggerInput');
     
-    if (staggerBtn && staggerInput) {
-        // Initially disable the input (stagger starts off)
-        staggerInput.disabled = true;
-        
-        staggerBtn.addEventListener('click', function() {
-            staggerBtn.classList.toggle('selected');
-            
-            // Enable/disable input based on stagger button state
-            if (staggerBtn.classList.contains('selected')) {
-                staggerInput.disabled = false;
-            } else {
-                staggerInput.disabled = true;
-            }
-        });
-        
+    if (staggerInput) {
         // Create tooltip for stagger input using JavaScript
         function createTooltip(element, text) {
             var tooltip = null;
@@ -1127,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tooltip = document.createElement('div');
                 tooltip.textContent = text;
                 tooltip.style.cssText = `
-                    position: absolute;
+                    position: fixed;
                     background-color: #1a1a1a;
                     color: #ffffff;
                     padding: 4px 8px;
@@ -1165,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
-        createTooltip(staggerInput, 'Stagger Frames');
+        createTooltip(staggerInput, 'Frames');
     }
     
     // X Distance +/- buttons

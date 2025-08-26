@@ -180,15 +180,11 @@
                     <button id="readKeyframes" class="main-button">Read Keyframes</button>
                 </div>
                 <div class="control-row">
-                    <div class="keyframe-display" id="delayDisplay">
+                    <div class="resolution-display" id="delayDisplay">
                         <span id="delayText" style="opacity: 0.5;">Delay</span>
-                        <div class="distance-controls">
-                            <input class="distance-input" id="staggerInput" type="number" value="3" min="1" max="99" data-tooltip="Frames">
-                            <button class="distance-btn in-out-btn" id="staggerBtn" type="button" data-tooltip="Stagger">
-                                <img src="../assets/icons/Stagger Icon.png" alt="Stagger" style="width: 16px; height: 16px;">
-                            </button>
-                            <button class="distance-btn nudge-btn decrement" id="delayDecrementBtn" type="button">−</button>
-                            <button class="distance-btn nudge-btn increment" id="delayIncrementBtn" type="button">+</button>
+                        <div class="number-controls">
+                            <button class="number-btn decrement" id="delayDecrementBtn" type="button">−</button>
+                            <button class="number-btn increment" id="delayIncrementBtn" type="button">+</button>
                         </div>
                     </div>
                     <input type="hidden" id="delayValue" value="0">
@@ -202,6 +198,16 @@
                         </div>
                     </div>
                     <input type="hidden" id="durationValue" value="500">
+                </div>
+                <div class="control-row">
+                    <div class="resolution-display" id="staggerDisplay">
+                        <span id="staggerText">Stagger</span>
+                        <div class="stagger-controls">
+                            <input class="stagger-input" id="staggerInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
+                            <button class="stagger-btn decrement" id="staggerDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="staggerIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="control-row">
                     <div class="keyframe-display" id="xDistanceDisplay">
