@@ -386,7 +386,7 @@ body {
     transform: translateY(-50%);
     width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
     display: flex;
-    gap: 4px; /* Smaller gap to fit 4 buttons */
+    gap: 6px; /* Same gap as other rows */
     pointer-events: all; /* Allow button clicks */
     padding: 0;
 }
@@ -475,7 +475,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .keyframe-display .distance-controls .distance-btn {
-    flex: 1; /* Each button takes equal space (25% of total controls area) */
+    width: calc(25% - 4.5px); /* Each button takes exactly 25% minus gap adjustment (18px / 4 = 4.5px) */
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
@@ -631,7 +631,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .stagger-input {
-    flex: 1.1;
+    width: calc(33.33% - 4px);
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
@@ -677,7 +677,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .stagger-btn {
-    flex: 1;
+    width: calc(33.33% - 4px);
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
