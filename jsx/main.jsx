@@ -120,11 +120,10 @@ function readKeyframesSmart() {
             return "error|No layers selected";
         }
         
-        var layer = selectedLayers[0];
         var propertyTimes = [];
         
         // Generic function to recursively search for selected keyframes
-        function searchAllProperties(propGroup) {
+        function searchAllProperties(propGroup, layerRef) {
             for (var i = 1; i <= propGroup.numProperties; i++) {
                 var prop = propGroup.property(i);
                 
@@ -135,6 +134,7 @@ function readKeyframesSmart() {
                             propertyTimes.push({
                                 name: prop.name,
                                 property: prop,
+                                layer: layerRef,
                                 time: prop.keyTime(j),
                                 keyIndex: j
                             });
@@ -146,32 +146,40 @@ function readKeyframesSmart() {
                 // Recurse into property groups
                 if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
                            prop.propertyType === PropertyType.NAMED_GROUP)) {
-                    searchAllProperties(prop);
+                    searchAllProperties(prop, layerRef);
                 }
             }
         }
         
-        // Search all layer properties
-        searchAllProperties(layer);
+        // Search properties across ALL selected layers
+        for (var layerIndex = 0; layerIndex < selectedLayers.length; layerIndex++) {
+            var layer = selectedLayers[layerIndex];
+            searchAllProperties(layer, layer);
+        }
         
-        // Also check special properties that might not be in the main layer group
-        try {
-            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-                for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
-                    if (layer.timeRemap.keySelected(j)) {
-                        propertyTimes.push({
-                            name: "Time Remap",
-                            property: layer.timeRemap,
-                            time: layer.timeRemap.keyTime(j),
-                            keyIndex: j
-                        });
-                        break;
+        // Also check special properties that might not be in the main layer group (across all layers)
+        for (var layerIndex = 0; layerIndex < selectedLayers.length; layerIndex++) {
+            var layer = selectedLayers[layerIndex];
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                        if (layer.timeRemap.keySelected(j)) {
+                            propertyTimes.push({
+                                name: "Time Remap",
+                                property: layer.timeRemap,
+                                layer: layer,
+                                time: layer.timeRemap.keyTime(j),
+                                keyIndex: j
+                            });
+                            break;
+                        }
                     }
                 }
+            } catch(e) {
+                // Time remap might not be accessible on this layer, continue to next
             }
-        } catch(e) {
-            // Time remap might not be available
         }
+        
         
         // CROSS-PROPERTY MODE: Multiple properties with selected keyframes
         if (propertyTimes.length >= 2) {
@@ -347,7 +355,15 @@ function readKeyframesSmart() {
                 DEBUG_JSX.log("Position calculation failed: " + posError.toString());
             }
             
-            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1"; // Add |1 to indicate cross-property mode
+            // Build debug info for cross-layer support  
+            var debugInfo = [];
+            debugInfo.push("Found " + propertyTimes.length + " keyframes across " + selectedLayers.length + " layers");
+            for (var debugIdx = 0; debugIdx < propertyTimes.length; debugIdx++) {
+                var debugProp = propertyTimes[debugIdx];
+                debugInfo.push(debugProp.layer.name + ":" + debugProp.name + " at " + Math.round(debugProp.time * 1000) + "ms");
+            }
+            
+            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|" + debugInfo.join(" | ");
         }
         
         // SINGLE-PROPERTY MODE: Multiple keyframes on one property
@@ -385,17 +401,19 @@ function readKeyframesSmart() {
             return null;
         }
         
-        // Search all layer properties for multiple selected keyframes
-        singlePropertyData = searchForMultipleKeyframes(layer);
-        
-        // Also check Time Remap for multiple keyframes
-        if (!singlePropertyData) {
-            try {
-                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-                    var selectedKeys = [];
-                    for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
-                        if (layer.timeRemap.keySelected(j)) {
-                            selectedKeys.push(j);
+        // Search all selected layers for properties with multiple selected keyframes
+        for (var layerIndex = 0; layerIndex < selectedLayers.length && !singlePropertyData; layerIndex++) {
+            var layer = selectedLayers[layerIndex];
+            singlePropertyData = searchForMultipleKeyframes(layer);
+            
+            // Also check Time Remap for multiple keyframes on this layer
+            if (!singlePropertyData) {
+                try {
+                    if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                        var selectedKeys = [];
+                        for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                            if (layer.timeRemap.keySelected(j)) {
+                                selectedKeys.push(j);
                         }
                     }
                     if (selectedKeys.length >= 2) {
@@ -407,6 +425,7 @@ function readKeyframesSmart() {
                 }
             } catch(e) {
                 // Time remap might not be available
+            }
             }
         }
         
@@ -1569,11 +1588,12 @@ function nudgeDelay(direction) {
                     var selKeys = prop.selectedKeys;
                     if (selKeys.length === 0) continue;
                     
-                    // Store property with its selected keyframes
-                    var propName = prop.name;
+                    // Store property with its selected keyframes (make property name unique per layer)
+                    var propName = layer.name + ":" + prop.name;
                     if (!propertyMap[propName]) {
                         propertyMap[propName] = {
                             property: prop,
+                            layer: layer,
                             keyframes: [],
                             selectedKeys: []
                         };

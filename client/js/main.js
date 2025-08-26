@@ -899,7 +899,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     DEBUG.error('Keyframe reading failed:', errorMsg);
                 } else if (status === 'success') {
                     // Check if this is cross-property mode first to determine parsing format
-                    var isCrossPropertyMode = parts[parts.length - 1] === '1';
+                    // Cross-property flag is at index 10: success|delay|delayF|dur|durF|1|x|y|hasX|hasY|FLAG|debug
+                    var isCrossPropertyMode = parts.length > 10 && parts[10] === '1';
+                    DEBUG.log('Cross-property mode detection: parts[10]=' + parts[10] + ', isCrossPropertyMode=' + isCrossPropertyMode);
                     
                     var delayMs, delayFrames, durationMs, durationFrames;
                     var xDistance, yDistance, hasXDistance, hasYDistance;
