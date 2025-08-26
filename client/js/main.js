@@ -598,7 +598,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             csInterface.evalScript('readKeyframesSmart()', function(readResult) {
                                 if (readResult && readResult.indexOf('success|') === 0) {
                                     var readParts = readResult.split('|');
-                                    var isCrossPropertyMode = readParts[readParts.length - 1] === '1';
+                                    var isCrossPropertyMode = readParts[10] === '1';
                                     
                                     var durationMs, durationFrames;
                                     if (isCrossPropertyMode) {
@@ -613,13 +613,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                     if (isCrossPropertyMode) {
                                         if (durationMs === -1) {
                                             durationText.textContent = 'Duration: Multiple';
+                                            durationText.style.opacity = '1';
+                                        } else if (durationMs === -999) {
+                                            durationText.textContent = 'Duration';
+                                            durationText.style.opacity = '0.5';
                                         } else {
                                             durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                                            durationText.style.opacity = '1';
                                         }
                                     } else {
                                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                                        durationText.style.opacity = '1';
                                     }
-                                    durationText.style.opacity = '1';
                                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                                 }
                             });
@@ -701,7 +706,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             csInterface.evalScript('readKeyframesSmart()', function(readResult) {
                                 if (readResult && readResult.indexOf('success|') === 0) {
                                     var readParts = readResult.split('|');
-                                    var isCrossPropertyMode = readParts[readParts.length - 1] === '1';
+                                    var isCrossPropertyMode = readParts[10] === '1';
                                     
                                     var durationMs, durationFrames;
                                     if (isCrossPropertyMode) {
@@ -716,13 +721,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                     if (isCrossPropertyMode) {
                                         if (durationMs === -1) {
                                             durationText.textContent = 'Duration: Multiple';
+                                            durationText.style.opacity = '1';
+                                        } else if (durationMs === -999) {
+                                            durationText.textContent = 'Duration';
+                                            durationText.style.opacity = '0.5';
                                         } else {
                                             durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                                            durationText.style.opacity = '1';
                                         }
                                     } else {
                                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                                        durationText.style.opacity = '1';
                                     }
-                                    durationText.style.opacity = '1';
                                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                                 }
                             });
@@ -971,10 +981,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Handle duration display
                         if (durationMs === -1) {
                             durationText.textContent = 'Duration: Multiple';
+                            durationText.style.opacity = '1';
+                        } else if (durationMs === -999) {
+                            // For layer selections, show default text for duration (not applicable)
+                            durationText.textContent = 'Duration';
+                            durationText.style.opacity = '0.5';
                         } else {
                             durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            durationText.style.opacity = '1';
                         }
-                        durationText.style.opacity = '1';
                         
                         // Handle delay display
                         if (delayMs === -1) {
@@ -996,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                         durationValue.value = durationMs;
                     }
-                    durationText.style.opacity = '1';
+                    // Don't override opacity - it's already set in the conditional logic above
                     
                     // Always show all buttons for consistency
                     showDurationButtons();

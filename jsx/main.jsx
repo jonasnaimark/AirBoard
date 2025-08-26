@@ -441,10 +441,134 @@ function readKeyframesSmart() {
             return result;
         }
         
-        return "error|Select > 1 Keyframe";
+        // No keyframes selected - try reading layer delays
+        DEBUG_JSX.log("No keyframes found, attempting to read layer delays");
+        return readLayerDelays(selectedLayers, comp);
         
     } catch(e) {
         return "error|" + e.toString();
+    }
+}
+
+// Read layer delays when no keyframes are selected - uses same logic as keyframe reading
+function readLayerDelays(selectedLayers, comp) {
+    try {
+        DEBUG_JSX.log("readLayerDelays: processing " + selectedLayers.length + " layers");
+        
+        if (selectedLayers.length === 0) {
+            return "error|No layers selected";
+        }
+        
+        var frameRate = comp.frameRate || 30;
+        
+        // Collect layer startTimes (same approach as keyframe reading)
+        var layerTimes = [];
+        
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            layerTimes.push({
+                name: layer.name,
+                time: layer.startTime
+            });
+        }
+        
+        DEBUG_JSX.log("Found " + layerTimes.length + " layers with startTimes");
+        
+        if (layerTimes.length === 1) {
+            // Single layer - show its startTime as delay
+            var delayMs = Math.round(layerTimes[0].time * 1000);
+            var delayFrames = Math.round(layerTimes[0].time * frameRate);
+            
+            // Single layer mode - return with cross-property format and duration -999 (not applicable for layers)
+            var result = "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|0|0|0|0|1|Layer " + layerTimes[0].name + " at " + delayMs + "ms";
+            DEBUG_JSX.log("Single layer result: " + result);
+            return result;
+        }
+        
+        // Multiple layers - use same logic as keyframe cross-property reading
+        layerTimes.sort(function(a, b) { return a.time - b.time; });
+        var earliestTime = layerTimes[0].time;
+        
+        // Calculate all delays from earliest layer
+        var delays = [];
+        for (var k = 0; k < layerTimes.length; k++) {
+            var delayMs = Math.round((layerTimes[k].time - earliestTime) * 1000);
+            delays.push(delayMs);
+        }
+        
+        // Find unique delays (with 1ms tolerance)
+        var uniqueDelays = [];
+        for (var k = 0; k < delays.length; k++) {
+            var found = false;
+            for (var j = 0; j < uniqueDelays.length; j++) {
+                if (Math.abs(uniqueDelays[j] - delays[k]) < 1) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                uniqueDelays.push(delays[k]);
+            }
+        }
+        
+        var resultDelayMs, resultDelayFrames;
+        
+        if (layerTimes.length === 2) {
+            // Only 2 layers - show the delay between them
+            resultDelayMs = delays[1]; // Second layer's delay from first
+            resultDelayFrames = Math.round((resultDelayMs / 1000) * frameRate);
+        } else {
+            // 3+ layers - check if all non-zero delays are the same
+            var nonZeroDelays = [];
+            for (var k = 1; k < delays.length; k++) { // Skip first delay (always 0)
+                if (delays[k] > 0) {
+                    nonZeroDelays.push(delays[k]);
+                }
+            }
+            
+            var uniqueNonZeroDelays = [];
+            for (var k = 0; k < nonZeroDelays.length; k++) {
+                var found = false;
+                for (var j = 0; j < uniqueNonZeroDelays.length; j++) {
+                    if (Math.abs(uniqueNonZeroDelays[j] - nonZeroDelays[k]) < 1) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    uniqueNonZeroDelays.push(nonZeroDelays[k]);
+                }
+            }
+            
+            if (uniqueNonZeroDelays.length === 0) {
+                // All layers at same time
+                resultDelayMs = 0;
+                resultDelayFrames = 0;
+            } else if (uniqueNonZeroDelays.length === 1) {
+                // All non-zero delays are the same
+                resultDelayMs = uniqueNonZeroDelays[0];
+                resultDelayFrames = Math.round((resultDelayMs / 1000) * frameRate);
+            } else {
+                // Multiple different delays
+                resultDelayMs = -1; // Flag for "Multiple" delays
+                resultDelayFrames = -1;
+            }
+        }
+        
+        // Build debug string
+        var debugStrings = [];
+        for (var k = 0; k < layerTimes.length; k++) {
+            debugStrings.push(layerTimes[k].name + " at " + delays[k] + "ms");
+        }
+        
+        // Return in same format as keyframe reading: success|delayMs|delayFrames|durationMs|durationFrames|crossProperty|xDist|yDist|hasX|hasY|isCrossProperty|debug
+        var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|-999|-999|1|0|0|0|0|1|Found " + layerTimes.length + " layers across " + selectedLayers.length + " layers | " + debugStrings.join(" | ");
+        
+        DEBUG_JSX.log("Layer delays result: " + result);
+        return result;
+        
+    } catch(e) {
+        return "error|Failed to read layer delays: " + e.toString();
     }
 }
 
@@ -1623,8 +1747,9 @@ function nudgeDelay(direction) {
         DEBUG_JSX.log("Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
         
         if (propertyNames.length === 0) {
-            app.endUndoGroup();
-            return "error|No selected keyframes found";
+            // No keyframes selected - try layer startTime nudging
+            DEBUG_JSX.log("No keyframes found, attempting layer startTime nudging");
+            return nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp);
         }
         
         // Allow single properties for timeline position nudging when all keyframes have same baseline
@@ -2284,6 +2409,128 @@ function nudgeDelay(direction) {
         } else {
             return "error|Failed to nudge delay: " + errorMsg;
         }
+    }
+}
+
+// Layer startTime nudging - uses same logic as keyframe delay nudging
+function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
+    try {
+        DEBUG_JSX.log("nudgeLayerStartTimes: processing " + selectedLayers.length + " layers");
+        
+        // Collect layer startTimes (same approach as keyframe delay detection)
+        var layerDelays = [];
+        var debugInfo = [];
+        
+        // Find baseline (earliest startTime) - same logic as keyframe baseline detection
+        var scanEarliestTime = Number.MAX_VALUE;
+        var scanBaselineLayer = null;
+        
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            var startTime = layer.startTime;
+            
+            if (startTime < scanEarliestTime) {
+                scanEarliestTime = startTime;
+                scanBaselineLayer = layer.name;
+            }
+        }
+        
+        DEBUG_JSX.log("Layer baseline detection: earliest=" + scanEarliestTime + "s, baseline=" + scanBaselineLayer);
+        
+        // Use same baseline cache approach as keyframes
+        BASELINE_CACHE.reset();
+        var baselineData = BASELINE_CACHE.initialize(scanEarliestTime, scanBaselineLayer);
+        var originalEarliestTime = baselineData.earliestTime;
+        
+        // Build layer delays with baseline tracking
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            var startTime = layer.startTime;
+            
+            // Track if this is a baseline layer
+            var isOriginalBaseline = (Math.abs(startTime - originalEarliestTime) < 0.001);
+            
+            layerDelays.push({
+                layer: layer,
+                currentDelay: startTime,
+                isOriginalBaseline: isOriginalBaseline
+            });
+            
+            debugInfo.push("Layer " + layer.name + ": startTime=" + startTime + "s, isBaseline=" + isOriginalBaseline);
+        }
+        
+        // Apply same snapping logic as keyframes
+        var allSameDelay = true;
+        var firstDelay = (layerDelays[0].currentDelay - originalEarliestTime) * 1000; // Convert to ms
+        
+        for (var i = 1; i < layerDelays.length; i++) {
+            var delayMs = (layerDelays[i].currentDelay - originalEarliestTime) * 1000;
+            if (Math.abs(delayMs - firstDelay) > 1) { // 1ms tolerance
+                allSameDelay = false;
+                break;
+            }
+        }
+        
+        DEBUG_JSX.log("All layers have same delay: " + allSameDelay + ", firstDelay=" + firstDelay + "ms");
+        
+        // Move layers using same logic as keyframes
+        var movedCount = 0;
+        if (allSameDelay && Math.abs(firstDelay) < 1) {
+            // Timeline mode - all layers at baseline, move together by 50ms
+            var timelineNudgeSeconds = (direction > 0 ? 50 : -50) / 1000.0;
+            
+            for (var i = 0; i < layerDelays.length; i++) {
+                var layerData = layerDelays[i];
+                var newStartTime = Math.max(0, layerData.currentDelay + timelineNudgeSeconds);
+                
+                // Clamp to composition bounds
+                newStartTime = Math.min(newStartTime, comp.duration);
+                
+                layerData.layer.startTime = newStartTime;
+                movedCount++;
+                debugInfo.push("Timeline mode: Moved " + layerData.layer.name + " to " + newStartTime + "s");
+            }
+        } else {
+            // Individual snapping mode - same as keyframes
+            for (var i = 0; i < layerDelays.length; i++) {
+                var layerData = layerDelays[i];
+                
+                if (layerData.isOriginalBaseline) {
+                    // Baseline layer never moves
+                    debugInfo.push(layerData.layer.name + ": baseline layer, never moves");
+                    continue;
+                }
+                
+                // Apply snapping to non-baseline layers
+                var currentDelayMs = (layerData.currentDelay - originalEarliestTime) * 1000;
+                var targetDelayMs = calculateDelaySnap(currentDelayMs, direction);
+                var targetTime = originalEarliestTime + (targetDelayMs / 1000);
+                
+                // Clamp to bounds
+                targetTime = Math.max(0, Math.min(targetTime, comp.duration));
+                
+                layerData.layer.startTime = targetTime;
+                movedCount++;
+                debugInfo.push("Snapped " + layerData.layer.name + ": " + currentDelayMs + "ms → " + targetDelayMs + "ms, startTime=" + targetTime + "s");
+            }
+        }
+        
+        app.endUndoGroup();
+        
+        // After nudging, read the new layer delays to return proper format
+        DEBUG_JSX.log("Moved " + movedCount + " layers, reading new delays");
+        var readResult = readLayerDelays(selectedLayers, comp);
+        
+        if (readResult && readResult.indexOf('success|') === 0) {
+            return readResult;
+        } else {
+            // Fallback if reading fails
+            return "success|nudged " + movedCount + " layers|" + debugInfo.join(" | ");
+        }
+        
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Failed to nudge layer startTimes: " + e.toString();
     }
 }
 
