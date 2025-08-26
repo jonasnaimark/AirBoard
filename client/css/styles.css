@@ -511,6 +511,12 @@ input.distance-input[data-tooltip]:hover::after {
     display: block;
     margin: 0 auto;
     vertical-align: middle;
+    opacity: 0.72;
+    transition: opacity 0.1s ease;
+}
+
+.keyframe-display .distance-controls .distance-btn.selected img {
+    opacity: 1;
 }
 
 /* Custom tooltips for stagger controls */
@@ -615,7 +621,7 @@ input.distance-input[data-tooltip]:hover::after {
 .keyframe-display .distance-controls .in-out-btn.selected {
     background-color: rgba(58, 58, 58, 1); /* Medium background for selected state */
     color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.25); /* Lighter border for selected state */
+    border-color: rgba(255, 255, 255, 0.32); /* Brighter border for selected state */
     opacity: 1;
 }
 
