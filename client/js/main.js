@@ -559,14 +559,27 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable button while working
             durationIncrementBtn.disabled = true;
             
-            // Check the stored cross-property mode flag to determine which function to call
-            var isMultiPropertyMode = window.lastReadKeyframesWasCrossProperty || false;
-            var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationForward()' : 'stretchKeyframesForward()';
-            
-            console.log('Calling script function:', scriptFunction);
-            
-            // Call the appropriate ExtendScript function
-            csInterface.evalScript(scriptFunction, function(result) {
+            // Auto-detect the correct mode by calling readKeyframesSmart first
+            console.log('Auto-detecting keyframe mode...');
+            csInterface.evalScript('readKeyframesSmart()', function(readResult) {
+                var isMultiPropertyMode = false;
+                
+                if (readResult && readResult.indexOf('success|') === 0) {
+                    var readParts = readResult.split('|');
+                    isMultiPropertyMode = readParts.length > 10 && readParts[10] === '1';
+                    console.log('Auto-detected mode: ' + (isMultiPropertyMode ? 'multi-property' : 'single-property'));
+                    
+                    // Store the result for future use
+                    window.lastReadKeyframesWasCrossProperty = isMultiPropertyMode;
+                } else {
+                    console.log('Could not auto-detect mode, using single-property');
+                }
+                
+                var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationForward()' : 'stretchKeyframesForward()';
+                console.log('Calling script function:', scriptFunction);
+                
+                // Call the appropriate ExtendScript function
+                csInterface.evalScript(scriptFunction, function(result) {
                 console.log('Stretch forward result:', result);
                 
                 // Re-enable button
@@ -633,6 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Unexpected result:', result);
                 }
             });
+            }); // Close readKeyframesSmart call
         });
         
         // - button: Shrink keyframes backward by 3 frames OR multi-property duration by 50ms
@@ -648,14 +662,27 @@ document.addEventListener('DOMContentLoaded', function() {
             // Disable button while working
             durationDecrementBtn.disabled = true;
             
-            // Check the stored cross-property mode flag to determine which function to call
-            var isMultiPropertyMode = window.lastReadKeyframesWasCrossProperty || false;
-            var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationBackward()' : 'stretchKeyframesBackward()';
-            
-            console.log('Calling script function:', scriptFunction);
-            
-            // Call the appropriate ExtendScript function
-            csInterface.evalScript(scriptFunction, function(result) {
+            // Auto-detect the correct mode by calling readKeyframesSmart first
+            console.log('Auto-detecting keyframe mode...');
+            csInterface.evalScript('readKeyframesSmart()', function(readResult) {
+                var isMultiPropertyMode = false;
+                
+                if (readResult && readResult.indexOf('success|') === 0) {
+                    var readParts = readResult.split('|');
+                    isMultiPropertyMode = readParts.length > 10 && readParts[10] === '1';
+                    console.log('Auto-detected mode: ' + (isMultiPropertyMode ? 'multi-property' : 'single-property'));
+                    
+                    // Store the result for future use
+                    window.lastReadKeyframesWasCrossProperty = isMultiPropertyMode;
+                } else {
+                    console.log('Could not auto-detect mode, using single-property');
+                }
+                
+                var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationBackward()' : 'stretchKeyframesBackward()';
+                console.log('Calling script function:', scriptFunction);
+                
+                // Call the appropriate ExtendScript function
+                csInterface.evalScript(scriptFunction, function(result) {
                 console.log('Stretch backward result:', result);
                 
                 // Re-enable button
@@ -722,6 +749,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Unexpected result:', result);
                 }
             });
+            }); // Close readKeyframesSmart call
         });
     }
     
