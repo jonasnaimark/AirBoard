@@ -1009,6 +1009,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         delayText.style.opacity = '0.5';
                         
                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        durationText.style.opacity = '1';
                         durationValue.value = durationMs;
                     }
                     // Don't override opacity - it's already set in the conditional logic above

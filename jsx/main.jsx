@@ -1493,10 +1493,13 @@ function stretchMultiPropertyDuration(direction) {
             
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
-                if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys === 0) continue;
+                
+                // More robust property validation
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
                 
                 var selKeys = prop.selectedKeys;
-                if (selKeys.length < 2) continue; // Need at least 2 keyframes to stretch duration
+                if (!selKeys || selKeys.length < 2) continue; // Need at least 2 keyframes to stretch duration
                 
                 // Store property with its selected keyframes (same as delay nudging)
                 var propName = prop.name + "_" + layerIdx + "_" + j; // Make unique key
@@ -1516,8 +1519,19 @@ function stretchMultiPropertyDuration(direction) {
             // Calculate current duration for this property
             var times = [];
             for (var k = 0; k < selKeys.length; k++) {
-                times.push(prop.keyTime(selKeys[k]));
+                var keyIndex = selKeys[k];
+                try {
+                    // Validate keyIndex is within bounds
+                    if (keyIndex > 0 && keyIndex <= prop.numKeys) {
+                        times.push(prop.keyTime(keyIndex));
+                    }
+                } catch(keyError) {
+                    DEBUG_JSX.log("Skipping invalid keyframe at index " + keyIndex + " for property " + prop.name + ": " + keyError.toString());
+                }
             }
+            
+            // Skip this property if we don't have at least 2 valid keyframes
+            if (times.length < 2) continue;
             times.sort(function(a, b) { return a - b; });
             var currentDurationMs = Math.round((times[times.length - 1] - times[0]) * 1000);
             
@@ -1707,10 +1721,13 @@ function nudgeDelay(direction) {
                 
                 for (var j = 0; j < selectedProps.length; j++) {
                     var prop = selectedProps[j];
-                    if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys === 0) continue;
+                    
+                    // More robust property validation like duration functions
+                    if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                    if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
                     
                     var selKeys = prop.selectedKeys;
-                    if (selKeys.length === 0) continue;
+                    if (!selKeys || selKeys.length === 0) continue;
                     
                     // Store property with its selected keyframes (make property name unique per layer)
                     var propName = layer.name + ":" + prop.name;
@@ -1726,11 +1743,20 @@ function nudgeDelay(direction) {
                     // Add all selected keyframes for this property
                     for (var k = 0; k < selKeys.length; k++) {
                         var keyIndex = selKeys[k];
-                        propertyMap[propName].keyframes.push({
-                            index: keyIndex,
-                            time: prop.keyTime(keyIndex)
-                        });
-                        propertyMap[propName].selectedKeys.push(keyIndex);
+                        try {
+                            // Validate keyIndex is within bounds
+                            if (keyIndex > 0 && keyIndex <= prop.numKeys) {
+                                var keyTime = prop.keyTime(keyIndex);
+                                propertyMap[propName].keyframes.push({
+                                    index: keyIndex,
+                                    time: keyTime
+                                });
+                                propertyMap[propName].selectedKeys.push(keyIndex);
+                            }
+                        } catch(keyError) {
+                            // Skip invalid keyframes but continue processing
+                            DEBUG_JSX.log("Skipping invalid keyframe at index " + keyIndex + " for property " + prop.name + ": " + keyError.toString());
+                        }
                     }
                 }
             }
