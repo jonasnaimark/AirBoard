@@ -363,7 +363,23 @@ function readKeyframesSmart() {
                 debugInfo.push(debugProp.layer.name + ":" + debugProp.name + " at " + Math.round(debugProp.time * 1000) + "ms");
             }
             
-            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|" + debugInfo.join(" | ");
+            // Calculate stagger for keyframes (cross-property mode)
+            var staggerMs = 0, staggerFrames = 0, staggerText = "Stagger";
+            try {
+                staggerText = calculateStagger(propertyTimes, frameRate, true); // true = keyframe mode
+                if (staggerText.indexOf("ms") > 0) {
+                    // Extract numeric values for backward compatibility
+                    var parts = staggerText.split(" / ");
+                    if (parts.length === 2) {
+                        staggerMs = parseInt(parts[0].replace("ms", "")) || 0;
+                        staggerFrames = parseInt(parts[1].replace("f", "")) || 0;
+                    }
+                }
+            } catch(e) {
+                DEBUG_JSX.log("Stagger calculation failed: " + e.toString());
+            }
+            
+            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|" + staggerText + "|" + debugInfo.join(" | ");
         }
         
         // SINGLE-PROPERTY MODE: Multiple keyframes on one property
@@ -434,9 +450,9 @@ function readKeyframesSmart() {
             DEBUG_JSX.log("Single property mode detected - delegating to readKeyframesDuration()");
             var result = readKeyframesDuration();
             
-            // Add cross-property mode flag (false for single-property mode)
+            // Add cross-property mode flag and stagger (false for single-property mode)
             if (result && result.indexOf('success|') === 0) {
-                return result + "|0"; // Add |0 to indicate single-property mode
+                return result + "|0|Stagger"; // Add |0 to indicate single-property mode, |Stagger for default stagger text
             }
             return result;
         }
@@ -447,6 +463,97 @@ function readKeyframesSmart() {
         
     } catch(e) {
         return "error|" + e.toString();
+    }
+}
+
+// Calculate stagger from timing data (works for both keyframes and layers)
+function calculateStagger(timingData, frameRate, isKeyframeMode) {
+    try {
+        if (timingData.length <= 1) {
+            return "Stagger"; // Default text for single item
+        }
+        
+        // Group by layer for keyframe mode, or use layer start times for layer mode
+        var layerTimes = [];
+        
+        if (isKeyframeMode) {
+            // Group keyframes by layer, take first keyframe time per layer
+            var layerGroups = {};
+            for (var i = 0; i < timingData.length; i++) {
+                var item = timingData[i];
+                var layerIndex = item.layer.index;
+                
+                if (!layerGroups[layerIndex] || item.time < layerGroups[layerIndex].time) {
+                    layerGroups[layerIndex] = {
+                        time: item.time,
+                        index: layerIndex,
+                        name: item.layer.name
+                    };
+                }
+            }
+            
+            // Convert to array
+            for (var layerIndex in layerGroups) {
+                layerTimes.push(layerGroups[layerIndex]);
+            }
+        } else {
+            // Layer mode - use start times directly
+            for (var i = 0; i < timingData.length; i++) {
+                var layer = timingData[i];
+                layerTimes.push({
+                    time: layer.time,
+                    index: layer.index, // Use actual layer index for proper ordering
+                    name: layer.name
+                });
+            }
+        }
+        
+        if (layerTimes.length <= 1) {
+            return "Stagger"; // Default text for single layer
+        }
+        
+        // Sort by layer index (bottom to top = highest index to lowest index)
+        layerTimes.sort(function(a, b) { return b.index - a.index; });
+        
+        // Calculate time differences between consecutive layers (bottom to top)
+        var staggers = [];
+        for (var i = 1; i < layerTimes.length; i++) {
+            var staggerSeconds = layerTimes[i].time - layerTimes[i-1].time;
+            var staggerMs = Math.round(staggerSeconds * 1000);
+            staggers.push(staggerMs);
+        }
+        
+        if (staggers.length === 0) {
+            return "Stagger"; // No stagger to calculate
+        }
+        
+        // Check if all staggers are the same (within 1ms tolerance)
+        var firstStagger = staggers[0];
+        var allSame = true;
+        for (var i = 1; i < staggers.length; i++) {
+            if (Math.abs(staggers[i] - firstStagger) > 1) {
+                allSame = false;
+                break;
+            }
+        }
+        
+        if (!allSame) {
+            return "Multiple"; // Different stagger values
+        }
+        
+        if (firstStagger === 0) {
+            return "Stagger"; // All layers at same time - show default
+        }
+        
+        // Convert to frames and return formatted string
+        var staggerFrames = Math.round((Math.abs(firstStagger) / 1000) * frameRate);
+        var sign = firstStagger < 0 ? "-" : "";
+        
+        return sign + Math.abs(firstStagger) + "ms / " + sign + staggerFrames + "f";
+        
+    } catch(e) {
+        DEBUG_JSX.log("calculateStagger error: " + e.toString());
+        return "Stagger";
     }
 }
 
@@ -468,7 +575,8 @@ function readLayerDelays(selectedLayers, comp) {
             var layer = selectedLayers[i];
             layerTimes.push({
                 name: layer.name,
-                time: layer.startTime
+                time: layer.startTime,
+                index: layer.index // Add layer index for proper stagger calculation
             });
         }
         
@@ -480,7 +588,7 @@ function readLayerDelays(selectedLayers, comp) {
             var delayFrames = Math.round(layerTimes[0].time * frameRate);
             
             // Single layer mode - return with cross-property format and duration -999 (not applicable for layers)
-            var result = "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|0|0|0|0|1|Layer " + layerTimes[0].name + " at " + delayMs + "ms";
+            var result = "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|0|0|0|0|1|Stagger|Layer " + layerTimes[0].name + " at " + delayMs + "ms";
             DEBUG_JSX.log("Single layer result: " + result);
             return result;
         }
@@ -561,8 +669,16 @@ function readLayerDelays(selectedLayers, comp) {
             debugStrings.push(layerTimes[k].name + " at " + delays[k] + "ms");
         }
         
-        // Return in same format as keyframe reading: success|delayMs|delayFrames|durationMs|durationFrames|crossProperty|xDist|yDist|hasX|hasY|isCrossProperty|debug
-        var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|-999|-999|1|0|0|0|0|1|Found " + layerTimes.length + " layers across " + selectedLayers.length + " layers | " + debugStrings.join(" | ");
+        // Calculate stagger for layers (layer mode)
+        var staggerText = "Stagger";
+        try {
+            staggerText = calculateStagger(layerTimes, frameRate, false); // false = layer mode
+        } catch(e) {
+            DEBUG_JSX.log("Layer stagger calculation failed: " + e.toString());
+        }
+        
+        // Return in same format as keyframe reading but with stagger: success|delayMs|delayFrames|durationMs|durationFrames|crossProperty|xDist|yDist|hasX|hasY|isCrossProperty|stagger|debug
+        var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|-999|-999|1|0|0|0|0|1|" + staggerText + "|Found " + layerTimes.length + " layers across " + selectedLayers.length + " layers | " + debugStrings.join(" | ");
         
         DEBUG_JSX.log("Layer delays result: " + result);
         return result;
@@ -2517,17 +2633,17 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
                 debugInfo.push("Timeline mode: Moved " + layerData.layer.name + " to " + newStartTime + "s");
             }
         } else {
-            // Individual snapping mode - same as keyframes
+            // Multiple delays - snap each delayed layer individually (like keyframes)
             for (var i = 0; i < layerDelays.length; i++) {
                 var layerData = layerDelays[i];
                 
                 if (layerData.isOriginalBaseline) {
-                    // Baseline layer never moves
+                    // Baseline layer never moves (same as keyframes)
                     debugInfo.push(layerData.layer.name + ": baseline layer, never moves");
                     continue;
                 }
                 
-                // Apply snapping to non-baseline layers
+                // Apply snapping to each non-baseline layer individually
                 var currentDelayMs = (layerData.currentDelay - originalEarliestTime) * 1000;
                 var targetDelayMs = calculateDelaySnap(currentDelayMs, direction);
                 var targetTime = originalEarliestTime + (targetDelayMs / 1000);

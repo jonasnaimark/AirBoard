@@ -913,11 +913,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Simple logic: if error is "Select > 1 Keyframe", show this message in all 4 rows
                     if (errorMsg === 'Select > 1 Keyframe') {
-                        // Show "Select > 1 Keyframe" in all 4 rows
+                        // Show "Select > 1 Keyframe" in all 5 rows
                         durationText.textContent = 'Select > 1 Keyframe';
                         durationText.style.opacity = '1';
                         delayText.textContent = 'Select > 1 Keyframe';
                         delayText.style.opacity = '1';
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            staggerTextElement.textContent = 'Select > 1 Keyframe';
+                            staggerTextElement.style.opacity = '1';
+                        }
                         xDistanceText.textContent = 'Select > 1 Keyframe';
                         xDistanceText.style.opacity = '1';
                         yDistanceText.textContent = 'Select > 1 Keyframe';
@@ -928,6 +933,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         durationText.style.opacity = '0.5';
                         delayText.textContent = 'Delay';
                         delayText.style.opacity = '0.5';
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            staggerTextElement.textContent = 'Stagger';
+                            staggerTextElement.style.opacity = '0.5';
+                        }
                         xDistanceText.textContent = 'X distance';
                         xDistanceText.style.opacity = '0.5';
                         yDistanceText.textContent = 'Y distance';
@@ -937,15 +947,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     DEBUG.error('Keyframe reading failed:', errorMsg);
                 } else if (status === 'success') {
                     // Check if this is cross-property mode first to determine parsing format
-                    // Cross-property flag is at index 10: success|delay|delayF|dur|durF|1|x|y|hasX|hasY|FLAG|debug
+                    // Cross-property flag is at index 10: success|delay|delayF|dur|durF|1|x|y|hasX|hasY|FLAG|stagger|debug
                     var isCrossPropertyMode = parts.length > 10 && parts[10] === '1';
                     DEBUG.log('Cross-property mode detection: parts[10]=' + parts[10] + ', isCrossPropertyMode=' + isCrossPropertyMode);
                     
                     var delayMs, delayFrames, durationMs, durationFrames;
                     var xDistance, yDistance, hasXDistance, hasYDistance;
+                    var staggerText = "Stagger";
                     
                     if (isCrossPropertyMode) {
-                        // Cross-property format: success|delayMs|delayFrames|durationMs|durationFrames|1|xDistance|yDistance|hasX|hasY|1
+                        // Cross-property format: success|delayMs|delayFrames|durationMs|durationFrames|1|xDistance|yDistance|hasX|hasY|1|stagger
                         delayMs = parseInt(parts[1]);
                         delayFrames = parseInt(parts[2]);
                         durationMs = parseInt(parts[3]);
@@ -954,6 +965,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
                         hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
                         hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
+                        staggerText = parts.length > 11 ? parts[11] : "Stagger";
                     } else {
                         // Single-property format: success|durationMs|durationFrames|...|xDistance|yDistance|hasX|hasY|0
                         durationMs = parseInt(parts[1]);
@@ -1003,6 +1015,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Store for delay nudging
                         document.getElementById('delayValue').value = delayMs;
+                        
+                        // Update stagger display (only in cross-property mode)
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            if (staggerText === "Stagger") {
+                                // Default text - show with dimmed opacity
+                                staggerTextElement.textContent = staggerText;
+                                staggerTextElement.style.opacity = '0.5';
+                            } else if (staggerText === "Multiple") {
+                                // Multiple stagger values - show with prefix
+                                staggerTextElement.textContent = 'Stagger: Multiple';
+                                staggerTextElement.style.opacity = '1';
+                            } else {
+                                // Show stagger value
+                                staggerTextElement.textContent = 'Stagger: ' + staggerText;
+                                staggerTextElement.style.opacity = '1';
+                            }
+                        }
                     } else {
                         // Single-property mode: show duration info in duration row
                         delayText.textContent = 'Delay';
@@ -1011,6 +1041,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                         durationText.style.opacity = '1';
                         durationValue.value = durationMs;
+                        
+                        // Reset stagger to default in single-property mode
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            staggerTextElement.textContent = 'Stagger';
+                            staggerTextElement.style.opacity = '0.5';
+                        }
                     }
                     // Don't override opacity - it's already set in the conditional logic above
                     
