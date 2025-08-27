@@ -320,7 +320,7 @@ body {
 #staggerText,
 #xDistanceText,
 #yDistanceText {
-    opacity: 0.5;
+    opacity: 0.75;
 }
 
 /* Keyframe display - styled like resolution display but without buttons */
@@ -435,7 +435,7 @@ body {
     color: #666666;
     border-color: rgba(255, 255, 255, 0.06);
     cursor: default;
-    opacity: 0.5;
+    opacity: 0.75;
 }
 
 /* Direct tooltip styling for input - higher specificity */

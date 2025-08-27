@@ -468,6 +468,56 @@ if (propertyNames.length === 1) {
 4. **Handle floating-point precision**: Use tolerance for time comparisons
 5. **Provide proper error handling**: Try-catch with undo group management
 6. **Test across different property types**: Position (spatial), Opacity (temporal), Scale, Rotation
+7. **ALWAYS implement debug logging**: Use our DEBUG_JSX system for development
+
+### **Debugging Keyframe Operations**
+
+#### **Essential Debug Pattern**
+```javascript
+function yourKeyframeFunction() {
+    try {
+        // Clear previous debug messages
+        DEBUG_JSX.clear();
+        
+        DEBUG_JSX.log("Starting keyframe operation");
+        DEBUG_JSX.log("Selected layers: " + selectedLayers.length);
+        
+        // Your keyframe logic with debug points
+        for (var i = 0; i < keyframes.length; i++) {
+            DEBUG_JSX.log("Processing keyframe " + i + " at time: " + keyframes[i].time);
+        }
+        
+        // Include debug messages in result
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|operation_data|" + debugMessages.join("|");
+        
+    } catch(e) {
+        DEBUG_JSX.error("Keyframe operation failed", e);
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+```
+
+#### **Critical Debug Points for Keyframe Operations**
+1. **Selection validation**: Log how many layers/properties/keyframes are selected
+2. **Time calculations**: Log original times, target times, and offsets
+3. **Property preservation**: Log when temporal/spatial properties are restored
+4. **Recreation process**: Log keyframe deletion and recreation steps
+5. **Selection restoration**: Log deferred selection process
+
+#### **Using the Debug Panel for Keyframes**
+1. **Open debug panel** with 🐛 Debug button before testing
+2. **Select keyframes** you want to manipulate
+3. **Click operation button** (delay +/-, duration +/-, position +/-)
+4. **Watch debug messages** appear in real-time
+5. **Copy debug output** if you need to document issues
+
+#### **Common Keyframe Debug Messages**
+- `"Timeline vs Baseline mode detection: TIMELINE/BASELINE"`
+- `"Moving keyframes with offset: +50ms"`
+- `"Recreating keyframe at time: 1.5s with easing: BEZIER"`
+- `"Selection restored: 5 keyframes selected"`
 
 ### **Property Preservation Checklist**
 - ✅ `keyValue()` - The actual keyframe value

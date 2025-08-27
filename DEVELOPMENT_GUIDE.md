@@ -555,4 +555,157 @@ Should result in:
 
 ---
 
+## 🐛 **DEBUGGING SYSTEM - CRITICAL DEVELOPMENT KNOWLEDGE**
+
+**NEVER use After Effects' built-in debugging tools - they don't work with our plugin!**
+
+### ❌ **What DOESN'T Work (Common Mistake)**
+```javascript
+// WRONG - This goes to ExtendScript console which is not accessible
+$.writeln("Debug message");
+console.log("Debug message"); // JavaScript only, not ExtendScript
+alert("Debug message"); // Intrusive and blocks workflow
+```
+
+### ✅ **What DOES Work - Our Plugin Debug System**
+
+#### **Step 1: Using the Plugin Debug Panel**
+1. **Click the 🐛 Debug button** in the "Device Templates [DEV MODE]" section
+2. **Debug panel opens** as floating overlay in top-right corner
+3. **All debug messages appear here** - this is the ONLY place to see ExtendScript debug output
+
+#### **Step 2: ExtendScript Debug Messages (jsx/main.jsx)**
+```javascript
+// CORRECT - Use our DEBUG_JSX system
+DEBUG_JSX.log("Function called with params: " + param1);
+DEBUG_JSX.error("Something failed", error);
+DEBUG_JSX.info("Status update", data);
+```
+
+#### **Step 3: How Debug Messages Flow to the Panel**
+1. **ExtendScript collects messages** in `DEBUG_JSX.messages[]` array
+2. **Functions return messages** as pipe-separated values in results
+3. **JavaScript extracts and displays** messages in the debug panel
+
+#### **Step 4: Making Functions Debug-Ready**
+```javascript
+// Pattern for new functions that need debugging
+function yourNewFunction(param1, param2) {
+    try {
+        // Clear previous debug messages
+        DEBUG_JSX.clear();
+        
+        DEBUG_JSX.log("yourNewFunction called with: " + param1 + ", " + param2);
+        
+        // Your function logic here
+        // More DEBUG_JSX.log() calls as needed
+        
+        // Include debug messages in result
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|result_data|" + debugMessages.join("|");
+        
+    } catch(e) {
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+```
+
+#### **Step 5: JavaScript Handler Pattern (client/js/main.js)**
+```javascript
+// Pattern for handling debug messages in JavaScript
+csInterface.evalScript('yourNewFunction(param1, param2)', function(result) {
+    console.log('Function result:', result);
+    
+    if (result && result.indexOf('|') !== -1) {
+        var parts = result.split('|');
+        var status = parts[0];
+        
+        // Extract debug messages (everything after main result parts)
+        var debugMessages = [];
+        for (var i = 2; i < parts.length; i++) { // Adjust index based on result format
+            if (parts[i] && parts[i].trim()) {
+                debugMessages.push(parts[i]);
+            }
+        }
+        
+        // Display debug messages in debug panel
+        if (debugMessages.length > 0) {
+            var debugLog = document.getElementById('debug-log');
+            if (debugLog) {
+                debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Your Function Debug:</div>';
+                for (var j = 0; j < debugMessages.length; j++) {
+                    debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                }
+                debugLog.scrollTop = debugLog.scrollHeight;
+            }
+        }
+    }
+});
+```
+
+### **Debug Panel Features**
+- **Clear button** - Clears all debug messages
+- **Copy button** - Copies all debug text to clipboard
+- **Close button** - Closes the debug panel
+- **Auto-scroll** - Always shows latest messages
+- **Selectable text** - You can select and copy specific messages
+
+### **Debug Categories with Color Coding**
+- **🎬 Blue** - General function calls and flow
+- **❌ Red** - Errors and failures
+- **ℹ️ Gray** - Status and info messages
+- **🎯 Custom colors** - Different operations (stagger increment = blue, decrement = orange)
+
+### **Common Debugging Workflows**
+
+#### **Workflow 1: New Feature Development**
+1. Add `DEBUG_JSX.clear()` at function start
+2. Add `DEBUG_JSX.log()` calls throughout function
+3. Return debug messages in result
+4. Update JavaScript handler to display messages
+5. Test with debug panel open
+
+#### **Workflow 2: Bug Investigation**
+1. Open debug panel with 🐛 Debug button
+2. Clear existing messages
+3. Reproduce the bug
+4. Read debug messages to understand what happened
+5. Copy messages if needed for documentation
+
+#### **Workflow 3: Performance Analysis**
+1. Add timing debug messages
+2. Compare before/after values
+3. Track function execution flow
+4. Identify bottlenecks from debug output
+
+### **Why This System is Required**
+- **After Effects has NO accessible ExtendScript console**
+- **CEP panels are isolated** from After Effects' internal debugging
+- **$.writeln() output is hidden** and cannot be accessed by users
+- **Our debug panel bridges the gap** between ExtendScript and browser debugging
+- **Essential for development** - without this, ExtendScript debugging is impossible
+
+### **Troubleshooting Debug Issues**
+1. **No debug messages appearing?**
+   - Check if 🐛 Debug panel is open
+   - Verify function is calling `DEBUG_JSX.clear()` at start
+   - Ensure JavaScript handler is extracting messages correctly
+
+2. **Messages cut off or malformed?**
+   - Check for pipe characters `|` in debug messages (breaks parsing)
+   - Escape special characters in debug strings
+
+3. **Debug panel not responding?**
+   - Close and reopen with 🐛 Debug button
+   - Check browser console for JavaScript errors
+
+### **NEVER FORGET: After Effects ≠ Browser Debugging**
+- **ExtendScript** runs in After Effects context (no browser dev tools)
+- **JavaScript** runs in CEP browser context (has dev tools)
+- **Our debug system** is the bridge between these two contexts
+- **Always use our debug panel** for ExtendScript debugging
+
+---
+
 **Remember: The scaling system took significant effort to perfect. When in doubt, follow the established patterns exactly. They have been battle-tested and proven to work reliably.**

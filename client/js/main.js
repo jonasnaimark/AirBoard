@@ -616,7 +616,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             durationText.style.opacity = '1';
                                         } else if (durationMs === -999) {
                                             durationText.textContent = 'Duration';
-                                            durationText.style.opacity = '0.5';
+                                            durationText.style.opacity = '0.75';
                                         } else {
                                             durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                                             durationText.style.opacity = '1';
@@ -724,7 +724,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                             durationText.style.opacity = '1';
                                         } else if (durationMs === -999) {
                                             durationText.textContent = 'Duration';
-                                            durationText.style.opacity = '0.5';
+                                            durationText.style.opacity = '0.75';
                                         } else {
                                             durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                                             durationText.style.opacity = '1';
@@ -871,22 +871,28 @@ document.addEventListener('DOMContentLoaded', function() {
         var delayText = document.getElementById('delayText');
         var xDistanceText = document.getElementById('xDistanceText');
         var yDistanceText = document.getElementById('yDistanceText');
+        var staggerText = document.getElementById('staggerText');
         
         durationText.textContent = 'Duration';
-        durationText.style.opacity = '0.5';
+        durationText.style.opacity = '0.75';
         delayText.textContent = 'Delay';
-        delayText.style.opacity = '0.5';
+        delayText.style.opacity = '0.75';
         xDistanceText.textContent = 'X distance';
         xDistanceText.style.opacity = '0.5';
         yDistanceText.textContent = 'Y distance';
         yDistanceText.style.opacity = '0.5';
+        staggerText.textContent = 'Stagger';
+        staggerText.style.opacity = '0.5';
+        
+        // Reset cumulative stagger counter
+        cumulativeStaggerFrames = 0;
         
         // Check if CSInterface is available
         if (!csInterface) {
             durationText.textContent = 'Duration';
-            durationText.style.opacity = '0.5';
+            durationText.style.opacity = '0.75';
             delayText.textContent = 'Delay';
-            delayText.style.opacity = '0.5';
+            delayText.style.opacity = '0.75';
             xDistanceText.textContent = 'X distance';
             xDistanceText.style.opacity = '0.5';
             yDistanceText.textContent = 'Y distance';
@@ -930,14 +936,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         // Other errors: reset to default text
                         durationText.textContent = 'Duration';
-                        durationText.style.opacity = '0.5';
+                        durationText.style.opacity = '0.75';
                         delayText.textContent = 'Delay';
-                        delayText.style.opacity = '0.5';
-                        var staggerTextElement = document.getElementById('staggerText');
-                        if (staggerTextElement) {
-                            staggerTextElement.textContent = 'Stagger';
-                            staggerTextElement.style.opacity = '0.5';
-                        }
+                        delayText.style.opacity = '0.75';
+                        resetCumulativeStagger();
                         xDistanceText.textContent = 'X distance';
                         xDistanceText.style.opacity = '0.5';
                         yDistanceText.textContent = 'Y distance';
@@ -997,7 +999,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         } else if (durationMs === -999) {
                             // For layer selections, show default text for duration (not applicable)
                             durationText.textContent = 'Duration';
-                            durationText.style.opacity = '0.5';
+                            durationText.style.opacity = '0.75';
                         } else {
                             durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                             durationText.style.opacity = '1';
@@ -1020,9 +1022,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         var staggerTextElement = document.getElementById('staggerText');
                         if (staggerTextElement) {
                             if (staggerText === "Stagger") {
-                                // Default text - show with dimmed opacity
+                                // Default text - show with dimmed opacity and reset cumulative tracking
                                 staggerTextElement.textContent = staggerText;
                                 staggerTextElement.style.opacity = '0.5';
+                                resetCumulativeStagger();
                             } else if (staggerText === "Multiple") {
                                 // Multiple stagger values - show with prefix
                                 staggerTextElement.textContent = 'Stagger: Multiple';
@@ -1036,18 +1039,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         // Single-property mode: show duration info in duration row
                         delayText.textContent = 'Delay';
-                        delayText.style.opacity = '0.5';
+                        delayText.style.opacity = '0.75';
                         
                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
                         durationText.style.opacity = '1';
                         durationValue.value = durationMs;
                         
                         // Reset stagger to default in single-property mode
-                        var staggerTextElement = document.getElementById('staggerText');
-                        if (staggerTextElement) {
-                            staggerTextElement.textContent = 'Stagger';
-                            staggerTextElement.style.opacity = '0.5';
-                        }
+                        resetCumulativeStagger();
                     }
                     // Don't override opacity - it's already set in the conditional logic above
                     
@@ -1101,9 +1100,9 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Reset all displays to default text  
                 durationText.textContent = 'Duration';
-                durationText.style.opacity = '0.5';
+                durationText.style.opacity = '0.75';
                 delayText.textContent = 'Delay';
-                delayText.style.opacity = '0.5';
+                delayText.style.opacity = '0.75';
                 
                 // Reset X and Y distance displays to default text
                 xDistanceText.textContent = 'X distance';
@@ -1189,6 +1188,309 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         createTooltip(staggerInput, 'Frames');
+    }
+    
+    // Stagger +/- buttons
+    var staggerIncrementBtn = document.getElementById('staggerIncrementBtn');
+    var staggerDecrementBtn = document.getElementById('staggerDecrementBtn');
+    var staggerInputField = document.getElementById('staggerInput');
+    
+    if (staggerIncrementBtn) {
+        staggerIncrementBtn.addEventListener('click', function() {
+            console.log('Stagger increment (+) clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Get stagger frames from input field
+            var staggerFrames = parseFloat(staggerInputField.value) || 3;
+            console.log('Applying +' + staggerFrames + ' frame stagger');
+            
+            staggerIncrementBtn.disabled = true;
+            
+            // Call the ExtendScript function with +1 direction and frame count
+            var script = 'applyStagger(1, ' + staggerFrames + ')';
+            csInterface.evalScript(script, function(result) {
+                console.log('Stagger increment result:', result);
+                
+                staggerIncrementBtn.disabled = false;
+                
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+                    
+                    // Extract debug messages (everything after the main result parts)
+                    var debugMessages = [];
+                    for (var i = 3; i < parts.length; i++) {
+                        if (parts[i] && parts[i].trim()) {
+                            debugMessages.push(parts[i]);
+                        }
+                    }
+                    
+                    // Display debug messages in debug panel if it exists
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Stagger Increment Debug:</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                            }
+                            debugLog.scrollTop = debugLog.scrollHeight;
+                        }
+                    }
+                    
+                    if (status === 'success') {
+                        // Check if stagger was stopped due to negative times
+                        if (parts[1] && parts[1].indexOf('stopped') !== -1) {
+                            console.log('Stagger stopped due to negative times:', parts[1]);
+                            // Don't update cumulative stagger if operation was stopped
+                        } else {
+                            // Check the actual stagger result to see if any movement occurred
+                            // parts[2] contains the effective stagger like "0ms per layer" or "50ms per layer"
+                            var effectiveStaggerText = parts[2] || '';
+                            var effectiveStaggerMatch = effectiveStaggerText.match(/([-\d\.]+)ms per layer/);
+                            var effectiveStaggerValue = effectiveStaggerMatch ? parseFloat(effectiveStaggerMatch[1]) : null;
+                            
+                            console.log('Debug INCREMENT: effectiveStaggerValue=' + effectiveStaggerValue + ' from "' + effectiveStaggerText + '"');
+                            
+                            if (effectiveStaggerValue === 0) {
+                                // No actual stagger exists - reset cumulative counter and display to 0ms
+                                console.log('No actual stagger detected (0ms effective stagger) - resetting display to 0ms');
+                                cumulativeStaggerFrames = 0; // Reset cumulative counter first
+                                updateStaggerDisplay(0, 0, true); // Then update display
+                            } else if (effectiveStaggerValue !== null) {
+                                // Check if smart snapping occurred
+                                var smartSnappingOccurred = debugMessages.some(function(msg) {
+                                    return msg.indexOf('Snapped layers to clean') !== -1 && msg.indexOf('frame increments') !== -1;
+                                });
+                                
+                                if (smartSnappingOccurred) {
+                                    console.log('Smart snapping detected - calculating true effective stagger from final positions');
+                                    
+                                    // Extract final layer times from debug messages to calculate true stagger
+                                    var layerMessages = debugMessages.filter(function(msg) { 
+                                        return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
+                                    });
+                                    
+                                    var finalTimes = [];
+                                    for (var k = 0; k < layerMessages.length; k++) {
+                                        var match = layerMessages[k].match(/to ([\d\.]+)ms/);
+                                        if (match) {
+                                            finalTimes.push(parseFloat(match[1]));
+                                        }
+                                    }
+                                    
+                                    if (finalTimes.length >= 2) {
+                                        // Sort times to get consistent interval calculation
+                                        finalTimes.sort(function(a, b) { return a - b; });
+                                        
+                                        // Calculate actual interval between layers
+                                        var actualInterval = finalTimes[1] - finalTimes[0]; // Assuming uniform intervals
+                                        var actualFrames = Math.round((actualInterval / 1000) * 60); // Convert to frames at 60fps
+                                        
+                                        console.log('Calculated true stagger: ' + actualInterval + 'ms = ' + actualFrames + 'f');
+                                        
+                                        // Set cumulative counter to match the actual result
+                                        cumulativeStaggerFrames = actualFrames;
+                                        updateStaggerDisplay(0, 0, true); // Force display update without changing counter
+                                    } else {
+                                        // Fallback to normal cumulative logic
+                                        updateStaggerDisplay(staggerFrames, 1, true);
+                                    }
+                                } else {
+                                    // Normal cumulative stagger - no snapping occurred
+                                    console.log('Actual movement detected (' + effectiveStaggerValue + 'ms) - updating stagger display');
+                                    updateStaggerDisplay(staggerFrames, 1, true);
+                                }
+                            } else {
+                                // Fallback to old logic if we can't parse the result
+                                console.log('Could not parse effective stagger, using fallback logic');
+                                var layerMessages = debugMessages.filter(function(msg) { 
+                                    return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
+                                });
+                                
+                                var allSameTime = true;
+                                var firstToTime = null;
+                                for (var k = 0; k < layerMessages.length; k++) {
+                                    var match = layerMessages[k].match(/to ([\d\.]+)ms/);
+                                    if (match) {
+                                        var toTime = parseFloat(match[1]);
+                                        if (firstToTime === null) {
+                                            firstToTime = toTime;
+                                        } else if (Math.abs(toTime - firstToTime) > 0.1) {
+                                            allSameTime = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                if (allSameTime && layerMessages.length > 1) {
+                                    resetCumulativeStagger();
+                                } else {
+                                    updateStaggerDisplay(staggerFrames, 1, true);
+                                }
+                            }
+                        }
+                    } else if (status === 'error') {
+                        console.log('Stagger error:', parts[1]);
+                        // Don't show errors in stagger display - errors should only be in debug panel
+                    }
+                } else {
+                    console.log('Invalid stagger result:', result);
+                }
+            });
+        });
+    }
+    
+    if (staggerDecrementBtn) {
+        staggerDecrementBtn.addEventListener('click', function() {
+            console.log('Stagger decrement (-) clicked');
+            
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+            
+            // Get stagger frames from input field
+            var staggerFrames = parseFloat(staggerInputField.value) || 3;
+            console.log('Applying -' + staggerFrames + ' frame stagger');
+            
+            staggerDecrementBtn.disabled = true;
+            
+            // Call the ExtendScript function with -1 direction and frame count
+            var script = 'applyStagger(-1, ' + staggerFrames + ')';
+            csInterface.evalScript(script, function(result) {
+                console.log('Stagger decrement result:', result);
+                
+                staggerDecrementBtn.disabled = false;
+                
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+                    
+                    // Extract debug messages (everything after the main result parts)
+                    var debugMessages = [];
+                    for (var i = 3; i < parts.length; i++) {
+                        if (parts[i] && parts[i].trim()) {
+                            debugMessages.push(parts[i]);
+                        }
+                    }
+                    
+                    // Display debug messages in debug panel if it exists
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #ff9a4a; font-weight: bold;">🎬 Stagger Decrement Debug:</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                            }
+                            debugLog.scrollTop = debugLog.scrollHeight;
+                        }
+                    }
+                    
+                    if (status === 'success') {
+                        // Check if stagger was stopped due to negative times
+                        if (parts[1] && parts[1].indexOf('stopped') !== -1) {
+                            console.log('Stagger stopped due to negative times:', parts[1]);
+                            // Don't update cumulative stagger if operation was stopped
+                        } else {
+                            // Check the actual stagger result to see if any movement occurred
+                            // parts[2] contains the effective stagger like "0ms per layer" or "-50ms per layer"
+                            var effectiveStaggerText = parts[2] || '';
+                            var effectiveStaggerMatch = effectiveStaggerText.match(/([-\d\.]+)ms per layer/);
+                            var effectiveStaggerValue = effectiveStaggerMatch ? parseFloat(effectiveStaggerMatch[1]) : null;
+                            
+                            console.log('Debug DECREMENT: effectiveStaggerValue=' + effectiveStaggerValue + ' from "' + effectiveStaggerText + '"');
+                            
+                            if (effectiveStaggerValue === 0) {
+                                // No actual stagger exists - reset cumulative counter and display to 0ms
+                                console.log('No actual stagger detected (0ms effective stagger) - resetting display to 0ms');
+                                cumulativeStaggerFrames = 0; // Reset cumulative counter first
+                                updateStaggerDisplay(0, 0, true); // Then update display
+                            } else if (effectiveStaggerValue !== null) {
+                                // Check if smart snapping occurred
+                                var smartSnappingOccurred = debugMessages.some(function(msg) {
+                                    return msg.indexOf('Snapped layers to clean') !== -1 && msg.indexOf('frame increments') !== -1;
+                                });
+                                
+                                if (smartSnappingOccurred) {
+                                    console.log('Smart snapping detected - calculating true effective stagger from final positions');
+                                    
+                                    // Extract final layer times from debug messages to calculate true stagger
+                                    var layerMessages = debugMessages.filter(function(msg) { 
+                                        return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
+                                    });
+                                    
+                                    var finalTimes = [];
+                                    for (var k = 0; k < layerMessages.length; k++) {
+                                        var match = layerMessages[k].match(/to ([\d\.]+)ms/);
+                                        if (match) {
+                                            finalTimes.push(parseFloat(match[1]));
+                                        }
+                                    }
+                                    
+                                    if (finalTimes.length >= 2) {
+                                        // Sort times to get consistent interval calculation
+                                        finalTimes.sort(function(a, b) { return a - b; });
+                                        
+                                        // Calculate actual interval between layers
+                                        var actualInterval = finalTimes[1] - finalTimes[0]; // Assuming uniform intervals
+                                        var actualFrames = Math.round((actualInterval / 1000) * 60); // Convert to frames at 60fps
+                                        
+                                        console.log('Calculated true stagger: ' + actualInterval + 'ms = ' + actualFrames + 'f');
+                                        
+                                        // Set cumulative counter to match the actual result
+                                        cumulativeStaggerFrames = actualFrames;
+                                        updateStaggerDisplay(0, 0, true); // Force display update without changing counter
+                                    } else {
+                                        // Fallback to normal cumulative logic
+                                        updateStaggerDisplay(staggerFrames, -1, true);
+                                    }
+                                } else {
+                                    // Normal cumulative stagger - no snapping occurred
+                                    console.log('Actual movement detected (' + effectiveStaggerValue + 'ms) - updating stagger display');
+                                    updateStaggerDisplay(staggerFrames, -1, true);
+                                }
+                            } else {
+                                // Fallback to old logic if we can't parse the result
+                                console.log('Could not parse effective stagger, using fallback logic');
+                                var layerMessages = debugMessages.filter(function(msg) { 
+                                    return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
+                                });
+                                
+                                var allSameTime = true;
+                                var firstToTime = null;
+                                for (var k = 0; k < layerMessages.length; k++) {
+                                    var match = layerMessages[k].match(/to ([\d\.]+)ms/);
+                                    if (match) {
+                                        var toTime = parseFloat(match[1]);
+                                        if (firstToTime === null) {
+                                            firstToTime = toTime;
+                                        } else if (Math.abs(toTime - firstToTime) > 0.1) {
+                                            allSameTime = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                if (allSameTime && layerMessages.length > 1) {
+                                    resetCumulativeStagger();
+                                } else {
+                                    updateStaggerDisplay(staggerFrames, -1, true);
+                                }
+                            }
+                        }
+                    } else if (status === 'error') {
+                        console.log('Stagger error:', parts[1]);
+                        // Don't show errors in stagger display - errors should only be in debug panel
+                    }
+                } else {
+                    console.log('Invalid stagger result:', result);
+                }
+            });
+        });
     }
     
     // X Distance +/- buttons
@@ -1289,6 +1591,48 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateDistanceDisplay('y', result);
             });
         });
+    }
+    
+    // Global variable to track cumulative stagger amount
+    var cumulativeStaggerFrames = 0;
+    
+    // Helper function to update stagger display after staggering
+    function updateStaggerDisplay(appliedStaggerFrames, direction, isSuccess) {
+        var staggerText = document.getElementById('staggerText');
+        if (!staggerText) return;
+        
+        if (isSuccess) {
+            // Update cumulative stagger (direction: 1 for +, -1 for -)
+            cumulativeStaggerFrames += appliedStaggerFrames * direction;
+            
+            if (cumulativeStaggerFrames !== 0) {
+                // Calculate milliseconds based on 60fps (or could get actual frame rate)
+                // Using same conversion as the ExtendScript: frames/frameRate * 1000
+                // For simplicity, assume 60fps: 1 frame = 16.67ms, so 3 frames = 50ms
+                var staggerMs = Math.round((cumulativeStaggerFrames / 60) * 1000);
+                
+                // Show the cumulative stagger amount (handles both positive and negative)
+                staggerText.textContent = 'Stagger: ' + staggerMs + 'ms / ' + cumulativeStaggerFrames + 'f';
+                staggerText.style.opacity = '1';
+                
+                console.log('Updated stagger display: cumulative ' + cumulativeStaggerFrames + ' frames = ' + staggerMs + 'ms');
+            } else {
+                // Reset to zero display when exactly zero
+                staggerText.textContent = 'Stagger: 0ms / 0f';
+                staggerText.style.opacity = '1';
+                cumulativeStaggerFrames = 0; // Ensure it's exactly zero
+            }
+        }
+    }
+    
+    // Function to reset cumulative stagger (called when reading keyframes detects no stagger)
+    function resetCumulativeStagger() {
+        cumulativeStaggerFrames = 0;
+        var staggerText = document.getElementById('staggerText');
+        if (staggerText) {
+            staggerText.textContent = 'Stagger: 0ms / 0f';
+            staggerText.style.opacity = '1';
+        }
     }
     
     // Helper function to update distance display after nudging
