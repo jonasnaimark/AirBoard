@@ -379,7 +379,9 @@ function readKeyframesSmart() {
             // Calculate stagger for keyframes (cross-property mode)
             var staggerMs = 0, staggerFrames = 0, staggerText = "Stagger";
             try {
+                DEBUG_JSX.log("About to call calculateStagger with " + propertyTimes.length + " property times");
                 staggerText = calculateStagger(propertyTimes, frameRate, true); // true = keyframe mode
+                DEBUG_JSX.log("calculateStagger returned: " + staggerText);
                 if (staggerText.indexOf("ms") > 0) {
                     // Extract numeric values for backward compatibility
                     var parts = staggerText.split(" / ");
@@ -490,24 +492,37 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         var layerTimes = [];
         
         if (isKeyframeMode) {
-            // Group keyframes by layer, take first keyframe time per layer
+            // Group all keyframe times by layer to analyze timing patterns
             var layerGroups = {};
             for (var i = 0; i < timingData.length; i++) {
                 var item = timingData[i];
                 var layerIndex = item.layer.index;
                 
-                if (!layerGroups[layerIndex] || item.time < layerGroups[layerIndex].time) {
+                if (!layerGroups[layerIndex]) {
                     layerGroups[layerIndex] = {
-                        time: item.time,
+                        times: [],
                         index: layerIndex,
                         name: item.layer.name
                     };
                 }
+                
+                // Collect all keyframe times for this layer (not just earliest)
+                var timeMs = Math.round(item.time * 1000);
+                if (layerGroups[layerIndex].times.indexOf(timeMs) === -1) {
+                    layerGroups[layerIndex].times.push(timeMs);
+                }
             }
             
-            // Convert to array
+            // Convert to array and use earliest time per layer for stagger calculation
             for (var layerIndex in layerGroups) {
-                layerTimes.push(layerGroups[layerIndex]);
+                var group = layerGroups[layerIndex];
+                group.times.sort(function(a, b) { return a - b; }); // Sort times
+                layerTimes.push({
+                    time: group.times[0] / 1000, // Use earliest time in seconds
+                    index: group.index,
+                    name: group.name,
+                    allTimes: group.times // Keep all times for pattern analysis
+                });
             }
         } else {
             // Layer mode - use start times directly
@@ -525,10 +540,16 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
             return "Stagger"; // Default text for single layer
         }
         
-        // Sort by layer index (bottom to top = highest index to lowest index)
-        layerTimes.sort(function(a, b) { return b.index - a.index; });
+        // Sort by time for keyframe mode, or by layer index for layer mode
+        if (isKeyframeMode) {
+            // For keyframes, sort by time to detect stagger pattern correctly
+            layerTimes.sort(function(a, b) { return a.time - b.time; });
+        } else {
+            // For layers, sort by layer index (bottom to top = highest index to lowest index)
+            layerTimes.sort(function(a, b) { return b.index - a.index; });
+        }
         
-        // Calculate time differences between consecutive layers (bottom to top)
+        // Calculate time differences between consecutive items
         var staggers = [];
         for (var i = 1; i < layerTimes.length; i++) {
             var staggerSeconds = layerTimes[i].time - layerTimes[i-1].time;
@@ -552,6 +573,26 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         
         if (!allSame) {
             return "Multiple"; // Different stagger values
+        }
+        
+        // Additional check for keyframe mode: if layers have different timing patterns, show "Multiple"
+        // This catches cases where some layers have keyframes at multiple times while others don't
+        if (isKeyframeMode) {
+            var hasInconsistentPatterns = false;
+            
+            // Check if layers have different numbers of unique keyframe times
+            var timeCounts = [];
+            for (var i = 0; i < layerTimes.length; i++) {
+                timeCounts.push(layerTimes[i].allTimes.length);
+            }
+            
+            // If layers have different numbers of keyframes times, it's inconsistent
+            var firstCount = timeCounts[0];
+            for (var i = 1; i < timeCounts.length; i++) {
+                if (timeCounts[i] !== firstCount) {
+                    return "Multiple"; // Layers have different timing complexity
+                }
+            }
         }
         
         if (firstStagger === 0) {
@@ -3145,12 +3186,12 @@ function calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolution
 // ================================
 
 // Helper function to snap inconsistent staggers to clean multiples of the input value (for keyframes)
-function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate) {
+function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction) {
     try {
         DEBUG_JSX.log("Smart keyframe snapping: checking if staggers need snapping to " + staggerFrames + " frame increments");
         
         var staggerSeconds = staggerFrames / frameRate; // Convert to seconds
-        var tolerance = 0.005; // 5ms tolerance (more forgiving)
+        var tolerance = Math.min(0.005, staggerSeconds * 0.15); // 5ms max or 15% of target stagger, whichever is smaller
         
         if (layerGroups.length < 2) {
             DEBUG_JSX.log("Not enough layer groups for keyframe stagger analysis");
@@ -3212,21 +3253,46 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate)
         }
         DEBUG_JSX.log("Keyframe intervals (seconds): " + intervalsStr);
         
-        // Check if intervals are clean multiples of the target stagger (allows cumulative stagger patterns)
-        var isCleanPattern = true;
+        // Detect the current stagger direction from existing intervals
+        var hasPositiveIntervals = 0;
+        var hasNegativeIntervals = 0;
         for (var i = 0; i < actualIntervals.length; i++) {
-            var interval = actualIntervals[i];
+            if (actualIntervals[i] > 0.001) hasPositiveIntervals++;
+            else if (actualIntervals[i] < -0.001) hasNegativeIntervals++;
+        }
+        
+        // Determine current pattern direction
+        var currentDirection;
+        if (hasNegativeIntervals > hasPositiveIntervals) {
+            currentDirection = -1; // Clear negative pattern
+        } else if (hasPositiveIntervals > hasNegativeIntervals) {
+            currentDirection = 1;  // Clear positive pattern
+        } else {
+            // No clear existing direction (all intervals ~0) - use requested direction
+            currentDirection = direction;
+        }
+        DEBUG_JSX.log("Interval analysis: " + hasPositiveIntervals + " positive, " + hasNegativeIntervals + " negative, detected direction: " + currentDirection + " (requested: " + direction + ")");
+        
+        // Check if intervals are already uniform (at any consistent value)
+        var isCleanPattern = true;
+        if (actualIntervals.length > 0) {
+            // Use the first interval as the reference for uniformity check
+            var referenceInterval = actualIntervals[0];
             
-            // Check if this interval is a clean multiple of the target stagger
-            var multiple = Math.round(interval / staggerSeconds);
-            var nearestMultiple = multiple * staggerSeconds;
-            var difference = Math.abs(interval - nearestMultiple);
+            for (var i = 0; i < actualIntervals.length; i++) {
+                var interval = actualIntervals[i];
+                var difference = Math.abs(interval - referenceInterval);
+                
+                DEBUG_JSX.log("Keyframe interval " + i + ": " + (interval * 1000).toFixed(1) + "ms, reference: " + (referenceInterval * 1000).toFixed(1) + "ms, diff: " + (difference * 1000).toFixed(1) + "ms");
+                
+                if (difference > tolerance) {
+                    isCleanPattern = false;
+                    DEBUG_JSX.log("Keyframe interval " + i + " is not uniform (" + (difference * 1000).toFixed(1) + "ms off) - needs snapping");
+                }
+            }
             
-            DEBUG_JSX.log("Keyframe interval " + i + ": " + (interval * 1000).toFixed(1) + "ms, nearest multiple (" + multiple + "×): " + (nearestMultiple * 1000).toFixed(1) + "ms, diff: " + (difference * 1000).toFixed(1) + "ms");
-            
-            if (difference > tolerance) {
-                isCleanPattern = false;
-                DEBUG_JSX.log("Keyframe interval " + i + " is not a clean multiple - needs snapping");
+            if (isCleanPattern) {
+                DEBUG_JSX.log("Keyframe pattern is already uniform at " + (referenceInterval * 1000).toFixed(1) + "ms intervals - no snapping needed");
             }
         }
         
@@ -3235,153 +3301,219 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate)
             return false;
         }
         
-        // Pattern is inconsistent - calculate snap targets that preserve the baseline
-        DEBUG_JSX.log("Keyframe pattern is inconsistent - snapping to clean multiples");
+        // Pattern is inconsistent - calculate offsets to snap to uniform staggers (same as uniform stagger logic)
+        DEBUG_JSX.log("Keyframe pattern is inconsistent - snapping to clean uniform staggers");
         
         var baselineTime = layerGroupTimes[0].time; // Baseline layer group time
-        var snapPlan = [];
         
-        // Calculate snap plan for each layer group
+        // Calculate the offset each layer needs to achieve uniform stagger (same logic as uniform staggers)
         for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
             var layerGroup = layerGroups[layerIdx];
-            var targetTime = baselineTime + (layerIdx * staggerSeconds);
+            var layerGroupTime = layerGroupTimes[layerIdx];
+            var currentLayerTime = layerGroupTime.time;
             
-            // Add all keyframes in this layer group to snap plan
+            // Calculate what this layer's time SHOULD be for uniform stagger (with detected current direction)
+            var uniformTargetTime = baselineTime + (layerIdx * currentDirection * staggerSeconds);
+            
+            // Calculate the OFFSET needed to get from current time to uniform target
+            var snapOffset = uniformTargetTime - currentLayerTime;
+            
+            DEBUG_JSX.log("Layer " + layerGroup.layer.index + ": current=" + (currentLayerTime * 1000).toFixed(1) + "ms, target=" + (uniformTargetTime * 1000).toFixed(1) + "ms, offset=" + (snapOffset * 1000).toFixed(1) + "ms");
+            
+            // Store the offset for this layer group (will be applied to ALL keyframes in the layer)
+            layerGroup.snapOffset = snapOffset;
+        }
+        
+        // Apply snapping using keyframe recreation (same pattern as uniform staggers)
+        var totalKeyframesToSnap = 0;
+        for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+            var layerGroup = layerGroups[layerIdx];
+            for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                totalKeyframesToSnap += layerGroup.keyframes[propIdx].selectedKeys.length;
+            }
+        }
+        
+        DEBUG_JSX.log("Snapping " + totalKeyframesToSnap + " keyframes using offset-based approach");
+        
+        // Process each layer group and apply its calculated snap offset (same as uniform staggers)
+        var propertyDataForSelection = [];
+        
+        for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+            var layerGroup = layerGroups[layerIdx];
+            var snapOffset = layerGroup.snapOffset;
+            
+            DEBUG_JSX.log("Processing layer " + layerGroup.layer.index + " with snap offset: " + (snapOffset * 1000).toFixed(1) + "ms");
+            
+            // Process all properties in this layer
             for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
                 var propData = layerGroup.keyframes[propIdx];
                 var prop = propData.property;
                 var selectedKeys = propData.selectedKeys;
                 
+                DEBUG_JSX.log("Processing " + selectedKeys.length + " keyframes on property " + prop.name);
+                
+                var keyframesToMove = [];
+                
+                // Collect keyframe data for this property (same pattern as uniform staggers)
                 for (var k = 0; k < selectedKeys.length; k++) {
                     var keyIndex = selectedKeys[k];
-                    var currentTime = prop.keyTime(keyIndex);
+                    var oldTime = prop.keyTime(keyIndex);
+                    var newTime = oldTime + snapOffset; // ADD offset to current time (same as uniform staggers)
+                    var finalTime = Math.max(0, newTime); // Clamp negatives to zero
                     
-                    snapPlan.push({
+                    DEBUG_JSX.log("Keyframe " + keyIndex + ": " + (oldTime * 1000).toFixed(1) + "ms + " + (snapOffset * 1000).toFixed(1) + "ms = " + (finalTime * 1000).toFixed(1) + "ms");
+                    
+                    var keyData = {
                         property: prop,
-                        keyIndex: keyIndex,
-                        currentTime: currentTime,
-                        targetTime: targetTime,
-                        layerIndex: layerGroup.layer.index
-                    });
-                }
-            }
-        }
-        
-        // Apply snapping using keyframe recreation
-        DEBUG_JSX.log("Snapping " + snapPlan.length + " keyframes to clean pattern");
-        
-        // Group by property to handle recreation efficiently
-        var propSnapGroups = {};
-        for (var i = 0; i < snapPlan.length; i++) {
-            var snapItem = snapPlan[i];
-            var propId = snapItem.property.propertyIndex || snapItem.property.name + "_" + snapItem.layerIndex;
-            
-            if (!propSnapGroups[propId]) {
-                propSnapGroups[propId] = {
-                    property: snapItem.property,
-                    snapItems: []
-                };
-            }
-            propSnapGroups[propId].snapItems.push(snapItem);
-        }
-        
-        // Apply snapping per property
-        for (var propId in propSnapGroups) {
-            var propGroup = propSnapGroups[propId];
-            var prop = propGroup.property;
-            var snapItems = propGroup.snapItems;
-            
-            DEBUG_JSX.log("Snapping " + snapItems.length + " keyframes on property " + prop.name);
-            
-            // Work with current selected keyframes directly (fresh data)
-            var selectedKeys = [];
-            for (var k = 1; k <= prop.numKeys; k++) {
-                if (prop.keySelected(k)) {
-                    selectedKeys.push(k);
-                }
-            }
-            
-            if (selectedKeys.length === 0) {
-                DEBUG_JSX.log("No selected keyframes found on " + prop.name + " - skipping");
-                continue;
-            }
-            
-            // Map current keyframes to target times based on layer position  
-            var keyframeData = [];
-            for (var k = 0; k < selectedKeys.length; k++) {
-                var keyIndex = selectedKeys[k];
-                var currentTime = prop.keyTime(keyIndex);
-                
-                // Find which snap item this keyframe corresponds to
-                var targetTime = null;
-                for (var s = 0; s < snapItems.length; s++) {
-                    if (Math.abs(snapItems[s].currentTime - currentTime) < 0.001) {
-                        targetTime = snapItems[s].targetTime;
-                        break;
+                        oldIndex: keyIndex,
+                        time: oldTime,
+                        newTime: finalTime,
+                        value: prop.keyValue(keyIndex),
+                        inInterp: prop.keyInInterpolationType(keyIndex),
+                        outInterp: prop.keyOutInterpolationType(keyIndex),
+                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                    };
+                    
+                    // Only collect temporal ease if bezier interpolation (same as uniform staggers)
+                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        } catch(e) {
+                            // Temporal ease might not be available for some properties
+                        }
                     }
+                    
+                    // Handle spatial properties if applicable (Position, etc.) - same as uniform staggers
+                    if (prop.isSpatial) {
+                        keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                        keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                        keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                        keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                    }
+                    
+                    keyframesToMove.push(keyData);
                 }
                 
-                if (targetTime === null) {
-                    DEBUG_JSX.log("Could not find target time for keyframe at " + (currentTime * 1000) + "ms");
-                    continue;
-                }
-                
-                keyframeData.push({
-                    oldIndex: keyIndex,
-                    newTime: targetTime,
-                    value: prop.keyValue(keyIndex),
-                    inInterp: prop.keyInInterpolationType(keyIndex),
-                    outInterp: prop.keyOutInterpolationType(keyIndex),
-                    temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                    temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
-                    inEase: prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER ? prop.keyInTemporalEase(keyIndex) : null,
-                    outEase: prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER ? prop.keyOutTemporalEase(keyIndex) : null,
-                    spatialContinuous: prop.isSpatial ? prop.keySpatialContinuous(keyIndex) : null,
-                    spatialAutoBezier: prop.isSpatial ? prop.keySpatialAutoBezier(keyIndex) : null,
-                    inTangent: prop.isSpatial ? prop.keyInSpatialTangent(keyIndex) : null,
-                    outTangent: prop.isSpatial ? prop.keyOutSpatialTangent(keyIndex) : null
+                // Store property info for batch recreation (same as delay nudging)
+                propertyDataForSelection.push({
+                    property: prop,
+                    propName: propData.propertyName || prop.name,
+                    keyframesToMove: keyframesToMove
                 });
             }
+        }
+        
+        DEBUG_JSX.log("Data collection complete: Prepared " + propertyDataForSelection.length + " properties for snapping");
+        
+        // PHASE 2: Remove all old keyframes (group by property, reverse order - same as delay nudging)
+        for (var i = 0; i < propertyDataForSelection.length; i++) {
+            var propInfo = propertyDataForSelection[i];
+            var prop = propInfo.property;
+            var keyframesToMove = propInfo.keyframesToMove;
             
-            // Remove old keyframes (in reverse order to maintain indices)
-            for (var i = keyframeData.length - 1; i >= 0; i--) {
-                prop.removeKey(keyframeData[i].oldIndex);
+            DEBUG_JSX.log("Phase 2: Removing " + keyframesToMove.length + " old keyframes from " + propInfo.propName);
+            
+            // Remove old keyframes (in reverse order to maintain indices - same as delay nudging)
+            keyframesToMove.sort(function(a, b) { return b.oldIndex - a.oldIndex; });
+            for (var k = 0; k < keyframesToMove.length; k++) {
+                prop.removeKey(keyframesToMove[k].oldIndex);
             }
+        }
+        
+        // PHASE 3: Recreate all keyframes at snapped times and collect new indices
+        for (var i = 0; i < propertyDataForSelection.length; i++) {
+            var propInfo = propertyDataForSelection[i];
+            var prop = propInfo.property;
+            var keyframesToMove = propInfo.keyframesToMove;
             
-            // Recreate with snapped times
-            for (var i = 0; i < keyframeData.length; i++) {
-                var data = keyframeData[i];
+            DEBUG_JSX.log("Phase 3: Recreating " + keyframesToMove.length + " keyframes on " + propInfo.propName);
+            
+            // Add new keyframes at snapped times and collect new indices
+            var newSelIndices = [];
+            // Sort keyframes by time to ensure they're added in chronological order (same as delay nudging)
+            keyframesToMove.sort(function(a, b) { return a.newTime - b.newTime; });
+            
+            for (var k = 0; k < keyframesToMove.length; k++) {
+                var data = keyframesToMove[k];
                 var newIdx = prop.addKey(data.newTime);
-                
                 prop.setValueAtKey(newIdx, data.value);
                 prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                 
-                if (data.inEase !== null && data.outEase !== null) {
+                // Apply easing if it exists (same as delay nudging)
+                if (data.inEase !== undefined && data.outEase !== undefined) {
                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                 }
+                
                 prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                 prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
                 
-                if (data.spatialContinuous !== null) {
+                // Apply spatial properties if they exist (Position, etc.) - same as delay nudging
+                if (data.spatialContinuous !== undefined) {
                     prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                     prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                     prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
                 }
                 
-                // Re-select immediately
-                try {
-                    prop.setSelectedAtKey(newIdx, true);
-                } catch(selError) {
-                    DEBUG_JSX.log("Keyframe snap selection failed: " + selError.toString());
+                newSelIndices.push(newIdx);
+                DEBUG_JSX.log("Added keyframe at " + (data.newTime * 1000).toFixed(1) + "ms, got index " + newIdx);
+            }
+            
+            // Store new indices for deferred selection (same as delay nudging)
+            propInfo.newSelIndices = newSelIndices;
+        }
+        
+        // PHASE 4: DEFERRED SELECTION - Deselect all, then select new indices at the very end (same as delay nudging)
+        DEBUG_JSX.log("Phase 4: Applying deferred selection to all properties");
+        for (var i = 0; i < propertyDataForSelection.length; i++) {
+            var propInfo = propertyDataForSelection[i];
+            var prop = propInfo.property;
+            
+            // First deselect all keyframes on this property (same as delay nudging)
+            for (var j = 1; j <= prop.numKeys; j++) {
+                prop.setSelectedAtKey(j, false);
+            }
+            
+            // Then select our new keyframes (same as delay nudging)
+            for (var k = 0; k < propInfo.newSelIndices.length; k++) {
+                var idx = propInfo.newSelIndices[k];
+                prop.setSelectedAtKey(idx, true);
+                DEBUG_JSX.log("Selected keyframe at index " + idx + " on " + propInfo.propName);
+            }
+        }
+        
+        // CRITICAL: Update layerGroups with new keyframe indices for subsequent stagger application
+        DEBUG_JSX.log("Updating layerGroups data structure with new keyframe indices");
+        
+        for (var i = 0; i < propertyDataForSelection.length; i++) {
+            var propInfo = propertyDataForSelection[i];
+            var prop = propInfo.property;
+            var newSelIndices = propInfo.newSelIndices;
+            
+            // Find and update the corresponding propData in layerGroups
+            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                var layerGroup = layerGroups[layerIdx];
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    if (propData.property === prop) {
+                        // Update selectedKeys with new indices
+                        propData.selectedKeys = newSelIndices.slice(); // Copy array
+                        DEBUG_JSX.log("Updated layerGroups: " + prop.name + " selectedKeys = [" + newSelIndices.join(", ") + "]");
+                        break;
+                    }
                 }
             }
         }
         
-        return true; // Snapping was applied
+        // Return both success status and the actual applied stagger interval in milliseconds
+        var actualStaggerMs = currentDirection * staggerSeconds * 1000;
+        DEBUG_JSX.log("Smart snapping applied uniform stagger of " + actualStaggerMs.toFixed(1) + "ms");
+        return {success: true, staggerMs: actualStaggerMs};
         
     } catch(e) {
         DEBUG_JSX.log("Smart keyframe stagger snapping failed: " + e.toString());
-        return false;
+        return {success: false, staggerMs: 0};
     }
 }
 
@@ -3486,12 +3618,15 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate) {
             layerTimes[i].layer.startTime = targetTime;
         }
         
-        return true; // Snapping was applied
+        // Return both success status and the actual applied stagger interval in milliseconds
+        var actualStaggerMs = staggerSeconds * 1000; // Layer snapping always uses positive direction
+        DEBUG_JSX.log("Smart snapping applied uniform stagger of " + actualStaggerMs.toFixed(1) + "ms");
+        return {success: true, staggerMs: actualStaggerMs};
         
     } catch(e) {
         DEBUG_JSX.log("Smart stagger snapping failed: " + e.toString());
         DEBUG_JSX.log("Error details: " + e.message + " at line " + (e.line || "unknown"));
-        return false;
+        return {success: false, staggerMs: 0};
     }
 }
 
@@ -3619,9 +3754,13 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
         layerGroups.sort(function(a, b) { return b.layerIndex - a.layerIndex; });
         
         // First: Snap inconsistent staggers to clean multiples of input value
-        var wasSnapped = snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate);
-        if (wasSnapped) {
+        var snapResult = snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction);
+        if (snapResult.success) {
             DEBUG_JSX.log("Snapped keyframes to clean " + staggerFrames + " frame increments");
+            
+            // Smart snapping already created the correct uniform pattern - no additional stagger needed
+            var successMessage = "Applied stagger to " + layerGroups.length + " layers|" + snapResult.staggerMs + "ms per layer";
+            return "success|" + successMessage;
         }
         
         DEBUG_JSX.log("Keyframe stagger - applying cumulative stagger: " + (direction * staggerMs) + "ms per layer position");
@@ -3641,8 +3780,10 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
                     var oldTime = prop.keyTime(keyIndex);
                     var newTime = oldTime + staggerOffset;
                     
-                    if (newTime < 0) {
-                        DEBUG_JSX.log("Keyframe stagger operation aborted - " + propData.propertyName + " keyframe would go to " + (newTime * 1000) + "ms (negative)");
+                    // Allow small negative values (floating point errors) that are essentially zero
+                    var newTimeMs = newTime * 1000;
+                    if (newTimeMs < -1) { // 1ms tolerance for floating point errors
+                        DEBUG_JSX.log("Keyframe stagger operation aborted - " + propData.propertyName + " keyframe would go to " + newTimeMs + "ms (significantly negative)");
                         return "success|Stagger stopped to prevent negative times|0ms per layer";
                     }
                 }
@@ -3674,7 +3815,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
                     var keyIndex = selectedKeys[k];
                     var oldTime = prop.keyTime(keyIndex);
                     var newTime = oldTime + staggerOffset; // Use cumulative offset
-                    var finalTime = newTime; // No individual clamping needed since we checked above
+                    var finalTime = Math.max(0, newTime); // Clamp small negatives to zero
                     
                     // Track if this keyframe actually moved
                     if (Math.abs(finalTime - oldTime) > 0.001) {
@@ -3806,22 +3947,30 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
         
         // First: Snap inconsistent staggers to clean multiples of input value
         DEBUG_JSX.log("About to call snapStaggersToInputValue with " + layerArray.length + " layers and " + staggerFrames + " frames");
-        var wasSnapped = snapStaggersToInputValue(layerArray, staggerFrames, frameRate);
-        DEBUG_JSX.log("snapStaggersToInputValue returned: " + wasSnapped);
-        if (wasSnapped) {
+        var snapResult = snapStaggersToInputValue(layerArray, staggerFrames, frameRate);
+        DEBUG_JSX.log("snapStaggersToInputValue returned: " + JSON.stringify(snapResult));
+        if (snapResult.success) {
             DEBUG_JSX.log("Snapped layers to clean " + staggerFrames + " frame increments");
+            
+            // Smart snapping already created the correct uniform pattern - no additional stagger needed
+            var actualStagger = direction * snapResult.staggerMs; // Apply direction to final display
+            var successMessage = "Applied stagger to " + layerArray.length + " layers|" + actualStagger + "ms per layer";
+            return "success|" + successMessage;
         }
         
         DEBUG_JSX.log("Layer stagger - applying cumulative stagger: " + (direction * staggerMs) + "ms per layer position");
         
-        // Pre-check: if ANY layer would go negative, abort entire operation
+        // Pre-check: if ANY layer would go significantly negative, abort entire operation
+        // Allow small negative values (floating point errors) that are essentially zero
+        var negativeToleranceMs = 1; // Allow up to 1ms tolerance for floating point errors
         for (var preCheckIdx = 0; preCheckIdx < layerArray.length; preCheckIdx++) {
             var layer = layerArray[preCheckIdx];
             var staggerOffset = preCheckIdx * direction * staggerMs / 1000; // in seconds
             var newStartTime = layer.startTime + staggerOffset;
+            var newStartTimeMs = newStartTime * 1000;
             
-            if (newStartTime < 0) {
-                DEBUG_JSX.log("Stagger operation aborted - Layer " + layer.index + " would go to " + (newStartTime * 1000) + "ms (negative)");
+            if (newStartTimeMs < -negativeToleranceMs) {
+                DEBUG_JSX.log("Stagger operation aborted - Layer " + layer.index + " would go to " + newStartTimeMs + "ms (significantly negative)");
                 return "success|Stagger stopped to prevent negative times|0ms per layer";
             }
         }
@@ -3845,8 +3994,8 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
                 layersWithActualMovement++;
             }
             
-            // Set final start time (no clamping needed since pre-checked)
-            layer.startTime = newStartTime;
+            // Set final start time, clamping small negatives to zero
+            layer.startTime = Math.max(0, newStartTime);
             processedLayers++;
         }
         
