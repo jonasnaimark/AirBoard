@@ -469,6 +469,7 @@ if (propertyNames.length === 1) {
 5. **Provide proper error handling**: Try-catch with undo group management
 6. **Test across different property types**: Position (spatial), Opacity (temporal), Scale, Rotation
 7. **ALWAYS implement debug logging**: Use our DEBUG_JSX system for development
+8. **⚠️ DO NOT build ZXP automatically** - Only run `./build-latest.sh` when explicitly requested by user
 
 ### **Debugging Keyframe Operations**
 

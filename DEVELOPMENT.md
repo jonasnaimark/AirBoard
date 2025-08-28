@@ -28,6 +28,11 @@
 ./build-latest.sh
 ```
 
+**⚠️ IMPORTANT: Only build ZXP when explicitly requested by user**
+- **DO NOT** run `./build-latest.sh` automatically during development
+- **ONLY** build when user specifically asks to create a ZXP for distribution
+- Use dev-sync.sh for testing - no ZXP building needed
+
 **Production Build Process:**
 - ✅ **Automatically removes** `[DEV MODE]` markers from HTML
 - ✅ **Removes debug button** and debugging functionality  
