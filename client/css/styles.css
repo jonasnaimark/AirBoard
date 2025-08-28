@@ -22,7 +22,7 @@ body {
 /* Section container styling - creates visual containers around sections */
 .section-container {
     background-color: #272727;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 6px;
     padding: 12px 10px;
     margin-bottom: 10px;
@@ -31,7 +31,7 @@ body {
 }
 
 .section-container:hover {
-    border-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.20);
 }
 
 .section-container.moving {
@@ -89,7 +89,7 @@ body {
 
 /* Spaced subsection titles (Effects, Shimmer) - extra top margin */
 .subsection-title.spaced {
-    margin-top: 10px; /* 6px extra + 4px base = 10px total */
+    margin-top: 14px; /* 10px extra + 4px base = 14px total */
 }
 
 /* Section controls container */
@@ -1070,3 +1070,4 @@ input.distance-input[data-tooltip]:hover::after {
 ::-webkit-scrollbar-thumb:hover {
     background: #4a4a4a;
 }
+

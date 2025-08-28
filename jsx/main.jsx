@@ -5673,6 +5673,57 @@ function createDeviceComposition(deviceType, multiplier) {
                                 }
                             }
                             debugInfo.push("=== " + deviceName + " Layer Copying Complete ===");
+                            
+                            // Step 2: Add iPhone UI - 393 as base layer for iPhone 15 and iPhone Simple
+                            if (deviceType === "iphone15" || deviceType === "iphone-simple") {
+                                debugInfo.push("=== Adding iPhone UI - 393 Base Layer ===");
+                                
+                                // Find iPhone UI - 393 comp in the project
+                                var iPhoneUIComp = null;
+                                for (var k = 1; k <= app.project.items.length; k++) {
+                                    var item = app.project.items[k];
+                                    if (item instanceof CompItem && item.name === "iPhone UI - 393") {
+                                        iPhoneUIComp = item;
+                                        debugInfo.push("✓ Found iPhone UI - 393 comp");
+                                        break;
+                                    }
+                                }
+                                
+                                if (iPhoneUIComp) {
+                                    // Add iPhone UI - 393 as precomp layer
+                                    var iPhoneUILayer = comp.layers.add(iPhoneUIComp);
+                                    iPhoneUILayer.name = "iPhone UI";
+                                    
+                                    // Apply proper scaling (same as regular iPhone UI)
+                                    var scaleFactor = (multiplier / 2) * 100;
+                                    iPhoneUILayer.transform.scale.setValue([scaleFactor, scaleFactor]);
+                                    debugInfo.push("iPhone UI scaled to " + scaleFactor + "%");
+                                    
+                                    // Center the layer
+                                    iPhoneUILayer.transform.position.setValue([comp.width/2, comp.height/2]);
+                                    
+                                    // Set start time to playhead position
+                                    iPhoneUILayer.startTime = comp.time;
+                                    
+                                    // Enable collapse transformations for crisp rendering
+                                    iPhoneUILayer.collapseTransformation = true;
+                                    
+                                    // Position iPhone UI layer based on device type
+                                    if (deviceType === "iphone-simple") {
+                                        // For iPhone Simple: iPhone UI goes to top (above Shadow)
+                                        iPhoneUILayer.moveToBeginning();
+                                        debugInfo.push("iPhone UI moved to top (above Shadow)");
+                                    } else {
+                                        // For iPhone 15: iPhone UI goes to bottom (behind Frame)
+                                        iPhoneUILayer.moveToEnd();
+                                        debugInfo.push("iPhone UI moved to bottom (behind Frame)");
+                                    }
+                                    
+                                    debugInfo.push("✓ iPhone UI - 393 added as base layer");
+                                } else {
+                                    debugInfo.push("❌ iPhone UI - 393 comp not found");
+                                }
+                            }
                         } else {
                             // For regular iPhone UI, add the entire composition as a precomp layer
                             var templateLayer = comp.layers.add(templateComp);
@@ -6269,6 +6320,137 @@ function replaceRectangleFromPanel() {
         alert("Error: " + e.toString());
         return "error";
     }
+}
+
+// Add Nulls function called from the panel
+function addNullsFromPanel(nullType) {
+    try {
+        addNulls(nullType);
+        return "success";
+    } catch(e) {
+        alert("Error: " + e.toString());
+        return "error";
+    }
+}
+
+// Add nulls/guides to selected shape layer
+function addNulls(nullType) {
+    var comp = app.project.activeItem;
+    if (!(comp && comp instanceof CompItem)) {
+        alert("Please select a comp with a shape layer.");
+        return;
+    }
+
+    var sel = comp.selectedLayers;
+    if (sel.length !== 1) {
+        alert("Select exactly one shape layer.");
+        return;
+    }
+
+    var baseLayer = sel[0];
+    var baseName = baseLayer.name;
+
+    app.beginUndoGroup("Add " + (nullType === "midpoints" ? "Midpoint" : "Corner") + " Nulls");
+
+    // Define points based on nullType
+    var points = [];
+    
+    if (nullType === "midpoints") {
+        // Midpoints: Top, Left, Center, Right, Bottom
+        points = [
+            { name: "Top",     exprX: "r.left + r.width/2", exprY: "r.top" },
+            { name: "Left",    exprX: "r.left", exprY: "r.top + r.height/2" },
+            { name: "Center",  exprX: "r.left + r.width/2", exprY: "r.top + r.height/2" },
+            { name: "Right",   exprX: "r.left + r.width", exprY: "r.top + r.height/2" },
+            { name: "Bottom",  exprX: "r.left + r.width/2", exprY: "r.top + r.height" }
+        ];
+    } else if (nullType === "corners") {
+        // Corners: Top left, Top right, Bottom left, Bottom right
+        points = [
+            { name: "Top Left",     exprX: "r.left", exprY: "r.top" },
+            { name: "Top Right",    exprX: "r.left + r.width", exprY: "r.top" },
+            { name: "Bottom Left",  exprX: "r.left", exprY: "r.top + r.height" },
+            { name: "Bottom Right", exprX: "r.left + r.width", exprY: "r.top + r.height" }
+        ];
+    }
+
+    function guideExists(layerName) {
+        for (var i = 1; i <= comp.numLayers; i++) {
+            if (comp.layer(i).name === layerName) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function makeGuide(name, exprX, exprY) {
+        var guideName = baseName + " - " + name;
+        if (guideExists(guideName)) {
+            return null; // skip if already exists
+        }
+
+        var shapeLayer = comp.layers.addShape();
+        shapeLayer.name = guideName;
+        shapeLayer.guideLayer = true;
+
+        var contents = shapeLayer.property("Contents");
+
+        // Horizontal crosshair line
+        var horiz = contents.addProperty("ADBE Vector Shape - Group");
+        var horizShape = new Shape();
+        horizShape.vertices = [[-10,0],[10,0]];
+        horizShape.inTangents = [[0,0],[0,0]];
+        horizShape.outTangents = [[0,0],[0,0]];
+        horizShape.closed = false;
+        horiz.property("Path").setValue(horizShape);
+
+        var horizStroke = contents.addProperty("ADBE Vector Graphic - Stroke");
+        horizStroke.property("Color").setValue([1,0.5,0]); // orange
+        horizStroke.property("Stroke Width").setValue(2);
+
+        // Vertical crosshair line
+        var vert = contents.addProperty("ADBE Vector Shape - Group");
+        var vertShape = new Shape();
+        vertShape.vertices = [[0,-10],[0,10]];
+        vertShape.inTangents = [[0,0],[0,0]];
+        vertShape.outTangents = [[0,0],[0,0]];
+        vertShape.closed = false;
+        vert.property("Path").setValue(vertShape);
+
+        var vertStroke = contents.addProperty("ADBE Vector Graphic - Stroke");
+        vertStroke.property("Color").setValue([1,0.5,0]);
+        vertStroke.property("Stroke Width").setValue(2);
+
+        // Position expressions
+        var pos = shapeLayer.property("Transform").property("Position");
+        pos.dimensionsSeparated = true;
+
+        var xProp = shapeLayer.property("Transform").property("X Position");
+        var yProp = shapeLayer.property("Transform").property("Y Position");
+
+        var exprHeader =
+            "var l = thisComp.layer('" + baseName + "');\n" +
+            "var r = l.sourceRectAtTime(time,false);\n" +
+            "var p = l.toComp([0,0]) - l.anchorPoint;\n";
+
+        xProp.expression = exprHeader + "p[0] + (" + exprX + ");";
+        yProp.expression = exprHeader + "p[1] + (" + exprY + ");";
+
+        return shapeLayer;
+    }
+
+    var created = [];
+    for (var i=0; i<points.length; i++) {
+        var g = makeGuide(points[i].name, points[i].exprX, points[i].exprY);
+        if (g) created.push(g);
+    }
+
+    // Ensure new ones go on top (index 1)
+    for (var j=0; j<created.length; j++) {
+        created[j].moveToBeginning();
+    }
+
+    app.endUndoGroup();
 }
 
 // Apply the complete preset

@@ -175,6 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get the buttons
     var createButton = document.getElementById('createSquircle');
     var replaceButton = document.getElementById('replaceRectangle');
+    var addNullButton = document.getElementById('addNull');
     var addDeviceButton = document.getElementById('addDevice');
     var addGestureButton = document.getElementById('addGesture');
     var addOverlayButton = document.getElementById('addOverlay');
@@ -1730,6 +1731,31 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Replace result:', result);
             // Re-enable button
             replaceButton.classList.remove('loading');
+        });
+    });
+    
+    // Add Nulls button handler
+    addNullButton.addEventListener('click', function() {
+        console.log('Add Nulls clicked');
+        
+        // Get selected null type from dropdown
+        var nullType = document.getElementById('nullType').value;
+        console.log('Null type:', nullType);
+        
+        // Disable button while working
+        addNullButton.disabled = true;
+        addNullButton.textContent = 'Adding...';
+        
+        // Pass the extension path to the JSX
+        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+        csInterface.evalScript(setPathScript);
+        
+        // Call the After Effects script with the null type
+        csInterface.evalScript('addNullsFromPanel("' + nullType + '")', function(result) {
+            console.log('Add Nulls result:', result);
+            // Re-enable button
+            addNullButton.disabled = false;
+            addNullButton.textContent = 'Add Nulls';
         });
     });
     
