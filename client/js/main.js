@@ -545,226 +545,167 @@ document.addEventListener('DOMContentLoaded', function() {
     var delayIncrementBtn = document.getElementById('delayIncrementBtn');
     var delayDecrementBtn = document.getElementById('delayDecrementBtn');
     
-    if (durationIncrementBtn && durationDecrementBtn) {
-        // + button: Stretch keyframes forward by 3 frames OR multi-property duration by 50ms
+    // Duration +/- buttons - stretch keyframes with dynamic frame values
+    var durationInputField = document.getElementById('durationInput');
+    if (durationIncrementBtn && durationDecrementBtn && durationInputField) {
+        // Create tooltip for duration input
+        createTooltip(durationInputField, 'Frames');
+        
         durationIncrementBtn.addEventListener('click', function() {
             console.log('Duration increment (stretch forward) clicked');
             
-            // Check if CSInterface is available
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
             
-            // Disable button while working
+            // Get duration frames from input field
+            var durationFrames = parseFloat(durationInputField.value) || 3;
+            console.log('Applying +' + durationFrames + ' frame duration stretch');
+            
             durationIncrementBtn.disabled = true;
             
-            // Auto-detect the correct mode by calling readKeyframesSmart first
-            console.log('Auto-detecting keyframe mode...');
-            csInterface.evalScript('readKeyframesSmart()', function(readResult) {
-                var isMultiPropertyMode = false;
+            // Call the frame-based function that maintains selection and uses dynamic input
+            var script = 'stretchKeyframesWithFrames(1, ' + durationFrames + ')';
+            csInterface.evalScript(script, function(result) {
+                console.log('Duration stretch forward result:', result);
                 
-                if (readResult && readResult.indexOf('success|') === 0) {
-                    var readParts = readResult.split('|');
-                    isMultiPropertyMode = readParts.length > 10 && readParts[10] === '1';
-                    console.log('Auto-detected mode: ' + (isMultiPropertyMode ? 'multi-property' : 'single-property'));
-                    
-                    // Store the result for future use
-                    window.lastReadKeyframesWasCrossProperty = isMultiPropertyMode;
-                } else {
-                    console.log('Could not auto-detect mode, using single-property');
-                }
-                
-                var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationForward()' : 'stretchKeyframesForward()';
-                console.log('Calling script function:', scriptFunction);
-                
-                // Call the appropriate ExtendScript function
-                csInterface.evalScript(scriptFunction, function(result) {
-                console.log('Stretch forward result:', result);
-                
-                // Re-enable button
                 durationIncrementBtn.disabled = false;
                 
-                // Update display if successful
                 if (result && result.indexOf('|') !== -1) {
                     var parts = result.split('|');
                     var status = parts[0];
                     
-                    if (status === 'success') {
-                        // Check if this was a multi-property call
-                        if (scriptFunction.indexOf('Multi') !== -1) {
-                            // Multi-property operation completed - re-read keyframes to get updated values
-                            console.log('Multi-property operation completed, re-reading keyframes...');
-                            csInterface.evalScript('readKeyframesSmart()', function(readResult) {
-                                if (readResult && readResult.indexOf('success|') === 0) {
-                                    var readParts = readResult.split('|');
-                                    var isCrossPropertyMode = readParts[10] === '1';
-                                    
-                                    var durationMs, durationFrames;
-                                    if (isCrossPropertyMode) {
-                                        durationMs = parseInt(readParts[3]);
-                                        durationFrames = parseInt(readParts[4]);
-                                    } else {
-                                        durationMs = parseInt(readParts[1]);
-                                        durationFrames = parseInt(readParts[2]);
-                                    }
-                                    
-                                    // Update duration display with actual new values
-                                    if (isCrossPropertyMode) {
-                                        if (durationMs === -1) {
-                                            durationText.textContent = 'Duration: Multiple';
-                                            durationText.style.opacity = '1';
-                                        } else if (durationMs === -999) {
-                                            durationText.textContent = 'Duration';
-                                            durationText.style.opacity = '0.75';
-                                        } else {
-                                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                                            durationText.style.opacity = '1';
-                                        }
-                                    } else {
-                                        durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                                        durationText.style.opacity = '1';
-                                    }
-                                    console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
-                                }
-                            });
-                        } else {
-                            // Single-property operation - parse result directly
-                            var durationMs = parseInt(parts[1]);
-                            var durationFrames = parseInt(parts[2]);
-                            
-                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                            durationText.style.opacity = '1';
-                            console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    // Extract debug messages (starting from index 3)
+                    var debugMessages = [];
+                    for (var i = 3; i < parts.length; i++) {
+                        if (parts[i] && parts[i].trim()) {
+                            debugMessages.push(parts[i]);
                         }
-                    } else if (status === 'error') {
-                        var errorMsg = parts[1] || 'Unknown error';
-                        console.log('Stretch error:', errorMsg);
+                    }
+                    
+                    // Display debug messages in panel
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Duration Stretch Forward:</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                            }
+                            debugLog.scrollTop = debugLog.scrollHeight;
+                        }
+                    }
+                    
+                    if (status === 'success') {
+                        var durationMs = parseInt(parts[1]);
+                        var durationFrames = parseInt(parts[2]);
                         
-                        // Show error briefly, then revert to selection message
+                        // Update duration display
+                        var durationText = document.getElementById('durationText');
+                        if (durationMs === -1) {
+                            durationText.textContent = 'Duration: Multiple';
+                        } else {
+                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        }
+                        durationText.style.opacity = '1';
+                        
+                        console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    } else if (status === 'error') {
+                        // Use consistent error message for duration buttons
+                        var durationText = document.getElementById('durationText');
                         durationText.textContent = 'Select > 1 Keyframe';
                         durationText.style.opacity = '1';
                     }
                 } else {
+                    // Unexpected result format
+                    var durationText = document.getElementById('durationText');
                     durationText.textContent = 'Select > 1 Keyframe';
                     durationText.style.opacity = '1';
-                    console.log('Unexpected result:', result);
                 }
             });
-            }); // Close readKeyframesSmart call
         });
         
-        // - button: Shrink keyframes backward by 3 frames OR multi-property duration by 50ms
         durationDecrementBtn.addEventListener('click', function() {
             console.log('Duration decrement (stretch backward) clicked');
             
-            // Check if CSInterface is available
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
             
-            // Disable button while working
+            // Get duration frames from input field
+            var durationFrames = parseFloat(durationInputField.value) || 3;
+            console.log('Applying -' + durationFrames + ' frame duration stretch');
+            
             durationDecrementBtn.disabled = true;
             
-            // Auto-detect the correct mode by calling readKeyframesSmart first
-            console.log('Auto-detecting keyframe mode...');
-            csInterface.evalScript('readKeyframesSmart()', function(readResult) {
-                var isMultiPropertyMode = false;
+            // Call the frame-based function that maintains selection and uses dynamic input
+            var script = 'stretchKeyframesWithFrames(-1, ' + durationFrames + ')';
+            csInterface.evalScript(script, function(result) {
+                console.log('Duration stretch backward result:', result);
                 
-                if (readResult && readResult.indexOf('success|') === 0) {
-                    var readParts = readResult.split('|');
-                    isMultiPropertyMode = readParts.length > 10 && readParts[10] === '1';
-                    console.log('Auto-detected mode: ' + (isMultiPropertyMode ? 'multi-property' : 'single-property'));
-                    
-                    // Store the result for future use
-                    window.lastReadKeyframesWasCrossProperty = isMultiPropertyMode;
-                } else {
-                    console.log('Could not auto-detect mode, using single-property');
-                }
-                
-                var scriptFunction = isMultiPropertyMode ? 'stretchMultiPropertyDurationBackward()' : 'stretchKeyframesBackward()';
-                console.log('Calling script function:', scriptFunction);
-                
-                // Call the appropriate ExtendScript function
-                csInterface.evalScript(scriptFunction, function(result) {
-                console.log('Stretch backward result:', result);
-                
-                // Re-enable button
                 durationDecrementBtn.disabled = false;
                 
-                // Update display if successful
                 if (result && result.indexOf('|') !== -1) {
                     var parts = result.split('|');
                     var status = parts[0];
                     
-                    if (status === 'success') {
-                        // Check if this was a multi-property call
-                        if (scriptFunction.indexOf('Multi') !== -1) {
-                            // Multi-property operation completed - re-read keyframes to get updated values
-                            console.log('Multi-property operation completed, re-reading keyframes...');
-                            csInterface.evalScript('readKeyframesSmart()', function(readResult) {
-                                if (readResult && readResult.indexOf('success|') === 0) {
-                                    var readParts = readResult.split('|');
-                                    var isCrossPropertyMode = readParts[10] === '1';
-                                    
-                                    var durationMs, durationFrames;
-                                    if (isCrossPropertyMode) {
-                                        durationMs = parseInt(readParts[3]);
-                                        durationFrames = parseInt(readParts[4]);
-                                    } else {
-                                        durationMs = parseInt(readParts[1]);
-                                        durationFrames = parseInt(readParts[2]);
-                                    }
-                                    
-                                    // Update duration display with actual new values
-                                    if (isCrossPropertyMode) {
-                                        if (durationMs === -1) {
-                                            durationText.textContent = 'Duration: Multiple';
-                                            durationText.style.opacity = '1';
-                                        } else if (durationMs === -999) {
-                                            durationText.textContent = 'Duration';
-                                            durationText.style.opacity = '0.75';
-                                        } else {
-                                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                                            durationText.style.opacity = '1';
-                                        }
-                                    } else {
-                                        durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                                        durationText.style.opacity = '1';
-                                    }
-                                    console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
-                                }
-                            });
-                        } else {
-                            // Single-property operation - parse result directly
-                            var durationMs = parseInt(parts[1]);
-                            var durationFrames = parseInt(parts[2]);
-                            
-                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                            durationText.style.opacity = '1';
-                            console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    // Extract debug messages (starting from index 3)
+                    var debugMessages = [];
+                    for (var i = 3; i < parts.length; i++) {
+                        if (parts[i] && parts[i].trim()) {
+                            debugMessages.push(parts[i]);
                         }
-                    } else if (status === 'error') {
-                        var errorMsg = parts[1] || 'Unknown error';
-                        console.log('Shrink error:', errorMsg);
+                    }
+                    
+                    // Display debug messages in panel
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Duration Stretch Backward:</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                            }
+                            debugLog.scrollTop = debugLog.scrollHeight;
+                        }
+                    }
+                    
+                    if (status === 'success') {
+                        var durationMs = parseInt(parts[1]);
+                        var durationFrames = parseInt(parts[2]);
                         
-                        // Show error briefly, then revert to selection message
+                        // Update duration display
+                        var durationText = document.getElementById('durationText');
+                        if (durationMs === -1) {
+                            durationText.textContent = 'Duration: Multiple';
+                        } else {
+                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        }
+                        durationText.style.opacity = '1';
+                        
+                        console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                    } else if (status === 'error') {
+                        // Use consistent error message for duration buttons
+                        var durationText = document.getElementById('durationText');
                         durationText.textContent = 'Select > 1 Keyframe';
                         durationText.style.opacity = '1';
                     }
                 } else {
+                    // Unexpected result format
+                    var durationText = document.getElementById('durationText');
                     durationText.textContent = 'Select > 1 Keyframe';
                     durationText.style.opacity = '1';
-                    console.log('Unexpected result:', result);
                 }
             });
-            }); // Close readKeyframesSmart call
         });
     }
     
-    // Delay +/- buttons - call delay nudging functions directly
-    if (delayIncrementBtn && delayDecrementBtn) {
+    // Delay +/- buttons - call delay nudging functions with dynamic frame values
+    var delayInputField = document.getElementById('delayInput');
+    if (delayIncrementBtn && delayDecrementBtn && delayInputField) {
+        // Create tooltip for delay input
+        createTooltip(delayInputField, 'Frames');
+        
         delayIncrementBtn.addEventListener('click', function() {
             console.log('Delay increment (nudge forward) clicked');
             
@@ -773,9 +714,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Get delay frames from input field
+            var delayFrames = parseFloat(delayInputField.value) || 3;
+            console.log('Applying +' + delayFrames + ' frame delay nudge');
+            
             delayIncrementBtn.disabled = true;
             
-            csInterface.evalScript('nudgeDelayForward()', function(result) {
+            // Call the ExtendScript function with +1 direction and frame count
+            var script = 'nudgeDelayWithFrames(1, ' + delayFrames + ')';
+            csInterface.evalScript(script, function(result) {
                 console.log('Delay nudge forward result:', result);
                 
                 delayIncrementBtn.disabled = false;
@@ -821,9 +768,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Get delay frames from input field
+            var delayFrames = parseFloat(delayInputField.value) || 3;
+            console.log('Applying -' + delayFrames + ' frame delay nudge');
+            
             delayDecrementBtn.disabled = true;
             
-            csInterface.evalScript('nudgeDelayBackward()', function(result) {
+            // Call the ExtendScript function with -1 direction and frame count
+            var script = 'nudgeDelayWithFrames(-1, ' + delayFrames + ')';
+            csInterface.evalScript(script, function(result) {
                 console.log('Delay nudge backward result:', result);
                 
                 delayDecrementBtn.disabled = false;
@@ -864,14 +817,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Helper function for automatic keyframe reading after stagger operations
     function handleReadKeyframes() {
-        DEBUG.log('handleReadKeyframes called');
+        DEBUG.log('handleReadKeyframes called - ENTRY POINT');
+        console.trace('Call stack for handleReadKeyframes');
         
         // Reset all displays to default text when starting read operation
+        var durationText = document.getElementById('durationText');
         var delayText = document.getElementById('delayText');
         var xDistanceText = document.getElementById('xDistanceText');
         var yDistanceText = document.getElementById('yDistanceText');
         var staggerText = document.getElementById('staggerText');
         
+        // Reset all displays to default text when starting read operation
         durationText.textContent = 'Duration';
         durationText.style.opacity = '0.75';
         delayText.textContent = 'Delay';
@@ -973,7 +929,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
                         staggerText = parts.length > 11 ? parts[11] : "Stagger";
                     } else {
-                        // Single-property format: success|durationMs|durationFrames|...|xDistance|yDistance|hasX|hasY|0
+                        // Single-property format: success|durationMs|durationFrames|firstKeyIndex|lastKeyIndex|propertyIndex|xDistance|yDistance|hasX|hasY|0|Stagger
                         durationMs = parseInt(parts[1]);
                         durationFrames = parseInt(parts[2]);
                         delayMs = 0; // No delay concept in single-property mode
@@ -982,10 +938,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
                         hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
                         hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
+                        staggerText = parts.length > 11 ? parts[11] : "Stagger";
                     }
                     
                     DEBUG.log('Successfully parsed delay:', delayMs + 'ms, ' + delayFrames + ' frames');
                     DEBUG.log('Successfully parsed duration:', durationMs + 'ms, ' + durationFrames + ' frames');
+                    DEBUG.log('Successfully parsed X distance:', xDistance + 'px, hasX=' + hasXDistance);
+                    DEBUG.log('Successfully parsed Y distance:', yDistance + 'px, hasY=' + hasYDistance);
                     
                     // Store cross-property mode flag for duration buttons to use
                     window.lastReadKeyframesWasCrossProperty = isCrossPropertyMode;
@@ -1019,8 +978,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         delayText.style.opacity = '1';
                         
-                        // Store for delay nudging
-                        document.getElementById('delayValue').value = delayMs;
+                        // Store for delay nudging - commented out as element doesn't exist
+                        // document.getElementById('delayValue').value = delayMs;
                         
                         // Update stagger display (only in cross-property mode)
                         var staggerTextElement = document.getElementById('staggerText');
@@ -1046,68 +1005,102 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     } else {
                         // Single-property mode: show duration info in duration row
+                        DEBUG.log('ENTERING SINGLE-PROPERTY MODE BLOCK');
+                        DEBUG.log('About to update delayText');
                         delayText.textContent = 'Delay';
                         delayText.style.opacity = '0.75';
+                        DEBUG.log('delayText updated');
                         
+                        DEBUG.log('About to update durationText with: ' + durationMs + 'ms / ' + durationFrames + 'f');
                         durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                        DEBUG.log('durationText.textContent set');
                         durationText.style.opacity = '1';
-                        durationValue.value = durationMs;
+                        DEBUG.log('durationText.opacity set');
+                        // durationValue.value = durationMs; // This element doesn't exist and isn't needed
+                        DEBUG.log('Duration display updated');
                         
                         // Reset stagger to default in single-property mode
+                        DEBUG.log('About to call resetCumulativeStagger');
                         resetCumulativeStagger();
+                        DEBUG.log('After resetCumulativeStagger');
                     }
                     // Don't override opacity - it's already set in the conditional logic above
+                    
+                    DEBUG.log('CHECKPOINT: After duration update, before buttons');
                     
                     // Always show all buttons for consistency
                     showDurationButtons();
                     showPositionButtons();
                     
-                    // Get current resolution multiplier for scaling
-                    var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+                    DEBUG.log('CHECKPOINT: After showing buttons, before resolution');
                     
-                    // Update X Distance display
-                    var xDistanceText = document.getElementById('xDistanceText');
-                    if (hasXDistance) {
-                        var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
+                    try {
+                        // Get current resolution multiplier for scaling
+                        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+                        DEBUG.log('Resolution multiplier:', resolutionMultiplier);
                         
-                        if (scaledXDistance === 0) {
-                            xDistanceText.textContent = 'X: 0px @1x';
+                        // Update X Distance display
+                        var xDistanceText = document.getElementById('xDistanceText');
+                        DEBUG.log('About to update X distance. hasXDistance=' + hasXDistance + ', xDistance=' + xDistance);
+                        if (hasXDistance) {
+                            // Check for special "Multiple" value
+                            if (xDistance === -999999) {
+                                xDistanceText.textContent = 'X: Multiple';
+                                DEBUG.log('Set X distance to Multiple');
+                            } else {
+                                var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
+                                DEBUG.log('Scaled X distance:', scaledXDistance);
+                                
+                                if (scaledXDistance === 0) {
+                                    xDistanceText.textContent = 'X: 0px @1x';
+                                } else {
+                                    // Show directional format
+                                    var direction = scaledXDistance > 0 ? 'Right' : 'Left';
+                                    var absScaledXDistance = Math.abs(scaledXDistance);
+                                    xDistanceText.textContent = 'X: ' + direction + ' ' + absScaledXDistance + 'px @1x';
+                                    DEBUG.log('Set X distance text to:', xDistanceText.textContent);
+                                }
+                            }
+                            xDistanceText.style.opacity = '1';
                         } else {
-                            // Show directional format
-                            var direction = scaledXDistance > 0 ? 'Right' : 'Left';
-                            var absScaledXDistance = Math.abs(scaledXDistance);
-                            xDistanceText.textContent = 'X: ' + direction + ' ' + absScaledXDistance + 'px @1x';
+                            // No X position keyframes selected - return to default text
+                            xDistanceText.textContent = 'X distance';
+                            xDistanceText.style.opacity = '0.75';
                         }
-                        xDistanceText.style.opacity = '1';
-                    } else {
-                        // No X position keyframes selected - return to default text
-                        xDistanceText.textContent = 'X distance';
-                        xDistanceText.style.opacity = '0.75';
-                    }
                     
-                    // Update Y Distance display
-                    var yDistanceText = document.getElementById('yDistanceText');
-                    if (hasYDistance) {
-                        var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
-                        
-                        if (scaledYDistance === 0) {
-                            yDistanceText.textContent = 'Y: 0px @1x';
+                        // Update Y Distance display
+                        var yDistanceText = document.getElementById('yDistanceText');
+                        if (hasYDistance) {
+                            // Check for special "Multiple" value
+                            if (yDistance === -999999) {
+                                yDistanceText.textContent = 'Y: Multiple';
+                                DEBUG.log('Set Y distance to Multiple');
+                            } else {
+                                var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
+                                
+                                if (scaledYDistance === 0) {
+                                    yDistanceText.textContent = 'Y: 0px @1x';
+                                } else {
+                                    // Show directional format
+                                    var direction = scaledYDistance > 0 ? 'Down' : 'Up';
+                                    var absScaledYDistance = Math.abs(scaledYDistance);
+                                    yDistanceText.textContent = 'Y: ' + direction + ' ' + absScaledYDistance + 'px @1x';
+                                }
+                            }
+                            yDistanceText.style.opacity = '1';
                         } else {
-                            // Show directional format
-                            var direction = scaledYDistance > 0 ? 'Down' : 'Up';
-                            var absScaledYDistance = Math.abs(scaledYDistance);
-                            yDistanceText.textContent = 'Y: ' + direction + ' ' + absScaledYDistance + 'px @1x';
+                            // No Y position keyframes selected - return to default text
+                            yDistanceText.textContent = 'Y distance';
+                            yDistanceText.style.opacity = '0.75';
                         }
-                        yDistanceText.style.opacity = '1';
-                    } else {
-                        // No Y position keyframes selected - return to default text
-                        yDistanceText.textContent = 'Y distance';
-                        yDistanceText.style.opacity = '0.75';
-                    }
                     
-                    console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
-                    console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
-                    console.log('Y Distance:', hasYDistance ? scaledYDistance + 'px @1x (raw: ' + yDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
+                        console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
+                        console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
+                        console.log('Y Distance:', hasYDistance ? scaledYDistance + 'px @1x (raw: ' + yDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
+                    } catch(e) {
+                        DEBUG.error('ERROR updating X/Y distances:', e);
+                        console.error('Error in X/Y distance update:', e);
+                    }
                 }
             } else {
                 // Reset all displays to default text  
@@ -1156,12 +1149,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupInOutToggle('xInBtn', 'xOutBtn');
     setupInOutToggle('yInBtn', 'yOutBtn');
     
-    // Setup stagger input tooltip functionality
-    var staggerInput = document.getElementById('staggerInput');
-    
-    if (staggerInput) {
-        // Create tooltip for stagger input using JavaScript
-        function createTooltip(element, text) {
+    // Global tooltip creation function (reusable across all inputs)
+    function createTooltip(element, text) {
             var tooltip = null;
             
             element.addEventListener('mouseenter', function() {
@@ -1205,7 +1194,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
-        
+    
+    // Setup stagger input tooltip functionality
+    var staggerInput = document.getElementById('staggerInput');
+    if (staggerInput) {
         createTooltip(staggerInput, 'Frames');
     }
     
@@ -1959,6 +1951,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
         loadSectionOrder();
         setTimeout(loadAccordionStates, 100);
+        
+        // Add debug panel for testing (DEV MODE)
+        addDebugPanel();
     }, 200);
     
     

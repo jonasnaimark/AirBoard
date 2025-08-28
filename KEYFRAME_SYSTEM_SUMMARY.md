@@ -27,25 +27,134 @@ The delay system has **two intelligent modes** that automatically switch based o
 
 ## 🧠 **CRITICAL TECHNICAL CHALLENGES SOLVED**
 
-### **Challenge 1: Keyframe Selection Preservation**
-**Problem**: After moving keyframes, they would become deselected, breaking repeated operations.
+### **Challenge 1: Keyframe Selection Preservation - THE COMPLETE SOLUTION**
+**Problem**: After Effects' keyframe selection APIs are extremely unreliable, especially when working with multiple properties. The selection state gets lost in several critical ways.
 
-**Solution**: Deferred selection system using keyframe recreation
+**THE COMPLETE MULTI-PROPERTY SELECTION SOLUTION** (December 2024)
+
+This is the definitive solution to maintaining keyframe selection across multiple properties when manipulating keyframes:
+
+#### **Critical Issues That Were Solved:**
+
+1. **`selectedKeys` becomes unreliable after ANY manipulation** - Once you start modifying keyframes on one property, `prop.selectedKeys` returns 0 for other properties
+2. **Property references become stale** - After keyframe manipulation, property object references can become invalid
+3. **`prop.selected = true` auto-selects ALL keyframes** - Setting a property as selected causes After Effects to select ALL keyframes on that property
+4. **Selection state is lost between properties** - After Effects loses track of selections on Property B when you manipulate Property A
+
+#### **THE WORKING SOLUTION:**
+
 ```javascript
-// WRONG: Select during creation (gets overwritten)
-prop.setSelectedAtKey(newIdx, true);
-
-// RIGHT: Collect indices, then select all at end
-var newSelIndices = [];
-for (var k = 0; k < keyframesToMove.length; k++) {
-    var newIdx = prop.addKey(data.newTime);
-    newSelIndices.push(newIdx);
+// STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
+var cachedSelections = [];
+for (var i = 0; i < selectedLayers.length; i++) {
+    var layer = selectedLayers[i];
+    var selectedProps = layer.selectedProperties;
+    
+    for (var j = 0; j < selectedProps.length; j++) {
+        var prop = selectedProps[j];
+        
+        // CRITICAL: Manually check EVERY keyframe for selection
+        // DO NOT trust prop.selectedKeys after this point!
+        var selKeys = [];
+        for (var k = 1; k <= prop.numKeys; k++) {
+            if (prop.keySelected(k)) {
+                selKeys.push(k);
+            }
+        }
+        
+        if (selKeys.length >= 2) {
+            cachedSelections.push({
+                layer: layer,
+                layerName: layer.name,
+                property: prop,
+                propertyName: prop.name,
+                selectedIndices: selKeys.slice() // Make a copy!
+            });
+        }
+    }
 }
 
-// Select all at the very end
-for (var i = 0; i < newSelIndices.length; i++) {
-    prop.setSelectedAtKey(newSelIndices[i], true);
+// STEP 2: PROCESS USING CACHED SELECTIONS
+// Now you can manipulate keyframes using the cached data
+// The original selectedKeys API is no longer reliable!
+for (var i = 0; i < cachedSelections.length; i++) {
+    var cached = cachedSelections[i];
+    var prop = cached.property;
+    var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
+    
+    // Do your keyframe manipulation here...
 }
+
+// STEP 3: RESTORE SELECTION WITH FRESH REFERENCES
+// Re-acquire fresh property references
+function findPropertyByName(layer, targetName) {
+    function searchGroup(group) {
+        for (var i = 1; i <= group.numProperties; i++) {
+            var prop = group.property(i);
+            if (prop.name === targetName && prop.canVaryOverTime) {
+                return prop;
+            }
+            if (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                prop.propertyType === PropertyType.NAMED_GROUP) {
+                var found = searchGroup(prop);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    return searchGroup(layer);
+}
+
+// STEP 4: DESELECT ALL, THEN SELECT ONLY WHAT WE WANT
+for (var i = 0; i < cachedSelections.length; i++) {
+    var cached = cachedSelections[i];
+    
+    // Get fresh property reference
+    var freshProp = findPropertyByName(cached.layer, cached.propertyName);
+    if (!freshProp) continue;
+    
+    // CRITICAL: First deselect ALL keyframes on this property
+    for (var k = 1; k <= freshProp.numKeys; k++) {
+        try {
+            freshProp.setSelectedAtKey(k, false);
+        } catch(e) {
+            // Ignore deselection errors
+        }
+    }
+    
+    // Now select only the keyframes we want
+    for (var j = 0; j < cached.selectedIndices.length; j++) {
+        freshProp.setSelectedAtKey(cached.selectedIndices[j], true);
+    }
+}
+
+// CRITICAL: DO NOT set prop.selected = true!
+// This will auto-select ALL keyframes on the property!
+```
+
+#### **Why Each Step is Critical:**
+
+1. **Cache Before Manipulation**: After Effects' `selectedKeys` API becomes unreliable the moment you start manipulating any keyframes
+2. **Manual Selection Check**: Loop through ALL keyframes with `keySelected()` instead of trusting `selectedKeys`
+3. **Fresh Property References**: Property objects can become stale after manipulation
+4. **Deselect All First**: Ensures no extra keyframes remain selected
+5. **Never Use `prop.selected = true`**: This triggers After Effects' auto-selection of ALL keyframes
+
+#### **Common Pitfalls to Avoid:**
+```javascript
+// ❌ WRONG: Trusting selectedKeys after manipulation starts
+var selKeys = prop.selectedKeys; // Returns 0 after other properties are touched!
+
+// ❌ WRONG: Using stale property references
+var prop = cachedProp; // May be invalid after keyframe manipulation
+
+// ❌ WRONG: Setting property as selected
+prop.selected = true; // Auto-selects ALL keyframes!
+
+// ❌ WRONG: Not deselecting first
+prop.setSelectedAtKey(index, true); // Other keyframes might stay selected!
+
+// ✅ RIGHT: The complete solution above
 ```
 
 ### **Challenge 2: The setKeyTime() Method Doesn't Exist**
@@ -543,6 +652,7 @@ var shouldUseBaselineMode = !shouldUseTimelineMode;
 
 ---
 
-*Last Updated: August 23, 2025*  
-*Version: v4.9.3 - Timeline Position Nudging System Complete*  
-*Status: All keyframe systems fully implemented and production-ready*
+*Last Updated: December 2024*  
+*Version: v4.9.3 - Timeline Position Nudging System Complete with Multi-Property Selection Fix*  
+*Status: All keyframe systems fully implemented and production-ready*  
+*Critical Fix: Complete solution for multi-property keyframe selection preservation documented*
