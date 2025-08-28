@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.9.4] - 2025-08-28 ✨ **LATEST RELEASE**
+### 🎯 Fixed - STAGGER READOUT ACCURACY & SIGN CALCULATION
+- **Fixed Stagger Sign Detection**: Stagger calculation now correctly shows negative values when top layer keyframes are earlier than bottom layer keyframes (e.g., -50ms when top layers lead)
+- **Fixed Stagger Readout Accuracy**: Stagger display now shows actual keyframe timing state instead of calculated operation results
+- **Eliminated UI Race Conditions**: Removed immediate stagger display updates that overrode accurate readings
+- **Consistent Layer Index Sorting**: Both keyframe and layer stagger calculations now use bottom-to-top layer index sorting for correct sign detection
+
+### 🔧 Technical Implementation - STAGGER SYSTEM IMPROVEMENTS
+- **ExtendScript Compatibility**: Replaced unsupported `indexOf()` method with manual array search for ExtendScript compatibility
+- **Unified Stagger Calculation**: `calculateStagger()` function now uses consistent layer index sorting for both keyframes and layers
+- **Automatic State Reading**: Stagger operations automatically trigger `handleReadKeyframes()` after completion to display true timeline state
+- **Enhanced Debug Logging**: Comprehensive debug output for stagger calculation troubleshooting and development
+
+### 🎮 User Experience - ACCURATE STAGGER FEEDBACK
+- **True Timeline State Display**: Stagger readout always reflects actual keyframe positions (e.g., shows "0ms" when keyframes are aligned, not operation result like "-50ms")
+- **Correct Positive/Negative Detection**: Negative staggers properly display when top layers animate before bottom layers
+- **Reliable Stagger Nudging**: Both keyframe and layer stagger operations work consistently with accurate sign detection
+- **Clean UI Updates**: Stagger display updates smoothly without conflicting calculated vs actual values
+
 ## [4.9.3] - 2025-08-23 ✨ **CURRENT RELEASE**
 ### 🎯 Added - TIMELINE POSITION NUDGING SYSTEM
 - **Timeline Position Nudging**: When ALL selected keyframes have the same baseline time, Delay +/- buttons now move ALL keyframes together by 50ms increments in the timeline
