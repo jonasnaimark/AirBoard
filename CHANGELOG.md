@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Visual indicator: Icon flips horizontally to show active direction
   - Works for both keyframe and layer staggering
   - Persistent state during session
+- **Layer Marker Syncing with Stagger**: Layer markers now move with keyframes during stagger operations
+  - Markers on the same frame as keyframes stay synchronized
+  - Maintains frame-perfect alignment between markers and keyframes
+  - Works with both stagger directions (top-to-bottom and bottom-to-top)
+  - Preserves marker properties (comments, duration, etc.)
 - **Enhanced Tooltips**: 
   - "Stagger direction" tooltip for direction toggle button
   - "First keyframe" tooltip for In buttons (X and Y distance)

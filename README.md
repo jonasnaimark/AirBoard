@@ -8,10 +8,11 @@
 
 > Transform your After Effects workflow with precision keyframe control, automated device compositions, gesture animations, and professional effects.
 
-## 🎯 What's New in v4.11.0 - Stagger Direction & Precision Improvements!
+## 🎯 What's New in v4.11.0 - Stagger Direction & Label Syncing!
 
 ### 🎨 Enhanced Stagger Control
 - **Stagger Direction Toggle**: Switch between bottom-to-top and top-to-bottom layer ordering
+- **Layer Marker Syncing**: Labels/markers now move with keyframes during stagger operations
 - **Visual Direction Indicator**: Icon flips to show active stagger direction
 - **Improved Tooltips**: Clear hover hints for all control buttons
 

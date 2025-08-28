@@ -4973,11 +4973,57 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         
         for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
             var layerGroup = layerGroups[layerIdx];
+            var layer = layerGroup.layer;
             
             // Calculate cumulative stagger offset for this layer position
             var staggerOffset = layerIdx * direction * staggerMs / 1000; // in seconds
             
             DEBUG_JSX.log("Layer " + layerGroup.layer.index + ": applying cumulative offset " + (staggerOffset * 1000) + "ms");
+            
+            // Collect layer markers that need to be moved with keyframes
+            var markersToMove = [];
+            if (layer.marker && layer.marker.numKeys > 0) {
+                DEBUG_JSX.log("Checking " + layer.marker.numKeys + " markers on layer " + layer.name + " for sync");
+                
+                // Collect all original keyframe times from this layer
+                var originalKeyframeTimes = [];
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    var prop = propData.property;
+                    var selectedKeys = propData.selectedKeys;
+                    
+                    for (var k = 0; k < selectedKeys.length; k++) {
+                        var keyIndex = selectedKeys[k];
+                        var keyTime = prop.keyTime(keyIndex);
+                        originalKeyframeTimes.push(keyTime);
+                    }
+                }
+                
+                // Check each marker to see if it's at the same time as any keyframe
+                for (var m = 1; m <= layer.marker.numKeys; m++) {
+                    var markerTime = layer.marker.keyTime(m);
+                    
+                    // Check if this marker is at the same time as any of the keyframes being moved
+                    for (var t = 0; t < originalKeyframeTimes.length; t++) {
+                        if (Math.abs(markerTime - originalKeyframeTimes[t]) < (0.5 / frameRate)) {
+                            var markerValue = layer.marker.keyValue(m);
+                            var markerComment = markerValue.comment || "";
+                            var newMarkerTime = Math.max(0, markerTime + staggerOffset);
+                            
+                            DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + roundMs(markerTime) + "ms, will move to " + roundMs(newMarkerTime) + "ms");
+                            
+                            markersToMove.push({
+                                markerIndex: m,
+                                oldTime: markerTime,
+                                newTime: newMarkerTime,
+                                markerValue: markerValue,
+                                comment: markerComment
+                            });
+                            break; // Only need to match once per marker
+                        }
+                    }
+                }
+            }
             
             // Move all keyframes in this layer by the cumulative offset (no clamping needed since pre-checked)
             var layerHadMovement = false; // Track if any keyframes in this layer actually moved
@@ -5054,6 +5100,32 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 
                 // Store the new indices for final selection
                 propData.newSelIndices = newSelIndices;
+            }
+            
+            // Move the layer markers that were synced with keyframes
+            if (markersToMove.length > 0) {
+                DEBUG_JSX.log("Moving " + markersToMove.length + " synced markers on layer " + layer.name);
+                
+                // Sort markers in reverse order to avoid index shifting
+                markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                
+                for (var m = 0; m < markersToMove.length; m++) {
+                    var markerInfo = markersToMove[m];
+                    
+                    try {
+                        // Remove the old marker
+                        layer.marker.removeKey(markerInfo.markerIndex);
+                        
+                        // Add new marker at the new time with same properties
+                        var newMarkerIndex = layer.marker.addKey(markerInfo.newTime);
+                        layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                        
+                        DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + roundMs(markerInfo.oldTime) + "ms to " + roundMs(markerInfo.newTime) + "ms");
+                        
+                    } catch(markerMoveError) {
+                        DEBUG_JSX.log("Failed to move marker '" + markerInfo.comment + "': " + markerMoveError.toString());
+                    }
+                }
             }
             
             // Track layers with actual movement
