@@ -10,6 +10,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.10.0] - 2024-12-28 🎉 **KEYFRAME NUDGER FEATURE COMPLETE**
+### ✨ Added - COMPREHENSIVE KEYFRAME NUDGING SYSTEM
+- **Multi-Property Selection Preservation**: Fixed complex issue where selecting keyframes across multiple properties (Position + Opacity) would lose selection during nudging operations
+- **Smart Duration Snapping**: Duration nudging now intelligently snaps to intervals based on frame input (e.g., 3 frames = 50ms intervals at 60fps)
+- **Multi-Layer Position Display**: Shows "X: Multiple" / "Y: Multiple" when position properties from different layers are selected
+- **Complete UI Display Fix**: Read Keyframes button now properly displays all values (Duration, Delay, X distance, Y distance, Stagger)
+
+### 🔧 Technical Implementation - SELECTION PRESERVATION SOLUTION
+- **Selection Caching System**: Cache all keyframe selections before ANY manipulation begins
+- **Fresh Property References**: Re-acquire property references after keyframe manipulation to avoid stale references
+- **Explicit Deselection/Selection**: First deselect ALL keyframes, then select only desired ones
+- **Avoided Auto-Selection Bug**: Never use `prop.selected = true` which causes After Effects to auto-select all keyframes
+
+### 🎯 Fixed - CRITICAL BUGS RESOLVED
+- **Fixed Missing Variable Declarations**: Added `durationText` and `durationValue` declarations in handleReadKeyframes
+- **Removed Non-Existent Element References**: Cleaned up references to elements that don't exist in HTML
+- **Fixed JavaScript Indentation**: Corrected code structure that was causing execution failures
+- **Fixed Cross-Property Mode Detection**: Properly handles multiple properties with different durations
+
+### 🚀 Smart Snapping Algorithm
+- **Dynamic Interval Detection**: Snapping interval adjusts based on frame input value
+- **Intelligent Snap Direction**: 
+  - If not snapped: Snaps to nearest interval in direction of nudge
+  - If already snapped: Moves by exactly one interval
+- **Example (467ms with 3-frame/50ms intervals)**:
+  - First + click: 467ms → 500ms (snap to next interval)
+  - Second + click: 500ms → 550ms (add interval)
+  - First - click: 467ms → 450ms (snap to previous interval)
+
+### 📚 Documentation
+- **Updated KEYFRAME_SYSTEM_SUMMARY.md**: Complete solution documentation for keyframe selection preservation
+- **Comprehensive Debug Logging**: Added throughout for easier troubleshooting
+- **Code Comments**: Detailed explanations of critical sections
+
+### 🎮 User Experience
+- **Consistent Selection Behavior**: Keyframes stay selected across all nudging operations
+- **Clear Multiple Values Display**: No more confusing sums when multiple layers selected
+- **Reliable Read Button**: All keyframe information displays correctly on first click
+- **Predictable Snapping**: Duration changes snap intelligently to clean intervals
+
 ## [4.9.5] - 2025-08-28 ✨ **LATEST RELEASE**
 ### 🎯 Added - LABEL SYNCING FOR DELAY NUDGING
 - **Layer Marker Syncing**: Layer markers at the same frame as first keyframes now move synchronously with delay nudging operations
