@@ -862,10 +862,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Read Keyframes button handler
-    var readKeyframesButton = document.getElementById('readKeyframes');
-    readKeyframesButton.addEventListener('click', function() {
-        DEBUG.log('Read Keyframes clicked');
+    // Helper function for automatic keyframe reading after stagger operations
+    function handleReadKeyframes() {
+        DEBUG.log('handleReadKeyframes called');
         
         // Reset all displays to default text when starting read operation
         var delayText = document.getElementById('delayText');
@@ -1026,19 +1025,23 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Update stagger display (only in cross-property mode)
                         var staggerTextElement = document.getElementById('staggerText');
                         if (staggerTextElement) {
+                            console.log('handleReadKeyframes: Updating stagger display with staggerText="' + staggerText + '"');
                             if (staggerText === "Stagger") {
                                 // Default text - show with dimmed opacity and reset cumulative tracking
                                 staggerTextElement.textContent = staggerText;
                                 staggerTextElement.style.opacity = '0.5';
                                 resetCumulativeStagger();
+                                console.log('handleReadKeyframes: Set stagger to default "Stagger"');
                             } else if (staggerText === "Multiple") {
                                 // Multiple stagger values - show with prefix
                                 staggerTextElement.textContent = 'Stagger: Multiple';
                                 staggerTextElement.style.opacity = '1';
+                                console.log('handleReadKeyframes: Set stagger to "Stagger: Multiple"');
                             } else {
                                 // Show stagger value
                                 staggerTextElement.textContent = 'Stagger: ' + staggerText;
                                 staggerTextElement.style.opacity = '1';
+                                console.log('handleReadKeyframes: Set stagger to "Stagger: ' + staggerText + '"');
                             }
                         }
                     } else {
@@ -1122,6 +1125,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Unexpected result:', result);
             }
         });
+    }
+    
+    // Read Keyframes button handler
+    var readKeyframesButton = document.getElementById('readKeyframes');
+    readKeyframesButton.addEventListener('click', function() {
+        DEBUG.log('Read Keyframes clicked');
+        handleReadKeyframes();
     });
     
     // Don't initialize displays on startup - keep default labels
@@ -1264,84 +1274,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             console.log('Debug INCREMENT: effectiveStaggerValue=' + effectiveStaggerValue + ' from "' + effectiveStaggerText + '"');
                             
-                            if (effectiveStaggerValue === 0) {
-                                // No actual stagger exists - reset cumulative counter and display to 0ms
-                                console.log('No actual stagger detected (0ms effective stagger) - resetting display to 0ms');
-                                cumulativeStaggerFrames = 0; // Reset cumulative counter first
-                                updateStaggerDisplay(0, 0, true); // Then update display
-                            } else if (effectiveStaggerValue !== null) {
-                                // Check if smart snapping occurred
-                                var smartSnappingOccurred = debugMessages.some(function(msg) {
-                                    return msg.indexOf('Snapped layers to clean') !== -1 && msg.indexOf('frame increments') !== -1;
-                                });
-                                
-                                if (smartSnappingOccurred) {
-                                    console.log('Smart snapping detected - calculating true effective stagger from final positions');
-                                    
-                                    // Extract final layer times from debug messages to calculate true stagger
-                                    var layerMessages = debugMessages.filter(function(msg) { 
-                                        return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
-                                    });
-                                    
-                                    var finalTimes = [];
-                                    for (var k = 0; k < layerMessages.length; k++) {
-                                        var match = layerMessages[k].match(/to ([\d\.]+)ms/);
-                                        if (match) {
-                                            finalTimes.push(parseFloat(match[1]));
-                                        }
-                                    }
-                                    
-                                    if (finalTimes.length >= 2) {
-                                        // Sort times to get consistent interval calculation
-                                        finalTimes.sort(function(a, b) { return a - b; });
-                                        
-                                        // Calculate actual interval between layers
-                                        var actualInterval = finalTimes[1] - finalTimes[0]; // Assuming uniform intervals
-                                        var actualFrames = Math.round((actualInterval / 1000) * 60); // Convert to frames at 60fps
-                                        
-                                        console.log('Calculated true stagger: ' + actualInterval + 'ms = ' + actualFrames + 'f');
-                                        
-                                        // Set cumulative counter to match the actual result
-                                        cumulativeStaggerFrames = actualFrames;
-                                        updateStaggerDisplay(0, 0, true); // Force display update without changing counter
-                                    } else {
-                                        // Fallback to normal cumulative logic
-                                        updateStaggerDisplay(staggerFrames, 1, true);
-                                    }
-                                } else {
-                                    // Normal cumulative stagger - no snapping occurred
-                                    console.log('Actual movement detected (' + effectiveStaggerValue + 'ms) - updating stagger display');
-                                    updateStaggerDisplay(staggerFrames, 1, true);
-                                }
-                            } else {
-                                // Fallback to old logic if we can't parse the result
-                                console.log('Could not parse effective stagger, using fallback logic');
-                                var layerMessages = debugMessages.filter(function(msg) { 
-                                    return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
-                                });
-                                
-                                var allSameTime = true;
-                                var firstToTime = null;
-                                for (var k = 0; k < layerMessages.length; k++) {
-                                    var match = layerMessages[k].match(/to ([\d\.]+)ms/);
-                                    if (match) {
-                                        var toTime = parseFloat(match[1]);
-                                        if (firstToTime === null) {
-                                            firstToTime = toTime;
-                                        } else if (Math.abs(toTime - firstToTime) > 0.1) {
-                                            allSameTime = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                                
-                                if (allSameTime && layerMessages.length > 1) {
-                                    resetCumulativeStagger();
-                                } else {
-                                    updateStaggerDisplay(staggerFrames, 1, true);
-                                }
-                            }
+                            // Remove all immediate stagger display updates - let handleReadKeyframes() handle it
+                            console.log('Stagger operation completed, letting automatic read update the display');
                         }
+                        
+                        // After successful stagger operation, automatically read current state
+                        setTimeout(function() {
+                            console.log('Auto-reading keyframes after stagger increment to get current state');
+                            handleReadKeyframes();
+                        }, 100);
+                        
                     } else if (status === 'error') {
                         console.log('Stagger error:', parts[1]);
                         // Don't show errors in stagger display - errors should only be in debug panel
@@ -1413,84 +1355,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             console.log('Debug DECREMENT: effectiveStaggerValue=' + effectiveStaggerValue + ' from "' + effectiveStaggerText + '"');
                             
-                            if (effectiveStaggerValue === 0) {
-                                // No actual stagger exists - reset cumulative counter and display to 0ms
-                                console.log('No actual stagger detected (0ms effective stagger) - resetting display to 0ms');
-                                cumulativeStaggerFrames = 0; // Reset cumulative counter first
-                                updateStaggerDisplay(0, 0, true); // Then update display
-                            } else if (effectiveStaggerValue !== null) {
-                                // Check if smart snapping occurred
-                                var smartSnappingOccurred = debugMessages.some(function(msg) {
-                                    return msg.indexOf('Snapped layers to clean') !== -1 && msg.indexOf('frame increments') !== -1;
-                                });
-                                
-                                if (smartSnappingOccurred) {
-                                    console.log('Smart snapping detected - calculating true effective stagger from final positions');
-                                    
-                                    // Extract final layer times from debug messages to calculate true stagger
-                                    var layerMessages = debugMessages.filter(function(msg) { 
-                                        return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
-                                    });
-                                    
-                                    var finalTimes = [];
-                                    for (var k = 0; k < layerMessages.length; k++) {
-                                        var match = layerMessages[k].match(/to ([\d\.]+)ms/);
-                                        if (match) {
-                                            finalTimes.push(parseFloat(match[1]));
-                                        }
-                                    }
-                                    
-                                    if (finalTimes.length >= 2) {
-                                        // Sort times to get consistent interval calculation
-                                        finalTimes.sort(function(a, b) { return a - b; });
-                                        
-                                        // Calculate actual interval between layers
-                                        var actualInterval = finalTimes[1] - finalTimes[0]; // Assuming uniform intervals
-                                        var actualFrames = Math.round((actualInterval / 1000) * 60); // Convert to frames at 60fps
-                                        
-                                        console.log('Calculated true stagger: ' + actualInterval + 'ms = ' + actualFrames + 'f');
-                                        
-                                        // Set cumulative counter to match the actual result
-                                        cumulativeStaggerFrames = actualFrames;
-                                        updateStaggerDisplay(0, 0, true); // Force display update without changing counter
-                                    } else {
-                                        // Fallback to normal cumulative logic
-                                        updateStaggerDisplay(staggerFrames, -1, true);
-                                    }
-                                } else {
-                                    // Normal cumulative stagger - no snapping occurred
-                                    console.log('Actual movement detected (' + effectiveStaggerValue + 'ms) - updating stagger display');
-                                    updateStaggerDisplay(staggerFrames, -1, true);
-                                }
-                            } else {
-                                // Fallback to old logic if we can't parse the result
-                                console.log('Could not parse effective stagger, using fallback logic');
-                                var layerMessages = debugMessages.filter(function(msg) { 
-                                    return msg.indexOf('Layer') !== -1 && msg.indexOf('from') !== -1 && msg.indexOf('to') !== -1; 
-                                });
-                                
-                                var allSameTime = true;
-                                var firstToTime = null;
-                                for (var k = 0; k < layerMessages.length; k++) {
-                                    var match = layerMessages[k].match(/to ([\d\.]+)ms/);
-                                    if (match) {
-                                        var toTime = parseFloat(match[1]);
-                                        if (firstToTime === null) {
-                                            firstToTime = toTime;
-                                        } else if (Math.abs(toTime - firstToTime) > 0.1) {
-                                            allSameTime = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                                
-                                if (allSameTime && layerMessages.length > 1) {
-                                    resetCumulativeStagger();
-                                } else {
-                                    updateStaggerDisplay(staggerFrames, -1, true);
-                                }
-                            }
+                            // Remove all immediate stagger display updates - let handleReadKeyframes() handle it
+                            console.log('Stagger operation completed, letting automatic read update the display');
                         }
+                        
+                        // After successful stagger operation, automatically read current state
+                        setTimeout(function() {
+                            console.log('Auto-reading keyframes after stagger decrement to get current state');
+                            handleReadKeyframes();
+                        }, 100);
+                        
                     } else if (status === 'error') {
                         console.log('Stagger error:', parts[1]);
                         // Don't show errors in stagger display - errors should only be in debug panel
