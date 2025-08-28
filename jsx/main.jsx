@@ -27,6 +27,21 @@ var DEBUG_JSX = {
     }
 };
 
+// Helper function for more accurate millisecond rounding
+// Handles tiny values near zero and reduces floating point errors
+function roundMs(seconds) {
+    var ms = seconds * 1000;
+    
+    // If the value is very close to zero (within 0.5ms), treat it as zero
+    // This prevents 0.4ms from rounding to 1ms
+    if (Math.abs(ms) < 0.5) {
+        return 0;
+    }
+    
+    // For other values, use standard rounding
+    return Math.round(ms);
+}
+
 // User Preferences - Save/Load resolution multiplier
 function saveResolutionPreference(multiplier) {
     try {
@@ -203,7 +218,7 @@ function readKeyframesSmart() {
             // Calculate all delays from earliest keyframe
             var delays = [];
             for (var k = 0; k < propertyTimes.length; k++) {
-                var delayMs = Math.round((propertyTimes[k].time - earliestTime) * 1000);
+                var delayMs = roundMs(propertyTimes[k].time - earliestTime);
                 delays.push(delayMs);
             }
             
@@ -293,7 +308,7 @@ function readKeyframesSmart() {
                     }
                     times.sort(function(a, b) { return a - b; });
                     var durationSeconds = times[times.length - 1] - times[0];
-                    var durationMs = Math.round(durationSeconds * 1000);
+                    var durationMs = roundMs(durationSeconds);
                     propertyDurations.push(durationMs);
                     DEBUG_JSX.log("Property " + propInfo.name + " duration: " + durationMs + "ms");
                 }
@@ -540,7 +555,7 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
                 }
                 
                 // Collect all keyframe times for this layer (not just earliest)
-                var timeMs = Math.round(item.time * 1000);
+                var timeMs = roundMs(item.time);
                 // ExtendScript doesn't have indexOf, so use manual search
                 var timeExists = false;
                 for (var t = 0; t < layerGroups[layerIndex].times.length; t++) {
@@ -598,7 +613,7 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         var staggers = [];
         for (var i = 1; i < layerTimes.length; i++) {
             var staggerSeconds = layerTimes[i].time - layerTimes[i-1].time;
-            var staggerMs = Math.round(staggerSeconds * 1000);
+            var staggerMs = roundMs(staggerSeconds);
             DEBUG_JSX.log("Stagger " + i + ": " + Math.round(layerTimes[i-1].time * 1000) + "ms -> " + Math.round(layerTimes[i].time * 1000) + "ms = " + staggerMs + "ms");
             staggers.push(staggerMs);
         }
@@ -690,7 +705,7 @@ function readLayerDelays(selectedLayers, comp) {
         
         if (layerTimes.length === 1) {
             // Single layer - show its startTime as delay
-            var delayMs = Math.round(layerTimes[0].time * 1000);
+            var delayMs = roundMs(layerTimes[0].time);
             var delayFrames = Math.round(layerTimes[0].time * frameRate);
             
             // Single layer mode - return with cross-property format and duration -999 (not applicable for layers)
@@ -706,7 +721,7 @@ function readLayerDelays(selectedLayers, comp) {
         // Calculate all delays from earliest layer
         var delays = [];
         for (var k = 0; k < layerTimes.length; k++) {
-            var delayMs = Math.round((layerTimes[k].time - earliestTime) * 1000);
+            var delayMs = roundMs(layerTimes[k].time - earliestTime);
             delays.push(delayMs);
         }
         
@@ -916,7 +931,7 @@ function readKeyframesDuration() {
         var durationSeconds = Math.abs(time2 - time1);
         
         // Convert to milliseconds
-        var durationMs = Math.round(durationSeconds * 1000);
+        var durationMs = roundMs(durationSeconds);
         
         // Convert to frames using composition frame rate
         var frameRate = comp.frameRate || 30;
@@ -1166,7 +1181,7 @@ function adjustKeyframeDurationFromPanel(adjustment) {
         var firstTime = targetProperty.keyTime(selectedKeys[0]);
         var lastTime = targetProperty.keyTime(selectedKeys[selectedKeys.length - 1]);
         var newDuration = lastTime - firstTime;
-        var newDurationMs = Math.round(newDuration * 1000);
+        var newDurationMs = roundMs(newDuration);
         var frameRate = comp.frameRate || 30;
         var newDurationFrames = Math.round(newDuration * frameRate);
         
@@ -1415,7 +1430,7 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
         }
         
         // Return success with new duration
-        var newDurationMs = Math.round(totalDuration * 1000);
+        var newDurationMs = roundMs(totalDuration);
         var newDurationFrames = Math.round(totalDuration * comp.frameRate);
         
         return "success|" + newDurationMs + "|" + newDurationFrames;
@@ -1814,7 +1829,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
         // We've already selected the specific keyframes we want above
         
         // Return success with new duration
-        var newDurationMs = Math.round(totalDuration * 1000);
+        var newDurationMs = roundMs(totalDuration);
         var newDurationFrames = Math.round(totalDuration * frameRate);
         
         DEBUG_JSX.log("🎬 Frame-based duration stretch completed: " + newDurationMs + "ms / " + newDurationFrames + "f");
@@ -2236,7 +2251,7 @@ function stretchMultiPropertyDuration(direction) {
             // Skip this property if we don't have at least 2 valid keyframes
             if (times.length < 2) continue;
             times.sort(function(a, b) { return a - b; });
-            var currentDurationMs = Math.round((times[times.length - 1] - times[0]) * 1000);
+            var currentDurationMs = roundMs(times[times.length - 1] - times[0]);
             
             // Apply smart snapping to find target duration
             var targetDurationMs = calculateDelaySnap(currentDurationMs, direction);
@@ -4808,7 +4823,7 @@ function applyStagger(direction, staggerFrames, isTopToBottom) {
         }
         
         // Convert stagger frames to milliseconds
-        var staggerMs = Math.round((staggerFrames / frameRate) * 1000);
+        var staggerMs = roundMs(staggerFrames / frameRate);
         DEBUG_JSX.log("Stagger: " + staggerFrames + " frames = " + staggerMs + "ms at " + frameRate + "fps");
         
         // Check for selected keyframes first (keyframes take precedence)

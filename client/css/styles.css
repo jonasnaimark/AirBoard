@@ -566,7 +566,12 @@ input.distance-input[data-tooltip]:hover::after {
     margin: 0 auto;
     vertical-align: middle;
     opacity: 0.72;
-    transition: opacity 0.1s ease;
+    transition: opacity 0.1s ease, transform 0.3s ease;
+}
+
+/* Stagger button flip animation */
+.keyframe-display .distance-controls .distance-btn.flipped img {
+    transform: scaleX(-1);
 }
 
 .keyframe-display .distance-controls .distance-btn.selected img {
@@ -683,8 +688,19 @@ input.distance-input[data-tooltip]:hover::after {
     padding: 0;
 }
 
-.stagger-input {
+/* Delay and Duration controls - 3 elements at 1/3 width each */
+#delayDisplay .stagger-controls .stagger-input,
+#durationDisplay .stagger-controls .stagger-input {
     width: calc(33.33% - 4px);
+}
+
+#delayDisplay .stagger-controls .stagger-btn,
+#durationDisplay .stagger-controls .stagger-btn {
+    width: calc(33.33% - 4px);
+}
+
+.stagger-input {
+    width: calc(25% - 4.5px);
     margin: 0;
     background-color: #1a1a1a;
     color: #cccccc;
@@ -732,7 +748,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .stagger-btn {
-    width: calc(33.33% - 4px);
+    width: calc(25% - 4.5px);
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
@@ -950,15 +966,61 @@ input.distance-input[data-tooltip]:hover::after {
 
 /* Removed specific section classes - now using unified .section class */
 
-/* Stagger input tooltip styles */
-.stagger-input[data-tooltip]:hover::before,
-.stagger-input[data-tooltip]:hover::after {
+/* Stagger input within distance-controls layout */
+.keyframe-display .distance-controls .stagger-input {
+    flex: 1;
+    margin: 0;
+    background-color: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cccccc;
+    padding: 6px 8px;
+    font-size: 11px;
+    text-align: center;
+    font-weight: 500;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.keyframe-display .distance-controls .stagger-input:hover {
+    background-color: #222222;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.keyframe-display .distance-controls .stagger-input:focus {
+    background-color: #222222;
+    color: #ffffff;
+    border-color: #4a90e2;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Hide number input arrows for stagger input in distance-controls */
+.keyframe-display .distance-controls .stagger-input::-webkit-outer-spin-button,
+.keyframe-display .distance-controls .stagger-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.keyframe-display .distance-controls .stagger-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* Stagger input tooltip styles - now handled by distance-controls context */
+.keyframe-display .distance-controls .stagger-input[data-tooltip] {
+    position: relative;
+}
+
+.keyframe-display .distance-controls .stagger-input[data-tooltip]:hover::before,
+.keyframe-display .distance-controls .stagger-input[data-tooltip]:hover::after {
     opacity: 1;
     pointer-events: none;
 }
 
-.stagger-input[data-tooltip]::before,
-.stagger-input[data-tooltip]::after {
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::before,
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::after {
     position: absolute;
     opacity: 0;
     pointer-events: none;
@@ -966,7 +1028,7 @@ input.distance-input[data-tooltip]:hover::after {
     z-index: 1000;
 }
 
-.stagger-input[data-tooltip]::before {
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::before {
     content: attr(data-tooltip);
     background-color: #1a1a1a;
     color: #ffffff;
@@ -982,7 +1044,7 @@ input.distance-input[data-tooltip]:hover::after {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.stagger-input[data-tooltip]::after {
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::after {
     content: '';
     border: 4px solid transparent;
     border-top-color: #1a1a1a;

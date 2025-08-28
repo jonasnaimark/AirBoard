@@ -4,18 +4,21 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/jonasnaimark/AirBoard?include_prereleases)](https://github.com/jonasnaimark/AirBoard/releases)
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
-[![Version](https://img.shields.io/badge/version-4.10.0-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.10.0)
+[![Version](https://img.shields.io/badge/version-4.11.0-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.11.0)
 
 > Transform your After Effects workflow with precision keyframe control, automated device compositions, gesture animations, and professional effects.
 
-## 🎯 What's New in v4.10.0 - Keyframe Nudger Feature Complete!
+## 🎯 What's New in v4.11.0 - Stagger Direction & Precision Improvements!
 
-### 🚀 Revolutionary Keyframe Control
-- **Smart Duration Snapping**: Intelligently snaps to clean time intervals based on your frame input
-- **Multi-Property Selection Preservation**: Maintains selection across Position, Opacity, and other properties
-- **Cross-Property Mode**: Automatically detects and handles multiple property types
-- **Position Distance Nudging**: Precise control over X and Y position changes
-- **Delay/Stagger Control**: Perfect timing adjustments for multi-layer animations
+### 🎨 Enhanced Stagger Control
+- **Stagger Direction Toggle**: Switch between bottom-to-top and top-to-bottom layer ordering
+- **Visual Direction Indicator**: Icon flips to show active stagger direction
+- **Improved Tooltips**: Clear hover hints for all control buttons
+
+### 🔧 Precision Improvements  
+- **Fixed Rounding Errors**: No more 1ms showing instead of 0ms
+- **Better Float Precision**: Improved accuracy for small time values
+- **Consistent Calculations**: All timing operations use enhanced rounding
 
 ## ✨ Core Features
 

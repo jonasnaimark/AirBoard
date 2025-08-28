@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.11.0] - 2024-12-28 🎯 **STAGGER DIRECTION & PRECISION IMPROVEMENTS**
+### ✨ Added - Enhanced Stagger Control
+- **Stagger Direction Toggle**: New button to switch between bottom-to-top (default) and top-to-bottom layer ordering
+  - Visual indicator: Icon flips horizontally to show active direction
+  - Works for both keyframe and layer staggering
+  - Persistent state during session
+- **Enhanced Tooltips**: 
+  - "Stagger direction" tooltip for direction toggle button
+  - "First keyframe" tooltip for In buttons (X and Y distance)
+  - "Last keyframe" tooltip for Out buttons (X and Y distance)
+
+### 🔧 Fixed - Rounding Precision
+- **Improved Millisecond Rounding**: Fixed issue where values would show 1ms instead of 0ms
+  - Added `roundMs()` helper function for more accurate rounding
+  - Values less than 0.5ms now correctly round to 0ms (prevents 0.4ms → 1ms)
+  - Reduces floating point precision errors in stagger/delay/duration calculations
+- **Affected Areas**: Stagger, delay, and duration calculations all use improved rounding
+
 ## [4.10.0] - 2024-12-28 🎉 **KEYFRAME NUDGER FEATURE COMPLETE**
 ### ✨ Added - COMPREHENSIVE KEYFRAME NUDGING SYSTEM
 - **Multi-Property Selection Preservation**: Fixed complex issue where selecting keyframes across multiple properties (Position + Opacity) would lose selection during nudging operations
