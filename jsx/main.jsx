@@ -2279,8 +2279,239 @@ function nudgeDelay(direction) {
                     var newTimelinePositionMs = newTimelineTime * 1000;
                     var newTimelinePositionFrames = Math.round(newTimelineTime * frameRate);
                     
+                    // COMPOSITION MARKER SYNCING FOR FORCED TIMELINE MODE
+                    try {
+                        DEBUG_JSX.log("🎬 MARKER SYNC: Starting forced timeline marker sync");
+                        debugInfo.push("MARKER SYNC: Starting forced timeline marker sync");
+                        
+                        // Safety check: ensure comp and markerProperty exist
+                        if (!comp || !comp.markerProperty) {
+                            DEBUG_JSX.log("No composition or marker property available");
+                            debugInfo.push("MARKER SYNC: No comp or marker property");
+                        } else {
+                            DEBUG_JSX.log("Composition has " + comp.markerProperty.numKeys + " markers");
+                            debugInfo.push("MARKER SYNC: Found " + comp.markerProperty.numKeys + " markers");
+                            
+                            // Additional diagnostic: check if there are layer markers instead
+                            DEBUG_JSX.log("DIAGNOSTIC: Checking for layer markers on selected layers");
+                            var selectedLayers = comp.selectedLayers;
+                            for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                                var layer = selectedLayers[layerIdx];
+                                if (layer.marker && layer.marker.numKeys > 0) {
+                                    DEBUG_JSX.log("DIAGNOSTIC: Layer '" + layer.name + "' has " + layer.marker.numKeys + " markers");
+                                    for (var m = 1; m <= layer.marker.numKeys; m++) {
+                                        var markerTime = layer.marker.keyTime(m);
+                                        var markerValue = layer.marker.keyValue(m);
+                                        var markerComment = markerValue.comment || "";
+                                        DEBUG_JSX.log("DIAGNOSTIC: Layer marker " + m + " at " + markerTime + "s: '" + markerComment + "'");
+                                    }
+                                }
+                            }
+                            
+                            // Check composition properties for other marker types
+                            DEBUG_JSX.log("DIAGNOSTIC: Composition properties count: " + comp.numProperties);
+                            for (var i = 1; i <= comp.numProperties; i++) {
+                                try {
+                                    var prop = comp.property(i);
+                                    DEBUG_JSX.log("DIAGNOSTIC: Comp property " + i + ": " + prop.name + " (numKeys: " + (prop.numKeys || 0) + ")");
+                                } catch(e) {
+                                    DEBUG_JSX.log("DIAGNOSTIC: Error checking comp property " + i + ": " + e.toString());
+                                }
+                            }
+                            
+                            var markersToMove = [];
+                            
+                            // Check for LAYER MARKERS instead of composition markers
+                            // Since we're moving keyframes on specific layers, check those layers for markers
+                            var selectedLayers = comp.selectedLayers;
+                            for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                                var layer = selectedLayers[layerIdx];
+                                
+                                if (layer.marker && layer.marker.numKeys > 0) {
+                                    DEBUG_JSX.log("Checking layer '" + layer.name + "' with " + layer.marker.numKeys + " markers");
+                                    
+                                    for (var m = 1; m <= layer.marker.numKeys; m++) {
+                                        try {
+                                            var markerTime = layer.marker.keyTime(m);
+                                            
+                                            DEBUG_JSX.log("Checking layer marker " + m + " at time " + markerTime + "s vs original " + originalEarliestTime + "s");
+                                            
+                                            // Check if marker is at same time as original first keyframes (with small tolerance)
+                                            if (Math.abs(markerTime - originalEarliestTime) < (0.5 / frameRate)) {
+                                                var markerValue = layer.marker.keyValue(m);
+                                                var markerComment = markerValue.comment || "";
+                                                
+                                                DEBUG_JSX.log("Found layer marker '" + markerComment + "' at original timeline position " + markerTime + "s on layer " + layer.name);
+                                                debugInfo.push("MARKER SYNC: Found layer marker '" + markerComment + "' at " + markerTime + "s");
+                                                
+                                                var newMarkerTime = Math.max(0, newTimelineTime);
+                                                
+                                                markersToMove.push({
+                                                    markerIndex: m,
+                                                    oldTime: markerTime,
+                                                    newTime: newMarkerTime,
+                                                    markerValue: markerValue,
+                                                    comment: markerComment,
+                                                    layer: layer // Include layer reference for layer markers
+                                                });
+                                            }
+                                        } catch(markerCheckError) {
+                                            DEBUG_JSX.log("Error checking layer marker " + m + ": " + markerCheckError.toString());
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Move synchronized layer markers
+                            if (markersToMove.length > 0) {
+                                DEBUG_JSX.log("Moving " + markersToMove.length + " layer markers in forced timeline mode");
+                                debugInfo.push("MARKER SYNC: Moving " + markersToMove.length + " layer markers");
+                                
+                                markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                                
+                                for (var m = 0; m < markersToMove.length; m++) {
+                                    var markerInfo = markersToMove[m];
+                                    
+                                    try {
+                                        // Use layer.marker instead of comp.markerProperty
+                                        markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
+                                        var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
+                                        markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                        
+                                        DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms on layer " + markerInfo.layer.name);
+                                        debugInfo.push("Synced layer marker '" + markerInfo.comment + "' with timeline");
+                                        
+                                    } catch(markerMoveError) {
+                                        DEBUG_JSX.log("Failed to move layer marker in forced timeline: " + markerMoveError.toString());
+                                        debugInfo.push("MARKER SYNC: Failed to move layer marker " + markerInfo.comment + ": " + markerMoveError.toString());
+                                    }
+                                }
+                            } else {
+                                DEBUG_JSX.log("No layer markers found at original timeline position " + originalEarliestTime + "s");
+                                debugInfo.push("MARKER SYNC: No layer markers at position " + originalEarliestTime + "s");
+                            }
+                        }
+                        
+                    } catch(markerSyncError) {
+                        DEBUG_JSX.log("Marker sync error in forced timeline: " + markerSyncError.toString());
+                        debugInfo.push("Marker sync error: " + markerSyncError.toString());
+                    }
+                    
+                    // Store keyframe selection info before ending undo group
+                    var keyframeSelectionInfo = [];
+                    for (var i = 0; i < timelinePropertyData.length; i++) {
+                        var propInfo = timelinePropertyData[i];
+                        keyframeSelectionInfo.push({
+                            property: propInfo.property,
+                            newSelIndices: propInfo.newSelIndices
+                        });
+                    }
+                    
                     app.endUndoGroup();
-                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE-FORCED|" + debugInfo.join(" | ");
+                    
+                    // COMPOSITION MARKER SYNCING AFTER UNDO GROUP - this prevents selection clearing
+                    try {
+                        DEBUG_JSX.log("🎬 MARKER SYNC: Starting post-undo marker sync");
+                        
+                        var selectedLayers = comp.selectedLayers;
+                        var markersToMove = [];
+                        
+                        // Check for layer markers on selected layers
+                        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                            var layer = selectedLayers[layerIdx];
+                            
+                            if (layer.marker && layer.marker.numKeys > 0) {
+                                DEBUG_JSX.log("Checking layer '" + layer.name + "' with " + layer.marker.numKeys + " markers");
+                                
+                                for (var m = 1; m <= layer.marker.numKeys; m++) {
+                                    try {
+                                        var markerTime = layer.marker.keyTime(m);
+                                        
+                                        // Check if marker is at same time as original first keyframes
+                                        if (Math.abs(markerTime - originalEarliestTime) < (0.5 / frameRate)) {
+                                            var markerValue = layer.marker.keyValue(m);
+                                            var markerComment = markerValue.comment || "";
+                                            
+                                            DEBUG_JSX.log("Found layer marker '" + markerComment + "' to sync from " + markerTime + "s to " + newTimelineTime + "s");
+                                            
+                                            markersToMove.push({
+                                                markerIndex: m,
+                                                oldTime: markerTime,
+                                                newTime: Math.max(0, newTimelineTime),
+                                                markerValue: markerValue,
+                                                comment: markerComment,
+                                                layer: layer
+                                            });
+                                        }
+                                    } catch(markerCheckError) {
+                                        DEBUG_JSX.log("Error checking layer marker: " + markerCheckError.toString());
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Move layer markers in separate undo group
+                        if (markersToMove.length > 0) {
+                            app.beginUndoGroup("Sync Layer Markers");
+                            
+                            markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                            
+                            for (var m = 0; m < markersToMove.length; m++) {
+                                var markerInfo = markersToMove[m];
+                                
+                                try {
+                                    markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
+                                    var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
+                                    markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                    
+                                    DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms");
+                                    debugInfo.push("Synced layer marker '" + markerInfo.comment + "'");
+                                    
+                                } catch(markerMoveError) {
+                                    DEBUG_JSX.log("Failed to move layer marker: " + markerMoveError.toString());
+                                }
+                            }
+                            
+                            app.endUndoGroup();
+                        }
+                        
+                    } catch(markerSyncError) {
+                        DEBUG_JSX.log("Post-undo marker sync error: " + markerSyncError.toString());
+                    }
+                    
+                    // CRITICAL: Restore keyframe selection after marker operations
+                    try {
+                        DEBUG_JSX.log("Restoring keyframe selection for " + keyframeSelectionInfo.length + " properties");
+                        
+                        for (var i = 0; i < keyframeSelectionInfo.length; i++) {
+                            var selInfo = keyframeSelectionInfo[i];
+                            var prop = selInfo.property;
+                            
+                            // First deselect all keyframes
+                            for (var j = 1; j <= prop.numKeys; j++) {
+                                prop.setSelectedAtKey(j, false);
+                            }
+                            
+                            // Then select our keyframes
+                            for (var k = 0; k < selInfo.newSelIndices.length; k++) {
+                                var idx = selInfo.newSelIndices[k];
+                                prop.setSelectedAtKey(idx, true);
+                                DEBUG_JSX.log("Reselected keyframe at index " + idx);
+                            }
+                        }
+                        
+                        debugInfo.push("Keyframe selection restored");
+                        
+                    } catch(selectionRestoreError) {
+                        DEBUG_JSX.log("Selection restore error: " + selectionRestoreError.toString());
+                        debugInfo.push("Selection restore failed: " + selectionRestoreError.toString());
+                    }
+                    
+                    // Include all DEBUG_JSX messages in the result
+                    var allDebugMessages = DEBUG_JSX.getMessages();
+                    var finalDebugInfo = debugInfo.concat(allDebugMessages);
+                    
+                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE-FORCED|" + finalDebugInfo.join(" | ");
                 } catch(forcedError) {
                     debugInfo.push("FORCED TIMELINE ERROR: " + forcedError.toString());
                 }
@@ -2391,6 +2622,62 @@ function nudgeDelay(direction) {
                             prop.setSelectedAtKey(idx, true);
                             debugInfo.push("FORCED: Selecting keyframe at index " + idx + " on " + propInfo.propName);
                         }
+                    }
+                    
+                    // COMPOSITION MARKER SYNCING FOR REGULAR TIMELINE MODE
+                    try {
+                        DEBUG_JSX.log("Starting marker sync for regular timeline mode");
+                        var markersToMove = [];
+                        
+                        // Check if there are markers at the original timeline position that should move
+                        for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
+                            var markerTime = comp.markerProperty.keyTime(m);
+                            
+                            // Check if marker is at same time as original first keyframes (with small tolerance)
+                            if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
+                                var markerValue = comp.markerProperty.keyValue(m);
+                                var markerComment = markerValue.comment || "";
+                                
+                                DEBUG_JSX.log("Found marker '" + markerComment + "' at original timeline position " + markerTime + "s");
+                                
+                                var newMarkerTime = Math.max(0, newTimelineTime);
+                                
+                                markersToMove.push({
+                                    markerIndex: m,
+                                    oldTime: markerTime,
+                                    newTime: newMarkerTime,
+                                    markerValue: markerValue,
+                                    comment: markerComment
+                                });
+                            }
+                        }
+                        
+                        // Move synchronized markers
+                        if (markersToMove.length > 0) {
+                            DEBUG_JSX.log("Moving " + markersToMove.length + " markers in regular timeline mode");
+                            
+                            markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                            
+                            for (var m = 0; m < markersToMove.length; m++) {
+                                var markerInfo = markersToMove[m];
+                                
+                                try {
+                                    comp.markerProperty.removeKey(markerInfo.markerIndex);
+                                    var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
+                                    comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                    
+                                    DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms");
+                                    debugInfo.push("Synced marker '" + markerInfo.comment + "' with timeline");
+                                    
+                                } catch(markerMoveError) {
+                                    DEBUG_JSX.log("Failed to move marker in regular timeline: " + markerMoveError.toString());
+                                }
+                            }
+                        }
+                        
+                    } catch(markerSyncError) {
+                        DEBUG_JSX.log("Marker sync error in regular timeline: " + markerSyncError.toString());
+                        debugInfo.push("Marker sync error: " + markerSyncError.toString());
                     }
                     
                     var newTimelinePositionMs = newTimelineTime * 1000;
@@ -2576,6 +2863,120 @@ function nudgeDelay(direction) {
             }
             
             debugInfo.push("Total keyframes moved: " + movedCount);
+            
+            // COMPOSITION MARKER SYNCING: Move markers that are at the same frame as first keyframes of properties
+            try {
+                DEBUG_JSX.log("Starting composition marker sync check");
+                var comp = app.project.activeItem;
+                var markersToMove = [];
+                
+                // For each property that had keyframes moved, check if there are markers at the same time as the first keyframe
+                for (var i = 0; i < propertyDelays.length; i++) {
+                    var propData = propertyDelays[i];
+                    
+                    // Find the first keyframe time for this property (before movement)
+                    if (propData.keyframes && propData.keyframes.length > 0) {
+                        var firstKeyframeTime = propData.keyframes[0].time; // Original time before movement
+                        var firstKeyframeFrameNumber = Math.round(firstKeyframeTime * frameRate) + 1; // Convert to 1-based frame number
+                        
+                        DEBUG_JSX.log("Property " + propData.property + " first keyframe originally at " + firstKeyframeTime + "s (frame " + firstKeyframeFrameNumber + ")");
+                        
+                        // Check all composition markers for ones at this exact frame
+                        for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
+                            var markerTime = comp.markerProperty.keyTime(m);
+                            var markerFrameNumber = Math.round(markerTime * frameRate) + 1;
+                            
+                            // Check if marker is at same frame as first keyframe (with small tolerance for floating point)
+                            if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
+                                var markerValue = comp.markerProperty.keyValue(m);
+                                var markerComment = markerValue.comment || ""; // Get marker comment/label
+                                
+                                DEBUG_JSX.log("Found marker at frame " + markerFrameNumber + " (time " + markerTime + "s) with comment: '" + markerComment + "'");
+                                
+                                // Calculate new marker time based on the same offset as the keyframe
+                                var currentTime = propData.currentDelay;
+                                var newKeyframeTime;
+                                
+                                if (useIndividualDelays) {
+                                    var targetDelaySeconds = propData.targetDelay / 1000;
+                                    newKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                                } else {
+                                    if (propData.isOriginalBaseline) {
+                                        newKeyframeTime = originalEarliestTime; // Baseline stays at original time
+                                    } else {
+                                        var targetDelaySeconds = targetDelayMs / 1000;
+                                        newKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                                    }
+                                }
+                                
+                                // Calculate the time offset applied to the keyframe
+                                var keyframeOffset = newKeyframeTime - currentTime;
+                                var newMarkerTime = markerTime + keyframeOffset;
+                                
+                                // Ensure marker doesn't go to negative time
+                                newMarkerTime = Math.max(0, newMarkerTime);
+                                
+                                DEBUG_JSX.log("Marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
+                                
+                                // Store marker info for movement (avoid duplicate moves)
+                                var alreadyQueued = false;
+                                for (var q = 0; q < markersToMove.length; q++) {
+                                    if (markersToMove[q].markerIndex === m) {
+                                        alreadyQueued = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!alreadyQueued) {
+                                    markersToMove.push({
+                                        markerIndex: m,
+                                        oldTime: markerTime,
+                                        newTime: newMarkerTime,
+                                        markerValue: markerValue,
+                                        property: propData.property,
+                                        comment: markerComment
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Move the markers that were found to be synchronized with first keyframes
+                if (markersToMove.length > 0) {
+                    DEBUG_JSX.log("Moving " + markersToMove.length + " synchronized markers:");
+                    
+                    // Sort markers by index in reverse order to avoid index shifts when removing
+                    markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                    
+                    for (var m = 0; m < markersToMove.length; m++) {
+                        var markerInfo = markersToMove[m];
+                        
+                        try {
+                            // Remove the old marker
+                            comp.markerProperty.removeKey(markerInfo.markerIndex);
+                            
+                            // Add new marker at the new time with same properties
+                            var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
+                            comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                            
+                            DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms (synced with " + markerInfo.property + ")");
+                            debugInfo.push("Synced marker '" + markerInfo.comment + "' with " + markerInfo.property);
+                            
+                        } catch(markerMoveError) {
+                            DEBUG_JSX.log("Failed to move marker " + markerInfo.comment + ": " + markerMoveError.toString());
+                            debugInfo.push("Failed to sync marker: " + markerMoveError.toString());
+                        }
+                    }
+                } else {
+                    DEBUG_JSX.log("No composition markers found at first keyframe times");
+                }
+                
+            } catch(markerSyncError) {
+                // Don't fail the entire operation if marker syncing fails
+                DEBUG_JSX.log("Marker sync error: " + markerSyncError.toString());
+                debugInfo.push("Marker sync error: " + markerSyncError.toString());
+            }
             
         } catch(moveError) {
             app.endUndoGroup();
