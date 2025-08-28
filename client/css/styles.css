@@ -488,6 +488,9 @@ input.distance-input[data-tooltip]:hover::after {
     height: 26px;
     border-radius: 4px;
     outline: none; /* Remove focus outline */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .keyframe-display .distance-controls .distance-btn:hover {
@@ -505,7 +508,57 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .keyframe-display .distance-controls .distance-btn.nudge-btn {
-    font-size: 13px; /* Slightly bigger - + icons for nudge buttons */
+    font-size: 13px; /* Slightly bigger for arrow icons */
+}
+
+/* CSS triangles for perfectly aligned directional arrows */
+.triangle {
+    display: inline-block;
+    width: 0;
+    height: 0;
+}
+
+.triangle-right {
+    border-left: 5px solid #cccccc;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+}
+
+.triangle-left {
+    border-right: 5px solid #cccccc;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+}
+
+.triangle-up {
+    border-bottom: 5px solid #cccccc;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    transform: translateY(-1px);
+}
+
+.triangle-down {
+    border-top: 5px solid #cccccc;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    transform: translateY(-1px);
+}
+
+/* Change triangle color on hover */
+.distance-btn:hover .triangle-right {
+    border-left-color: #ffffff;
+}
+
+.distance-btn:hover .triangle-left {
+    border-right-color: #ffffff;
+}
+
+.distance-btn:hover .triangle-up {
+    border-bottom-color: #ffffff;
+}
+
+.distance-btn:hover .triangle-down {
+    border-top-color: #ffffff;
 }
 
 .keyframe-display .distance-controls .distance-btn img {
@@ -633,11 +686,11 @@ input.distance-input[data-tooltip]:hover::after {
 .stagger-input {
     width: calc(33.33% - 4px);
     margin: 0;
-    background-color: #2f2f2f;
+    background-color: #1a1a1a;
     color: #cccccc;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+    cursor: text;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     font-size: 11px;
     font-weight: 500;
@@ -654,15 +707,17 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .stagger-input:hover {
-    background-color: #3c3c3c;
+    background-color: #222222;
     color: #ffffff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
 
 .stagger-input:focus {
-    background-color: #3c3c3c;
+    background-color: #222222;
     color: #ffffff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    border-color: #4a90e2;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4), 0 0 0 1px rgba(74, 144, 226, 0.3);
 }
 
 /* Hide number input arrows */
@@ -685,12 +740,16 @@ input.distance-input[data-tooltip]:hover::after {
     box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     cursor: pointer;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 500;
     height: 26px;
     border-radius: 4px;
     outline: none;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 2px;
 }
 
 .stagger-btn:hover {

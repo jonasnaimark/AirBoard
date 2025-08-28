@@ -878,11 +878,11 @@ document.addEventListener('DOMContentLoaded', function() {
         delayText.textContent = 'Delay';
         delayText.style.opacity = '0.75';
         xDistanceText.textContent = 'X distance';
-        xDistanceText.style.opacity = '0.5';
+        xDistanceText.style.opacity = '0.75';
         yDistanceText.textContent = 'Y distance';
-        yDistanceText.style.opacity = '0.5';
+        yDistanceText.style.opacity = '0.75';
         staggerText.textContent = 'Stagger';
-        staggerText.style.opacity = '0.5';
+        staggerText.style.opacity = '0.75';
         
         // Reset cumulative stagger counter
         cumulativeStaggerFrames = 0;
@@ -894,9 +894,9 @@ document.addEventListener('DOMContentLoaded', function() {
             delayText.textContent = 'Delay';
             delayText.style.opacity = '0.75';
             xDistanceText.textContent = 'X distance';
-            xDistanceText.style.opacity = '0.5';
+            xDistanceText.style.opacity = '0.75';
             yDistanceText.textContent = 'Y distance';
-            yDistanceText.style.opacity = '0.5';
+            yDistanceText.style.opacity = '0.75';
             return;
         }
         
@@ -939,11 +939,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         durationText.style.opacity = '0.75';
                         delayText.textContent = 'Delay';
                         delayText.style.opacity = '0.75';
-                        resetCumulativeStagger();
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            staggerTextElement.textContent = 'Stagger';
+                            staggerTextElement.style.opacity = '0.75';
+                        }
+                        cumulativeStaggerFrames = 0; // Reset counter without changing display
                         xDistanceText.textContent = 'X distance';
-                        xDistanceText.style.opacity = '0.5';
+                        xDistanceText.style.opacity = '0.75';
                         yDistanceText.textContent = 'Y distance';
-                        yDistanceText.style.opacity = '0.5';
+                        yDistanceText.style.opacity = '0.75';
                     }
                     
                     DEBUG.error('Keyframe reading failed:', errorMsg);
@@ -1060,37 +1065,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Update X Distance display
                     var xDistanceText = document.getElementById('xDistanceText');
                     if (hasXDistance) {
-                        if (xDistance > 0) {
-                            var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
-                            xDistanceText.textContent = 'X: ' + scaledXDistance + 'px @1x';
-                            xDistanceText.style.opacity = '1';
+                        var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
+                        
+                        if (scaledXDistance === 0) {
+                            xDistanceText.textContent = 'X: 0px @1x';
                         } else {
-                            // Has X position keyframes but no distance change
-                            xDistanceText.textContent = 'No change in X position';
-                            xDistanceText.style.opacity = '1';
+                            // Show directional format
+                            var direction = scaledXDistance > 0 ? 'Right' : 'Left';
+                            var absScaledXDistance = Math.abs(scaledXDistance);
+                            xDistanceText.textContent = 'X: ' + direction + ' ' + absScaledXDistance + 'px @1x';
                         }
+                        xDistanceText.style.opacity = '1';
                     } else {
                         // No X position keyframes selected - return to default text
                         xDistanceText.textContent = 'X distance';
-                        xDistanceText.style.opacity = '0.5';
+                        xDistanceText.style.opacity = '0.75';
                     }
                     
                     // Update Y Distance display
                     var yDistanceText = document.getElementById('yDistanceText');
                     if (hasYDistance) {
-                        if (yDistance > 0) {
-                            var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
-                            yDistanceText.textContent = 'Y: ' + scaledYDistance + 'px @1x';
-                            yDistanceText.style.opacity = '1';
+                        var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
+                        
+                        if (scaledYDistance === 0) {
+                            yDistanceText.textContent = 'Y: 0px @1x';
                         } else {
-                            // Has Y position keyframes but no distance change
-                            yDistanceText.textContent = 'No change in Y position';
-                            yDistanceText.style.opacity = '1';
+                            // Show directional format
+                            var direction = scaledYDistance > 0 ? 'Down' : 'Up';
+                            var absScaledYDistance = Math.abs(scaledYDistance);
+                            yDistanceText.textContent = 'Y: ' + direction + ' ' + absScaledYDistance + 'px @1x';
                         }
+                        yDistanceText.style.opacity = '1';
                     } else {
                         // No Y position keyframes selected - return to default text
                         yDistanceText.textContent = 'Y distance';
-                        yDistanceText.style.opacity = '0.5';
+                        yDistanceText.style.opacity = '0.75';
                     }
                     
                     console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
@@ -1498,9 +1507,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var xDecrementBtn = document.getElementById('xDecrementBtn');
     
     if (xIncrementBtn && xDecrementBtn) {
-        // X + button: Move X position forward by 10px
+        // X → button: Move selected keyframe right by 5px
         xIncrementBtn.addEventListener('click', function() {
-            console.log('X Distance increment clicked');
+            console.log('X Right arrow clicked');
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1511,18 +1520,18 @@ document.addEventListener('DOMContentLoaded', function() {
             var isInDirection = document.getElementById('xInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
             
-            // Call the ExtendScript function
+            // Call the ExtendScript function: positive = right
             csInterface.evalScript('nudgeXPosition(1, "' + direction + '")', function(result) {
-                console.log('X nudge forward result:', result);
+                console.log('X nudge right result:', result);
                 
                 // Update display based on result
                 updateDistanceDisplay('x', result);
             });
         });
         
-        // X - button: Move X position backward by 10px
+        // X ← button: Move selected keyframe left by 5px
         xDecrementBtn.addEventListener('click', function() {
-            console.log('X Distance decrement clicked');
+            console.log('X Left arrow clicked');
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1533,9 +1542,9 @@ document.addEventListener('DOMContentLoaded', function() {
             var isInDirection = document.getElementById('xInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
             
-            // Call the ExtendScript function
+            // Call the ExtendScript function: negative = left
             csInterface.evalScript('nudgeXPosition(-1, "' + direction + '")', function(result) {
-                console.log('X nudge backward result:', result);
+                console.log('X nudge left result:', result);
                 
                 // Update display based on result
                 updateDistanceDisplay('x', result);
@@ -1548,9 +1557,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var yDecrementBtn = document.getElementById('yDecrementBtn');
     
     if (yIncrementBtn && yDecrementBtn) {
-        // Y + button: Move Y position forward by 10px
+        // Y ↓ button: Move selected keyframe down by 5px
         yIncrementBtn.addEventListener('click', function() {
-            console.log('Y Distance increment clicked');
+            console.log('Y Down arrow clicked');
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1561,18 +1570,18 @@ document.addEventListener('DOMContentLoaded', function() {
             var isInDirection = document.getElementById('yInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
             
-            // Call the ExtendScript function
+            // Call the ExtendScript function: positive = down
             csInterface.evalScript('nudgeYPosition(1, "' + direction + '")', function(result) {
-                console.log('Y nudge forward result:', result);
+                console.log('Y nudge down result:', result);
                 
                 // Update display based on result
                 updateDistanceDisplay('y', result);
             });
         });
         
-        // Y - button: Move Y position backward by 10px
+        // Y ↑ button: Move selected keyframe up by 5px
         yDecrementBtn.addEventListener('click', function() {
-            console.log('Y Distance decrement clicked');
+            console.log('Y Up arrow clicked');
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1583,9 +1592,9 @@ document.addEventListener('DOMContentLoaded', function() {
             var isInDirection = document.getElementById('yInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
             
-            // Call the ExtendScript function
+            // Call the ExtendScript function: negative = up
             csInterface.evalScript('nudgeYPosition(-1, "' + direction + '")', function(result) {
-                console.log('Y nudge backward result:', result);
+                console.log('Y nudge up result:', result);
                 
                 // Update display based on result
                 updateDistanceDisplay('y', result);
@@ -1643,6 +1652,27 @@ document.addEventListener('DOMContentLoaded', function() {
             var parts = result.split('|');
             var status = parts[0];
             
+            // Extract debug messages (parts 3 and beyond, following the same pattern as stagger functions)
+            var debugMessages = [];
+            for (var i = 3; i < parts.length; i++) {
+                if (parts[i] && parts[i].trim()) {
+                    debugMessages.push(parts[i]);
+                }
+            }
+            
+            // Display debug messages in debug panel if it exists
+            if (debugMessages.length > 0) {
+                var debugLog = document.getElementById('debug-log');
+                if (debugLog) {
+                    var axisUpper = axis.toUpperCase();
+                    debugLog.innerHTML += '<div style="margin: 4px 0; color: #9a4aff; font-weight: bold;">🎬 ' + axisUpper + ' Position Nudge Debug:</div>';
+                    for (var j = 0; j < debugMessages.length; j++) {
+                        debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                    }
+                    debugLog.scrollTop = debugLog.scrollHeight;
+                }
+            }
+            
             if (status === 'success') {
                 var distance = parseFloat(parts[1]);
                 var hasDistance = parts[2] === '1';
@@ -1650,9 +1680,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Get current resolution multiplier for scaling display
                 var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
                 
-                if (hasDistance && distance > 0) {
+                if (hasDistance) {
+                    // Show directional values with Up/Down/Left/Right
                     var scaledDistance = parseFloat((distance / resolutionMultiplier).toFixed(2));
-                    textElement.textContent = axis.toUpperCase() + ': ' + scaledDistance + 'px @1x';
+                    
+                    if (scaledDistance === 0) {
+                        // Zero distance
+                        textElement.textContent = axis.toUpperCase() + ': 0px @1x';
+                    } else {
+                        // Determine direction based on axis and sign
+                        var direction = '';
+                        var absScaledDistance = Math.abs(scaledDistance);
+                        
+                        if (axis === 'x') {
+                            direction = scaledDistance > 0 ? 'Right' : 'Left';
+                        } else { // y axis
+                            direction = scaledDistance > 0 ? 'Down' : 'Up';
+                        }
+                        
+                        textElement.textContent = axis.toUpperCase() + ': ' + direction + ' ' + absScaledDistance + 'px @1x';
+                    }
                     textElement.style.opacity = '1';
                 } else {
                     textElement.textContent = 'Select > 1 Keyframe';

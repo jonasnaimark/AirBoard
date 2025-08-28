@@ -1858,6 +1858,27 @@ function nudgeDelay(direction) {
                     var selKeys = prop.selectedKeys;
                     if (!selKeys || selKeys.length === 0) continue;
                     
+                    // Check if this is time remapping and deselect instead of processing
+                    var isTimeRemap = false;
+                    try {
+                        isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+                    } catch(e) {
+                        // Property name/matchName might not be accessible
+                    }
+                    
+                    if (isTimeRemap) {
+                        // Deselect all time remap keyframes and skip processing
+                        DEBUG_JSX.log("Deselecting " + selKeys.length + " Time Remap keyframes on " + layer.name);
+                        for (var k = 0; k < selKeys.length; k++) {
+                            try {
+                                prop.setSelectedAtKey(selKeys[k], false);
+                            } catch(deselectError) {
+                                DEBUG_JSX.log("Failed to deselect Time Remap keyframe: " + deselectError.toString());
+                            }
+                        }
+                        continue; // Skip this property entirely
+                    }
+                    
                     // Store property with its selected keyframes (make property name unique per layer)
                     var propName = layer.name + ":" + prop.name;
                     if (!propertyMap[propName]) {
@@ -2764,10 +2785,22 @@ function nudgeYPosition(pixelAmount, direction) {
     }
 }
 
-// Core position nudging function with distance-based smart 10px snapping
+// Core position nudging function with direct keyframe movement (5px increments)
 function nudgePositionAxis(axis, nudgeDirection, direction) {
     try {
-        app.beginUndoGroup("Nudge " + axis.toUpperCase() + " Distance");
+        // Clear previous debug messages
+        DEBUG_JSX.clear();
+        
+        var directionName = '';
+        if (axis === 'x') {
+            directionName = nudgeDirection > 0 ? 'Right' : 'Left';
+        } else {
+            directionName = nudgeDirection > 0 ? 'Down' : 'Up';
+        }
+        
+        DEBUG_JSX.log("nudgePositionAxis called: " + axis + " " + directionName + " (direction=" + direction + ")");
+        
+        app.beginUndoGroup("Nudge " + axis.toUpperCase() + " " + directionName);
         
         var comp = app.project.activeItem;
         if (!(comp && comp instanceof CompItem)) {
@@ -2777,11 +2810,9 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         
         var selectedLayers = comp.selectedLayers;
         var processedAny = false;
-        var finalDistance = 0;
-        var hasDistance = false;
         
-        // Use the same property searching approach as readKeyframesSmart()
-        var layer = selectedLayers[0]; // Use first selected layer
+        // Use first selected layer
+        var layer = selectedLayers[0];
         
         // Function to recursively search for selected keyframes with matching axis
         function findAxisProperty(propGroup, targetAxis) {
@@ -2851,37 +2882,6 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         // Sort selected key indices
         selKeys.sort(function(a, b) { return a - b; });
         
-        // Get the first and last keyframes for distance calculation
-        var firstKeyIndex = selKeys[0];
-        var lastKeyIndex = selKeys[selKeys.length - 1];
-        
-        var firstValue = prop.keyValue(firstKeyIndex);
-        var lastValue = prop.keyValue(lastKeyIndex);
-        
-        // Extract the coordinate values for the specified axis
-        var firstCoord, lastCoord;
-        
-        if (firstValue instanceof Array && lastValue instanceof Array) {
-            // 2D Position case [x, y]
-            if (firstValue.length >= 2 && lastValue.length >= 2) {
-                firstCoord = axis === 'x' ? firstValue[0] : firstValue[1];
-                lastCoord = axis === 'x' ? lastValue[0] : lastValue[1];
-            } else {
-                app.endUndoGroup();
-                return "error|Invalid position values";
-            }
-        } else if (typeof firstValue === "number" && typeof lastValue === "number") {
-            // 1D Position case
-            firstCoord = firstValue;
-            lastCoord = lastValue;
-        } else {
-            app.endUndoGroup();
-            return "error|Invalid position values";
-        }
-        
-        // Calculate current distance
-        var currentDistance = Math.abs(lastCoord - firstCoord);
-        
         // Get the current resolution multiplier
         var resolutionMultiplier = 2; // Default to 2x
         try {
@@ -2896,41 +2896,99 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
             // Use default 2x if we can't read the setting
         }
         
-        // Calculate target distance using smart 5px snapping (resolution-aware)
-        var targetDistance = calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolutionMultiplier);
+        // Calculate movement amount: 5px base * resolution multiplier
+        var baseMovement = 5;
+        var scaledIncrement = baseMovement * resolutionMultiplier;
         
-        // Calculate the adjustment needed
-        var distanceDifference = targetDistance - currentDistance;
-        
-        // Determine which keyframe to move and in which direction
-        var keyIndexToMove, newCoord;
-        
+        // Determine which keyframe to move
+        var keyIndexToMove;
         if (direction === 'in') {
-            // "In" mode: move first keyframe to achieve target distance
-            keyIndexToMove = firstKeyIndex;
-            if (lastCoord >= firstCoord) {
-                // Normal case: last > first, move first towards/away from last
-                newCoord = firstCoord - distanceDifference;
-            } else {
-                // Reverse case: first > last, move first towards/away from last
-                newCoord = firstCoord + distanceDifference;
-            }
+            // "In" mode: move first keyframe
+            keyIndexToMove = selKeys[0];
         } else {
-            // "Out" mode: move last keyframe to achieve target distance  
-            keyIndexToMove = lastKeyIndex;
-            if (lastCoord >= firstCoord) {
-                // Normal case: last > first, move last towards/away from first
-                newCoord = lastCoord + distanceDifference;
-            } else {
-                // Reverse case: first > last, move last towards/away from first
-                newCoord = lastCoord - distanceDifference;
-            }
+            // "Out" mode: move last keyframe  
+            keyIndexToMove = selKeys[selKeys.length - 1];
         }
         
-        // Apply the new value
+        // Get current keyframe value and extract coordinate for this axis
         var currentValue = prop.keyValue(keyIndexToMove);
-        var newValue;
+        var currentCoord;
         
+        if (currentValue instanceof Array && currentValue.length >= 2) {
+            // 2D Position case [x, y]
+            currentCoord = axis === 'x' ? currentValue[0] : currentValue[1];
+        } else if (typeof currentValue === "number") {
+            // 1D Position case
+            currentCoord = currentValue;
+        } else {
+            app.endUndoGroup();
+            return "error|Invalid position value type";
+        }
+        
+        // Get the other keyframe to calculate current distance
+        var otherKeyIndex = (keyIndexToMove === selKeys[0]) ? selKeys[selKeys.length - 1] : selKeys[0];
+        var otherValue = prop.keyValue(otherKeyIndex);
+        var otherCoord;
+        
+        if (otherValue instanceof Array && otherValue.length >= 2) {
+            // 2D Position case [x, y]
+            otherCoord = axis === 'x' ? otherValue[0] : otherValue[1];
+        } else if (typeof otherValue === "number") {
+            // 1D Position case
+            otherCoord = otherValue;
+        } else {
+            app.endUndoGroup();
+            return "error|Invalid other keyframe position value type";
+        }
+        
+        // Calculate current distance between keyframes
+        var currentDistance = Math.abs(currentCoord - otherCoord);
+        
+        // Smart snapping: check if current DISTANCE is aligned to scaledIncrement boundary
+        var distanceRemainder = Math.abs(currentDistance % scaledIncrement);
+        var tolerance = 0.1;
+        var isDistanceAlreadySnapped = (distanceRemainder < tolerance) || (distanceRemainder > (scaledIncrement - tolerance));
+        
+        DEBUG_JSX.log("Position snapping debug:");
+        DEBUG_JSX.log("  currentCoord: " + currentCoord + "px");
+        DEBUG_JSX.log("  otherCoord: " + otherCoord + "px");  
+        DEBUG_JSX.log("  currentDistance: " + currentDistance + "px");
+        DEBUG_JSX.log("  scaledIncrement: " + scaledIncrement + "px");
+        DEBUG_JSX.log("  distanceRemainder: " + distanceRemainder);
+        DEBUG_JSX.log("  isDistanceAlreadySnapped: " + isDistanceAlreadySnapped);
+        DEBUG_JSX.log("  nudgeDirection: " + nudgeDirection);
+        
+        var newCoord;
+        if (isDistanceAlreadySnapped) {
+            // Distance already snapped - move by exact increment to maintain snapping
+            newCoord = currentCoord + (nudgeDirection * scaledIncrement);
+            DEBUG_JSX.log("  INCREMENTAL: " + currentCoord + " + " + (nudgeDirection * scaledIncrement) + " = " + newCoord);
+        } else {
+            // Distance not snapped - snap the distance to nearest multiple in the nudge direction
+            var targetDistance;
+            if (nudgeDirection > 0) {
+                // Positive direction: snap to next higher distance multiple
+                targetDistance = Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
+                DEBUG_JSX.log("  SNAP DISTANCE UP: ceil(" + currentDistance + " / " + scaledIncrement + ") * " + scaledIncrement + " = " + targetDistance);
+            } else {
+                // Negative direction: snap to next lower distance multiple  
+                targetDistance = Math.floor(currentDistance / scaledIncrement) * scaledIncrement;
+                DEBUG_JSX.log("  SNAP DISTANCE DOWN: floor(" + currentDistance + " / " + scaledIncrement + ") * " + scaledIncrement + " = " + targetDistance);
+            }
+            
+            // Calculate new coordinate to achieve target distance
+            if (currentCoord > otherCoord) {
+                // Moving keyframe is on the positive side
+                newCoord = otherCoord + targetDistance;
+            } else {
+                // Moving keyframe is on the negative side
+                newCoord = otherCoord - targetDistance;
+            }
+            DEBUG_JSX.log("  NEW COORD FOR DISTANCE: " + newCoord);
+        }
+        
+        // Apply the new coordinate to the keyframe value
+        var newValue;
         if (currentValue instanceof Array && currentValue.length >= 2) {
             // 2D Position case [x, y]
             newValue = [currentValue[0], currentValue[1]];
@@ -2951,12 +3009,9 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         try {
             prop.setValueAtKey(keyIndexToMove, newValue);
         } catch(e) {
-            $.writeln("Failed to set keyframe value: " + e.toString());
+            app.endUndoGroup();
+            return "error|Failed to set keyframe value: " + e.toString();
         }
-        
-        // Store the final distance for return
-        finalDistance = targetDistance;
-        hasDistance = true;
         
         app.endUndoGroup();
         
@@ -2964,30 +3019,29 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
             return "error|Select " + axis.toUpperCase() + " position keyframes";
         }
         
-        // Recalculate total distance for display (in case of multi-keyframe paths)
-        if (processedAny) {
-            // Re-read to get accurate total distance through all keyframes
-            var readResult = readKeyframesSmart();
-            if (readResult && readResult.indexOf('success|') === 0) {
-                var parts = readResult.split('|');
-                var xDistance = parseFloat(parts[6]) || 0;
-                var yDistance = parseFloat(parts[7]) || 0;
-                var hasXDistance = parts[8] === '1';
-                var hasYDistance = parts[9] === '1';
-                
-                if (axis === 'x' && hasXDistance) {
-                    finalDistance = xDistance;
-                } else if (axis === 'y' && hasYDistance) {
-                    finalDistance = yDistance;
-                }
+        // Re-read to get updated distance for display
+        var readResult = readKeyframesSmart();
+        var debugMessages = DEBUG_JSX.getMessages();
+        
+        if (readResult && readResult.indexOf('success|') === 0) {
+            var parts = readResult.split('|');
+            var xDistance = parseFloat(parts[6]) || 0;
+            var yDistance = parseFloat(parts[7]) || 0;
+            var hasXDistance = parts[8] === '1';
+            var hasYDistance = parts[9] === '1';
+            
+            if (axis === 'x' && hasXDistance) {
+                return "success|" + xDistance + "|1|" + debugMessages.join("|");
+            } else if (axis === 'y' && hasYDistance) {
+                return "success|" + yDistance + "|1|" + debugMessages.join("|");
             }
         }
         
-        return "success|" + finalDistance + "|" + (hasDistance ? "1" : "0");
+        return "success|0|1|" + debugMessages.join("|");
         
     } catch(e) {
         app.endUndoGroup();
-        return "error|Failed to nudge distance: " + e.toString();
+        return "error|Failed to nudge position: " + e.toString();
     }
 }
 
@@ -3024,21 +3078,21 @@ function calculatePositionDistance(posProperty, keyIndices) {
     
     // Handle both 2D position [x,y] and separated 1D position values
     if (value1 instanceof Array && value2 instanceof Array) {
-        // 2D Position case
+        // 2D Position case - signed distances
         if (value1.length >= 2 && value2.length >= 2) {
-            totalXDist = Math.abs(value2[0] - value1[0]);
-            totalYDist = Math.abs(value2[1] - value1[1]);
+            totalXDist = value2[0] - value1[0]; // Signed: positive = right, negative = left
+            totalYDist = value2[1] - value1[1]; // Signed: positive = down, negative = up
             hasXData = true;
             hasYData = true;
         }
     } else if (typeof value1 === "number" && typeof value2 === "number") {
-        // 1D Position case (X Position or Y Position)
+        // 1D Position case (X Position or Y Position) - signed distances
         var propName = posProperty.name.toLowerCase();
         if (propName === "x position") {
-            totalXDist = Math.abs(value2 - value1);
+            totalXDist = value2 - value1; // Signed distance
             hasXData = true;
         } else if (propName === "y position") {
-            totalYDist = Math.abs(value2 - value1);
+            totalYDist = value2 - value1; // Signed distance
             hasYData = true;
         }
     }
@@ -3052,7 +3106,7 @@ function calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolution
     var baseIncrement = 5;
     var scaledIncrement = baseIncrement * resolutionMultiplier;
     
-    // Check if current distance is already aligned to scaledIncrement boundary
+    // Check if current distance is already aligned to scaledIncrement boundary (use absolute value for remainder)
     var remainder = Math.abs(currentDistance % scaledIncrement);
     var tolerance = 0.1;
     var isAlreadySnapped = (remainder < tolerance) || (remainder > (scaledIncrement - tolerance));
@@ -3060,20 +3114,28 @@ function calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolution
     if (isAlreadySnapped) {
         // Already snapped to boundary - apply scaled increment/decrement
         if (nudgeDirection > 0) {
-            // + button: increase distance by scaledIncrement
+            // + button: increase distance by scaledIncrement (more positive/right/down)
             return currentDistance + scaledIncrement;
         } else {
-            // - button: decrease distance by scaledIncrement (minimum 0)
-            return Math.max(0, currentDistance - scaledIncrement);
+            // - button: decrease distance by scaledIncrement (more negative/left/up)
+            return currentDistance - scaledIncrement;
         }
     } else {
-        // Not snapped yet - snap to nearest scaledIncrement multiple
+        // Not snapped yet - snap to nearest scaledIncrement multiple, preserving sign
         if (nudgeDirection > 0) {
-            // + button: snap to next higher scaledIncrement
-            return Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
+            // + button: snap toward more positive direction
+            if (currentDistance >= 0) {
+                return Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
+            } else {
+                return Math.floor(currentDistance / scaledIncrement) * scaledIncrement;
+            }
         } else {
-            // - button: snap to next lower scaledIncrement (minimum 0)
-            return Math.max(0, Math.floor(currentDistance / scaledIncrement) * scaledIncrement);
+            // - button: snap toward more negative direction  
+            if (currentDistance > 0) {
+                return Math.floor(currentDistance / scaledIncrement) * scaledIncrement;
+            } else {
+                return Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
+            }
         }
     }
 }
@@ -3564,9 +3626,31 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
         
         DEBUG_JSX.log("Keyframe stagger - applying cumulative stagger: " + (direction * staggerMs) + "ms per layer position");
         
-        // Apply CUMULATIVE stagger to each layer group with individual keyframe clamping at 0ms
+        // Pre-check: if ANY keyframe would go negative, abort entire operation
+        for (var preCheckIdx = 0; preCheckIdx < layerGroups.length; preCheckIdx++) {
+            var layerGroup = layerGroups[preCheckIdx];
+            var staggerOffset = preCheckIdx * direction * staggerMs / 1000; // in seconds
+            
+            for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                var propData = layerGroup.keyframes[propIdx];
+                var prop = propData.property;
+                var selectedKeys = propData.selectedKeys;
+                
+                for (var k = 0; k < selectedKeys.length; k++) {
+                    var keyIndex = selectedKeys[k];
+                    var oldTime = prop.keyTime(keyIndex);
+                    var newTime = oldTime + staggerOffset;
+                    
+                    if (newTime < 0) {
+                        DEBUG_JSX.log("Keyframe stagger operation aborted - " + propData.propertyName + " keyframe would go to " + (newTime * 1000) + "ms (negative)");
+                        return "success|Stagger stopped to prevent negative times|0ms per layer";
+                    }
+                }
+            }
+        }
+        
+        // Apply CUMULATIVE stagger to each layer group (no clamping needed since pre-checked)
         var processedLayers = 0;
-        var clampedLayers = 0;
         var layersWithActualMovement = 0;
         
         for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
@@ -3577,35 +3661,12 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
             
             DEBUG_JSX.log("Layer " + layerGroup.layer.index + ": applying cumulative offset " + (staggerOffset * 1000) + "ms");
             
-            // Move all keyframes in this layer by the cumulative offset
-            var layerHasClamped = false; // Track if any property in this layer was clamped
+            // Move all keyframes in this layer by the cumulative offset (no clamping needed since pre-checked)
             var layerHadMovement = false; // Track if any keyframes in this layer actually moved
             for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
                 var propData = layerGroup.keyframes[propIdx];
                 var prop = propData.property;
                 var selectedKeys = propData.selectedKeys;
-                
-                // Check if any keyframe in this property would hit 0ms - if so, skip entire property
-                var propertyWouldClamp = false;
-                for (var k = 0; k < selectedKeys.length; k++) {
-                    var keyIndex = selectedKeys[k];
-                    var oldTime = prop.keyTime(keyIndex);
-                    var newTime = oldTime + staggerOffset;
-                    
-                    if (newTime < 0) {
-                        propertyWouldClamp = true;
-                        DEBUG_JSX.log("Property " + propData.propertyName + " would clamp (keyframe at " + (oldTime * 1000) + "ms would go to " + (newTime * 1000) + "ms) → ENTIRE PROPERTY SKIPPED");
-                        break;
-                    }
-                }
-                
-                // If property would clamp, skip all keyframes in this property
-                if (propertyWouldClamp) {
-                    layerHasClamped = true;
-                    // Keep original selection for this property
-                    propData.newSelIndices = selectedKeys.slice(); // Copy original indices
-                    continue; // Skip to next property
-                }
                 
                 // Process all keyframes in this property (none would clamp)
                 var keyframeData = [];
@@ -3677,10 +3738,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
                 propData.newSelIndices = newSelIndices;
             }
             
-            // Track clamped layers and layers with actual movement
-            if (layerHasClamped) {
-                clampedLayers++;
-            }
+            // Track layers with actual movement
             if (layerHadMovement) {
                 layersWithActualMovement++;
             }
@@ -3715,12 +3773,10 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
             DEBUG_JSX.log("Final keyframe selection pass failed: " + finalPassError.toString());
         }
         
-        var clampMessage = clampedLayers > 0 ? " (" + clampedLayers + " clamped to 0ms)" : "";
-        
         // If no layers had actual movement, show 0ms stagger since nothing actually moved
         var effectiveStagger = layersWithActualMovement > 0 ? (direction * staggerMs) : 0;
         
-        return "success|Applied stagger to " + processedLayers + " layers" + clampMessage + "|" + effectiveStagger + "ms per layer";
+        return "success|Applied stagger to " + processedLayers + " layers|" + effectiveStagger + "ms per layer";
         
     } catch(e) {
         return "error|Keyframe stagger failed: " + e.toString();
@@ -3758,9 +3814,20 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
         
         DEBUG_JSX.log("Layer stagger - applying cumulative stagger: " + (direction * staggerMs) + "ms per layer position");
         
-        // Apply CUMULATIVE stagger to each layer with individual clamping at 0ms
+        // Pre-check: if ANY layer would go negative, abort entire operation
+        for (var preCheckIdx = 0; preCheckIdx < layerArray.length; preCheckIdx++) {
+            var layer = layerArray[preCheckIdx];
+            var staggerOffset = preCheckIdx * direction * staggerMs / 1000; // in seconds
+            var newStartTime = layer.startTime + staggerOffset;
+            
+            if (newStartTime < 0) {
+                DEBUG_JSX.log("Stagger operation aborted - Layer " + layer.index + " would go to " + (newStartTime * 1000) + "ms (negative)");
+                return "success|Stagger stopped to prevent negative times|0ms per layer";
+            }
+        }
+        
+        // Apply CUMULATIVE stagger to each layer (no clamping needed since pre-checked)
         var processedLayers = 0;
-        var clampedLayers = 0;
         var layersWithActualMovement = 0;
         
         for (var layerIdx = 0; layerIdx < layerArray.length; layerIdx++) {
@@ -3770,25 +3837,16 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
             // Calculate cumulative stagger offset for this layer position
             var staggerOffset = layerIdx * direction * staggerMs / 1000; // in seconds
             var newStartTime = originalStartTime + staggerOffset;
+            var actuallyMoved = (Math.abs(newStartTime - originalStartTime) > 0.001); // 1ms tolerance
             
-            // Clamp to 0ms if would go negative
-            var finalStartTime = Math.max(0, newStartTime);
-            var wasClamped = (newStartTime < 0);
-            var actuallyMoved = (Math.abs(finalStartTime - originalStartTime) > 0.001); // 1ms tolerance
-            
-            if (wasClamped) {
-                DEBUG_JSX.log("Layer " + layer.index + " (" + layer.name + "): from " + (originalStartTime * 1000) + "ms to " + (newStartTime * 1000) + "ms → CLAMPED to 0ms");
-                clampedLayers++;
-            } else {
-                DEBUG_JSX.log("Layer " + layer.index + " (" + layer.name + "): from " + (originalStartTime * 1000) + "ms to " + (finalStartTime * 1000) + "ms");
-            }
+            DEBUG_JSX.log("Layer " + layer.index + " (" + layer.name + "): from " + (originalStartTime * 1000) + "ms to " + (newStartTime * 1000) + "ms");
             
             if (actuallyMoved) {
                 layersWithActualMovement++;
             }
             
-            // Set final start time (clamped if necessary)
-            layer.startTime = finalStartTime;
+            // Set final start time (no clamping needed since pre-checked)
+            layer.startTime = newStartTime;
             processedLayers++;
         }
         
@@ -3813,8 +3871,6 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
             DEBUG_JSX.log("Layer re-selection failed: " + selectionError.toString());
         }
         
-        var clampMessage = clampedLayers > 0 ? " (" + clampedLayers + " clamped to 0ms)" : "";
-        
         // Check if the final result is actually a stagger pattern or all layers at same time
         var finalStaggerExists = false;
         if (layerArray.length > 1) {
@@ -3830,7 +3886,7 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
         // If final result has no stagger (all layers at same time), show 0ms stagger
         var effectiveStagger = finalStaggerExists ? (direction * staggerMs) : 0;
         
-        return "success|Applied stagger to " + processedLayers + " layers" + clampMessage + "|" + effectiveStagger + "ms per layer";
+        return "success|Applied stagger to " + processedLayers + " layers|" + effectiveStagger + "ms per layer";
         
     } catch(e) {
         return "error|Layer stagger failed: " + e.toString();
