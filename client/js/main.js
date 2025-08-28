@@ -1201,6 +1201,23 @@ document.addEventListener('DOMContentLoaded', function() {
         createTooltip(staggerInput, 'Frames');
     }
     
+    // Setup stagger direction button tooltip
+    var staggerActionBtn = document.getElementById('staggerActionBtn');
+    if (staggerActionBtn) {
+        createTooltip(staggerActionBtn, 'Stagger direction');
+    }
+    
+    // Setup In/Out button tooltips for X and Y distance
+    var xInBtn = document.getElementById('xInBtn');
+    var xOutBtn = document.getElementById('xOutBtn');
+    var yInBtn = document.getElementById('yInBtn');
+    var yOutBtn = document.getElementById('yOutBtn');
+    
+    if (xInBtn) createTooltip(xInBtn, 'First keyframe');
+    if (xOutBtn) createTooltip(xOutBtn, 'Last keyframe');
+    if (yInBtn) createTooltip(yInBtn, 'First keyframe');
+    if (yOutBtn) createTooltip(yOutBtn, 'Last keyframe');
+    
     // Stagger +/- buttons
     var staggerIncrementBtn = document.getElementById('staggerIncrementBtn');
     var staggerDecrementBtn = document.getElementById('staggerDecrementBtn');
@@ -1217,12 +1234,16 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get stagger frames from input field
             var staggerFrames = parseFloat(staggerInputField.value) || 3;
-            console.log('Applying +' + staggerFrames + ' frame stagger');
+            
+            // Check if stagger direction is flipped (top to bottom)
+            var staggerActionBtn = document.getElementById('staggerActionBtn');
+            var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
+            console.log('Applying +' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
             
             staggerIncrementBtn.disabled = true;
             
-            // Call the ExtendScript function with +1 direction and frame count
-            var script = 'applyStagger(1, ' + staggerFrames + ')';
+            // Call the ExtendScript function with +1 direction, frame count, and layer order flag
+            var script = 'applyStagger(1, ' + staggerFrames + ', ' + isTopToBottom + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Stagger increment result:', result);
                 
@@ -1298,12 +1319,16 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get stagger frames from input field
             var staggerFrames = parseFloat(staggerInputField.value) || 3;
-            console.log('Applying -' + staggerFrames + ' frame stagger');
+            
+            // Check if stagger direction is flipped (top to bottom)
+            var staggerActionBtn = document.getElementById('staggerActionBtn');
+            var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
+            console.log('Applying -' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
             
             staggerDecrementBtn.disabled = true;
             
-            // Call the ExtendScript function with -1 direction and frame count
-            var script = 'applyStagger(-1, ' + staggerFrames + ')';
+            // Call the ExtendScript function with -1 direction, frame count, and layer order flag
+            var script = 'applyStagger(-1, ' + staggerFrames + ', ' + isTopToBottom + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Stagger decrement result:', result);
                 
@@ -1365,6 +1390,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Invalid stagger result:', result);
                 }
             });
+        });
+    }
+    
+    // Stagger Action Button - Toggle flip functionality
+    var staggerActionBtn = document.getElementById('staggerActionBtn');
+    if (staggerActionBtn) {
+        staggerActionBtn.addEventListener('click', function() {
+            console.log('Stagger action button clicked');
+            
+            // Toggle the flipped class
+            if (staggerActionBtn.classList.contains('flipped')) {
+                staggerActionBtn.classList.remove('flipped');
+                console.log('Stagger direction: Bottom to Top (default)');
+                DEBUG.log('Stagger direction changed to: Bottom to Top');
+            } else {
+                staggerActionBtn.classList.add('flipped');
+                console.log('Stagger direction: Top to Bottom');
+                DEBUG.log('Stagger direction changed to: Top to Bottom');
+            }
         });
     }
     

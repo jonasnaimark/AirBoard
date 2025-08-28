@@ -4780,12 +4780,17 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate) {
 }
 
 // Main stagger function called from panel +/- buttons
-function applyStagger(direction, staggerFrames) {
+function applyStagger(direction, staggerFrames, isTopToBottom) {
     try {
         // Clear debug messages from previous operations
         DEBUG_JSX.clear();
         
-        DEBUG_JSX.log("applyStagger called - direction: " + direction + ", frames: " + staggerFrames);
+        // Default to bottom-to-top (false) if not specified
+        if (isTopToBottom === undefined) {
+            isTopToBottom = false;
+        }
+        
+        DEBUG_JSX.log("applyStagger called - direction: " + direction + ", frames: " + staggerFrames + ", topToBottom: " + isTopToBottom);
         app.beginUndoGroup("Apply Stagger " + (direction > 0 ? "Forward" : "Backward"));
         
         var comp = app.project.activeItem;
@@ -4807,7 +4812,7 @@ function applyStagger(direction, staggerFrames) {
         DEBUG_JSX.log("Stagger: " + staggerFrames + " frames = " + staggerMs + "ms at " + frameRate + "fps");
         
         // Check for selected keyframes first (keyframes take precedence)
-        var keyframeResult = applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames);
+        var keyframeResult = applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
         if (keyframeResult.indexOf("error|No selected keyframes") !== 0) {
             app.endUndoGroup();
             var debugMessages = DEBUG_JSX.getMessages();
@@ -4815,7 +4820,7 @@ function applyStagger(direction, staggerFrames) {
         }
         
         // If no keyframes selected, try layers
-        var layerResult = applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames);
+        var layerResult = applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
         
         app.endUndoGroup();
         var debugMessages = DEBUG_JSX.getMessages();
@@ -4829,7 +4834,7 @@ function applyStagger(direction, staggerFrames) {
 }
 
 // Apply stagger to selected keyframes (grouped by layer)
-function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames) {
+function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
     try {
         var comp = app.project.activeItem;
         var selectedLayers = comp.selectedLayers;
@@ -4899,8 +4904,16 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
             return "error|No selected keyframes found";
         }
         
-        // Sort layers by index (bottom to top: highest index to lowest)
-        layerGroups.sort(function(a, b) { return b.layerIndex - a.layerIndex; });
+        // Sort layers by index
+        // If isTopToBottom is true: top to bottom (lowest index to highest)
+        // If isTopToBottom is false: bottom to top (highest index to lowest)
+        if (isTopToBottom) {
+            layerGroups.sort(function(a, b) { return a.layerIndex - b.layerIndex; });
+            DEBUG_JSX.log("Sorting keyframe layers top to bottom (index ascending)");
+        } else {
+            layerGroups.sort(function(a, b) { return b.layerIndex - a.layerIndex; });
+            DEBUG_JSX.log("Sorting keyframe layers bottom to top (index descending)");
+        }
         
         // First: Snap inconsistent staggers to clean multiples of input value
         var snapResult = snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction);
@@ -5074,7 +5087,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames)
 }
 
 // Apply stagger to selected layers (layer start times)
-function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
+function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
     try {
         var comp = app.project.activeItem;
         var selectedLayers = comp.selectedLayers;
@@ -5091,8 +5104,16 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames) {
             layerIndices.push(selectedLayers[i].index);
         }
         
-        // Sort layers by index (bottom to top: highest index to lowest)
-        layerArray.sort(function(a, b) { return b.index - a.index; });
+        // Sort layers by index
+        // If isTopToBottom is true: top to bottom (lowest index to highest)  
+        // If isTopToBottom is false: bottom to top (highest index to lowest)
+        if (isTopToBottom) {
+            layerArray.sort(function(a, b) { return a.index - b.index; });
+            DEBUG_JSX.log("Sorting layers top to bottom (index ascending)");
+        } else {
+            layerArray.sort(function(a, b) { return b.index - a.index; });
+            DEBUG_JSX.log("Sorting layers bottom to top (index descending)");
+        }
         
         // First: Snap inconsistent staggers to clean multiples of input value
         DEBUG_JSX.log("About to call snapStaggersToInputValue with " + layerArray.length + " layers and " + staggerFrames + " frames");

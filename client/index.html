@@ -92,6 +92,86 @@
             </section>
         </div>
         
+        <!-- Keyframe Reader Section -->
+        <div class="section-container">
+            <section class="section">
+                <div class="section-header">
+                    <h2>Keyframe Nudger</h2>
+                    <div class="section-controls">
+                        <button class="section-btn move-up" title="Move Up">
+                            <div class="control-arrow up"></div>
+                        </button>
+                        <button class="section-btn move-down" title="Move Down">
+                            <div class="control-arrow down"></div>
+                        </button>
+                        <button class="accordion-toggle" data-section="keyframe-reader">
+                            <div class="accordion-arrow"></div>
+                        </button>
+                    </div>
+                </div>
+                <div class="section-content" data-section="keyframe-reader">
+                <div class="control-row">
+                    <button id="readKeyframes" class="main-button">Read Keyframes</button>
+                </div>
+                <div class="control-row">
+                    <div class="resolution-display" id="delayDisplay">
+                        <span id="delayText" style="opacity: 0.75;">Delay</span>
+                        <div class="stagger-controls">
+                            <input class="stagger-input" id="delayInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
+                            <button class="stagger-btn decrement" id="delayDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="delayIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <div class="resolution-display" id="durationDisplay">
+                        <span id="durationText" style="opacity: 0.75;">Duration</span>
+                        <div class="stagger-controls">
+                            <input class="stagger-input" id="durationInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
+                            <button class="stagger-btn decrement" id="durationDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="durationIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <div class="keyframe-display" id="staggerDisplay">
+                        <span id="staggerText">Stagger</span>
+                        <div class="distance-controls">
+                            <input class="stagger-input" id="staggerInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
+                            <button class="distance-btn stagger-btn" id="staggerActionBtn" type="button" title="Stagger direction">
+                                <img src="assets/icons/Stagger Icon.png" alt="Stagger" style="width: 16px; height: 16px; opacity: 0.8;">
+                            </button>
+                            <button class="stagger-btn decrement" id="staggerDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="staggerIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <div class="keyframe-display" id="xDistanceDisplay">
+                        <span id="xDistanceText">X distance</span>
+                        <div class="distance-controls">
+                            <button class="distance-btn in-out-btn selected" id="xInBtn" type="button">In</button>
+                            <button class="distance-btn in-out-btn" id="xOutBtn" type="button">Out</button>
+                            <button class="distance-btn nudge-btn decrement" id="xDecrementBtn" type="button"><span class="triangle triangle-left"></span></button>
+                            <button class="distance-btn nudge-btn increment" id="xIncrementBtn" type="button"><span class="triangle triangle-right"></span></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <div class="keyframe-display" id="yDistanceDisplay">
+                        <span id="yDistanceText">Y distance</span>
+                        <div class="distance-controls">
+                            <button class="distance-btn in-out-btn selected" id="yInBtn" type="button">In</button>
+                            <button class="distance-btn in-out-btn" id="yOutBtn" type="button">Out</button>
+                            <button class="distance-btn nudge-btn decrement" id="yDecrementBtn" type="button"><span class="triangle triangle-up"></span></button>
+                            <button class="distance-btn nudge-btn increment" id="yIncrementBtn" type="button"><span class="triangle triangle-down"></span></button>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </section>
+        </div>
+        
         <!-- Presets Section -->      
         <div class="section-container">
             <section class="section">
@@ -153,83 +233,6 @@
                     <button id="shimmerLayers" class="main-button">
                         Add Shimmer
                     </button>
-                </div>
-                </div>
-            </section>
-        </div>
-        
-        <!-- Keyframe Reader Section -->
-        <div class="section-container">
-            <section class="section">
-                <div class="section-header">
-                    <h2>Keyframe Nudger</h2>
-                    <div class="section-controls">
-                        <button class="section-btn move-up" title="Move Up">
-                            <div class="control-arrow up"></div>
-                        </button>
-                        <button class="section-btn move-down" title="Move Down">
-                            <div class="control-arrow down"></div>
-                        </button>
-                        <button class="accordion-toggle" data-section="keyframe-reader">
-                            <div class="accordion-arrow"></div>
-                        </button>
-                    </div>
-                </div>
-                <div class="section-content" data-section="keyframe-reader">
-                <div class="control-row">
-                    <button id="readKeyframes" class="main-button">Read Keyframes</button>
-                </div>
-                <div class="control-row">
-                    <div class="resolution-display" id="delayDisplay">
-                        <span id="delayText" style="opacity: 0.75;">Delay</span>
-                        <div class="stagger-controls">
-                            <input class="stagger-input" id="delayInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
-                            <button class="stagger-btn decrement" id="delayDecrementBtn" type="button">−</button>
-                            <button class="stagger-btn increment" id="delayIncrementBtn" type="button">+</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="control-row">
-                    <div class="resolution-display" id="durationDisplay">
-                        <span id="durationText" style="opacity: 0.75;">Duration</span>
-                        <div class="stagger-controls">
-                            <input class="stagger-input" id="durationInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
-                            <button class="stagger-btn decrement" id="durationDecrementBtn" type="button">−</button>
-                            <button class="stagger-btn increment" id="durationIncrementBtn" type="button">+</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="control-row">
-                    <div class="resolution-display" id="staggerDisplay">
-                        <span id="staggerText">Stagger</span>
-                        <div class="stagger-controls">
-                            <input class="stagger-input" id="staggerInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
-                            <button class="stagger-btn decrement" id="staggerDecrementBtn" type="button">−</button>
-                            <button class="stagger-btn increment" id="staggerIncrementBtn" type="button">+</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="control-row">
-                    <div class="keyframe-display" id="xDistanceDisplay">
-                        <span id="xDistanceText">X distance</span>
-                        <div class="distance-controls">
-                            <button class="distance-btn in-out-btn selected" id="xInBtn" type="button">In</button>
-                            <button class="distance-btn in-out-btn" id="xOutBtn" type="button">Out</button>
-                            <button class="distance-btn nudge-btn decrement" id="xDecrementBtn" type="button"><span class="triangle triangle-left"></span></button>
-                            <button class="distance-btn nudge-btn increment" id="xIncrementBtn" type="button"><span class="triangle triangle-right"></span></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="control-row">
-                    <div class="keyframe-display" id="yDistanceDisplay">
-                        <span id="yDistanceText">Y distance</span>
-                        <div class="distance-controls">
-                            <button class="distance-btn in-out-btn selected" id="yInBtn" type="button">In</button>
-                            <button class="distance-btn in-out-btn" id="yOutBtn" type="button">Out</button>
-                            <button class="distance-btn nudge-btn decrement" id="yDecrementBtn" type="button"><span class="triangle triangle-up"></span></button>
-                            <button class="distance-btn nudge-btn increment" id="yIncrementBtn" type="button"><span class="triangle triangle-down"></span></button>
-                        </div>
-                    </div>
                 </div>
                 </div>
             </section>
