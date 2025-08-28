@@ -17,9 +17,21 @@ echo "🧹 Removing [DEV MODE] markers for production..."
 # Remove [DEV MODE] from HTML titles and clean up extra spaces
 sed -i '' 's/ \[DEV MODE\]//g' temp-package/client/index.html
 
-# Remove debug button from production build and clean up whitespace
-sed -i '' '/<button onclick="addDebugPanel()"/,/<\/button>/d' temp-package/client/index.html
-sed -i '' 's/Device Templates \[DEV MODE\] *$/Device Templates/g' temp-package/client/index.html
+# Remove debug button from production build (multi-line button)
+# First remove the entire debug button block
+perl -i -0pe 's/<button onclick="addDebugPanel\(\)"[^>]*>.*?<\/button>//gs' temp-package/client/index.html
+# Then clean up the [DEV MODE] text
+sed -i '' 's/Device Templates \[DEV MODE\]/Device Templates/g' temp-package/client/index.html
+
+# Remove ALL debug panel related code from main.js
+# 1. Remove the addDebugPanel function definition (multi-line)
+sed -i '' '/\/\/ Add simple debug panel to the extension UI (DEV MODE only)/,/^};$/d' temp-package/client/js/main.js
+
+# 2. Remove the auto-initialization call
+sed -i '' '/addDebugPanel();/d' temp-package/client/js/main.js
+
+# 3. Remove the comment about debug panel
+sed -i '' '/\/\/ Add debug panel for testing (DEV MODE)/d' temp-package/client/js/main.js
 
 # Reset manifest to production settings (remove .dev from IDs)
 sed -i '' 's/com\.airboard\.panel\.dev/com.airboard.panel/g' temp-package/CSXS/manifest.xml
@@ -29,7 +41,7 @@ echo "✅ Production files cleaned"
 
 # Navigate to temp directory and create ZXP
 cd temp-package
-../ZXPSignCmd -sign . ../dist/AirBoard-v4.11.1.zxp ../new-cert.p12 mypassword
+../ZXPSignCmd -sign . ../dist/AirBoard-v4.11.2.zxp ../new-cert.p12 mypassword
 
 # Return to parent directory
 cd ..
@@ -38,9 +50,9 @@ cd ..
 rm -rf temp-package
 
 # Verify the file was created
-if [ -f "dist/AirBoard-v4.11.1.zxp" ]; then
-    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.11.1.zxp"
-    ls -la dist/AirBoard-v4.11.1.zxp
+if [ -f "dist/AirBoard-v4.11.2.zxp" ]; then
+    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.11.2.zxp"
+    ls -la dist/AirBoard-v4.11.2.zxp
 else
     echo "❌ ERROR: ZXP file was not created"
 fi

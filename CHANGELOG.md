@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.11.2] - 2024-12-28 📦 **LATEST BUILD**
+### 📦 Updated
+- **New build**: Latest production build with all recent improvements
+
 ## [4.11.1] - 2024-12-28 🔧 **TEMPLATE FIX**
 ### 🔧 Fixed
 - **AirBoard Templates.aep**: Updated template file with minor fixes
