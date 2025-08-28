@@ -484,7 +484,10 @@ function readKeyframesSmart() {
 // Calculate stagger from timing data (works for both keyframes and layers)
 function calculateStagger(timingData, frameRate, isKeyframeMode) {
     try {
+        DEBUG_JSX.log("calculateStagger called with " + timingData.length + " items, isKeyframeMode=" + isKeyframeMode);
+        
         if (timingData.length <= 1) {
+            DEBUG_JSX.log("calculateStagger: Only " + timingData.length + " items, returning default");
             return "Stagger"; // Default text for single item
         }
         
@@ -517,6 +520,7 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
             for (var layerIndex in layerGroups) {
                 var group = layerGroups[layerIndex];
                 group.times.sort(function(a, b) { return a - b; }); // Sort times
+                DEBUG_JSX.log("Layer " + group.name + " (index " + group.index + ") has times: " + group.times.join(", ") + "ms, using earliest: " + group.times[0] + "ms");
                 layerTimes.push({
                     time: group.times[0] / 1000, // Use earliest time in seconds
                     index: group.index,
@@ -524,6 +528,7 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
                     allTimes: group.times // Keep all times for pattern analysis
                 });
             }
+            DEBUG_JSX.log("Created " + layerTimes.length + " layer groups for stagger calculation");
         } else {
             // Layer mode - use start times directly
             for (var i = 0; i < timingData.length; i++) {
@@ -544,6 +549,10 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         if (isKeyframeMode) {
             // For keyframes, sort by time to detect stagger pattern correctly
             layerTimes.sort(function(a, b) { return a.time - b.time; });
+            DEBUG_JSX.log("After sorting by time:");
+            for (var i = 0; i < layerTimes.length; i++) {
+                DEBUG_JSX.log("  " + layerTimes[i].name + " at " + Math.round(layerTimes[i].time * 1000) + "ms");
+            }
         } else {
             // For layers, sort by layer index (bottom to top = highest index to lowest index)
             layerTimes.sort(function(a, b) { return b.index - a.index; });
@@ -554,10 +563,14 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         for (var i = 1; i < layerTimes.length; i++) {
             var staggerSeconds = layerTimes[i].time - layerTimes[i-1].time;
             var staggerMs = Math.round(staggerSeconds * 1000);
+            DEBUG_JSX.log("Stagger " + i + ": " + Math.round(layerTimes[i-1].time * 1000) + "ms -> " + Math.round(layerTimes[i].time * 1000) + "ms = " + staggerMs + "ms");
             staggers.push(staggerMs);
         }
         
+        DEBUG_JSX.log("All staggers: [" + staggers.join(", ") + "]");
+        
         if (staggers.length === 0) {
+            DEBUG_JSX.log("No staggers calculated, returning default");
             return "Stagger"; // No stagger to calculate
         }
         
@@ -570,6 +583,8 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
                 break;
             }
         }
+        
+        DEBUG_JSX.log("First stagger: " + firstStagger + "ms, allSame: " + allSame);
         
         if (!allSame) {
             return "Multiple"; // Different stagger values
