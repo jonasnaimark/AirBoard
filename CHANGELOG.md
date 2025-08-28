@@ -10,7 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.9.4] - 2025-08-28 ✨ **LATEST RELEASE**
+## [4.9.5] - 2025-08-28 ✨ **LATEST RELEASE**
+### 🎯 Added - LABEL SYNCING FOR DELAY NUDGING
+- **Layer Marker Syncing**: Layer markers at the same frame as first keyframes now move synchronously with delay nudging operations
+- **Multiple Marker Type Support**: Works with both layer markers (added with `*` key) and composition markers
+- **Universal Delay Mode Integration**: Functions in all delay nudging modes - timeline position, baseline adjustment, and forced timeline
+- **Keyframe Selection Preservation**: Keyframes remain selected after marker operations, enabling repeated delay adjustments
+- **Smart Frame Detection**: Detects markers within 0.5 frame tolerance of first keyframes for precise synchronization
+
+### 🔧 Technical Implementation - MARKER SYNC SYSTEM
+- **Post-Undo Marker Processing**: Marker operations execute after main undo group to prevent keyframe selection clearing
+- **Separate Undo Groups**: Marker syncing uses dedicated undo groups for clean undo history ("Sync Layer Markers")
+- **Explicit Selection Restoration**: Comprehensive keyframe selection restoration system maintains selection state
+- **Multi-Layer Support**: Processes markers across all selected layers with keyframe operations
+- **Robust Error Handling**: Graceful fallbacks ensure delay nudging works even if marker syncing fails
+
+### 🎮 User Experience - SYNCHRONIZED ANIMATION WORKFLOW
+- **Seamless Label Movement**: Labels/markers move automatically with keyframes - no manual repositioning needed
+- **Consistent Multi-Click Behavior**: Repeated delay nudging works correctly without switching to unwanted layer nudging mode
+- **Timeline Synchronization**: Markers maintain exact frame alignment with first keyframes through all operations
+- **Non-Destructive Workflow**: Marker syncing never interferes with core keyframe delay functionality
+- **Debug Visibility**: Comprehensive debug logging for troubleshooting marker sync operations
+
+## [4.9.4] - 2025-08-28
 ### 🎯 Fixed - STAGGER READOUT ACCURACY & SIGN CALCULATION
 - **Fixed Stagger Sign Detection**: Stagger calculation now correctly shows negative values when top layer keyframes are earlier than bottom layer keyframes (e.g., -50ms when top layers lead)
 - **Fixed Stagger Readout Accuracy**: Stagger display now shows actual keyframe timing state instead of calculated operation results
