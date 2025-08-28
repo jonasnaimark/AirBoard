@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.11.1] - 2024-12-28 🔧 **TEMPLATE FIX**
+### 🔧 Fixed
+- **AirBoard Templates.aep**: Updated template file with minor fixes
+
 ## [4.11.0] - 2024-12-28 🎯 **STAGGER DIRECTION & PRECISION IMPROVEMENTS**
 ### ✨ Added - Enhanced Stagger Control
 - **Stagger Direction Toggle**: New button to switch between bottom-to-top (default) and top-to-bottom layer ordering
