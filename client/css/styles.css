@@ -950,6 +950,47 @@ input.distance-input[data-tooltip]:hover::after {
 
 /* Removed specific section classes - now using unified .section class */
 
+/* Stagger input tooltip styles */
+.stagger-input[data-tooltip]:hover::before,
+.stagger-input[data-tooltip]:hover::after {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.stagger-input[data-tooltip]::before,
+.stagger-input[data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+.stagger-input[data-tooltip]::before {
+    content: attr(data-tooltip);
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.stagger-input[data-tooltip]::after {
+    content: '';
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
 /* Custom scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;
