@@ -2,6 +2,28 @@
 
 **Comprehensive technical documentation for developers working on the AirBoard After Effects plugin**
 
+## 🚀 Quick Start
+
+### One-Time Setup
+```bash
+# Run the development sync script
+./dev-sync.sh
+
+# This creates a symlink in:
+# ~/Library/Application Support/Adobe/CEP/extensions/airboard-dev
+```
+
+### Development Workflow
+1. **Make code changes** in HTML/CSS/JS/JSX files
+2. **Save files**
+3. **Restart After Effects**
+4. **Test using "AirBoard Dev"** in Window > Extensions
+5. **Repeat steps 1-4** as needed
+
+### Two Extension Versions
+- **"AirBoard"** = Production version (from installed ZXP)
+- **"AirBoard Dev"** = Development version (live files with [DEV MODE] indicator)
+
 ## ⚠️ ZXP Build Policy - READ FIRST!
 **NEVER build ZXP files automatically!**
 - **ALWAYS ask the user first** before building any ZXP files

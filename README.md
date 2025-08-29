@@ -23,7 +23,7 @@
 
 ## ✨ Core Features
 
-### ⌨️ Keyframe Nudger (v4.10.0) 
+### ⌨️ Keyframe Nudger 
 **The most advanced keyframe manipulation system for After Effects**
 
 #### Duration Control
@@ -80,7 +80,7 @@
 
 ### Installation
 
-1. **Download** the latest `AirBoard-v4.10.0.zxp` from [Releases](https://github.com/jonasnaimark/AirBoard/releases)
+1. **Download** the latest `AirBoard-v4.11.2.zxp` from [Releases](https://github.com/jonasnaimark/AirBoard/releases)
 2. **Install** using [ZXP Installer](https://aescripts.com/learn/zxp-installer/) or Adobe Extension Manager
 3. **Access** via `Window > Extensions > AirBoard` in After Effects
 
@@ -155,7 +155,7 @@
 - **[CHANGELOG.md](CHANGELOG.md)**: Detailed version history
 
 ### For Developers
-- **[DEVELOPMENT.md](DEVELOPMENT.md)**: Development setup and workflow
+- **[DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)**: Complete development setup, workflow, and technical patterns
 - **[KEYFRAME_SYSTEM_SUMMARY.md](KEYFRAME_SYSTEM_SUMMARY.md)**: Complete keyframe system documentation
 - **[UI_PATTERNS.md](UI_PATTERNS.md)**: UI consistency guidelines
 
@@ -193,7 +193,7 @@ AirBoard/
 ## 🎯 Roadmap
 
 ### Near Term
-- [ ] Testing and bug fixes for v4.10.0
+- [ ] Additional testing and refinements
 - [ ] Additional keyframe easing controls
 - [ ] Batch keyframe operations
 
@@ -240,7 +240,7 @@ Proprietary - All rights reserved
 
 <div align="center">
   
-**AirBoard v4.10.0** - Precision Keyframe Control for After Effects
+**AirBoard v4.11.2** - Precision Keyframe Control for After Effects
   
 Made with ❤️ for the motion design community
   
