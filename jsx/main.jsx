@@ -6397,11 +6397,749 @@ function replaceRectangleFromPanel() {
 // Add Nulls function called from the panel
 function addNullsFromPanel(nullType) {
     try {
-        addNulls(nullType);
-        return "success";
+        var result = addNulls(nullType);
+        return result || "success";
     } catch(e) {
+        DEBUG_JSX.error("addNullsFromPanel failed", e.toString());
         alert("Error: " + e.toString());
-        return "error";
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+// Apply FitToShape functionality - adapted from FitToShape.jsx
+function applyFitToShape(mode) {
+    try {
+        // Clear previous debug messages
+        DEBUG_JSX.clear();
+        
+        DEBUG_JSX.log("applyFitToShape called with mode: " + mode);
+        
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            DEBUG_JSX.error("No active composition selected");
+            alert("Please select a composition first.");
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No composition|" + debugMessages.join("|");
+        }
+    
+        var selectedLayers = comp.selectedLayers;
+        DEBUG_JSX.log("Found " + selectedLayers.length + " selected layers");
+        
+        if (selectedLayers.length < 2) {
+            DEBUG_JSX.error("Not enough layers selected", "Need at least 2 layers");
+            alert("Please select at least 2 layers: one shape layer and one or more other layers.");
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|Not enough layers|" + debugMessages.join("|");
+        }
+    
+        // Identify shape layer with highest index (bottom of layer stack) and other layers
+        var shapeLayer = null;
+        var highestShapeIndex = -1;
+        var otherLayers = [];
+        
+        DEBUG_JSX.log("Analyzing selected layers...");
+        
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            DEBUG_JSX.log("Layer " + i + ": " + layer.name + " (type: " + (layer instanceof ShapeLayer ? "Shape" : "Other") + ", index: " + layer.index + ")");
+            
+            if (layer instanceof ShapeLayer) {
+                // Keep track of the shape layer with the highest index (bottom of layer stack)
+                if (layer.index > highestShapeIndex) {
+                    // If we already had a shape layer, add it to otherLayers
+                    if (shapeLayer) {
+                        DEBUG_JSX.log("Moving previous shape layer '" + shapeLayer.name + "' to content layers");
+                        otherLayers.push(shapeLayer);
+                    }
+                    shapeLayer = layer;
+                    highestShapeIndex = layer.index;
+                    DEBUG_JSX.log("Set shape layer to: " + layer.name + " (index: " + layer.index + ")");
+                } else {
+                    // This shape layer has a lower index, treat it as content
+                    DEBUG_JSX.log("Adding shape layer '" + layer.name + "' to content layers (lower index)");
+                    otherLayers.push(layer);
+                }
+            } else {
+                DEBUG_JSX.log("Adding layer '" + layer.name + "' to content layers");
+                otherLayers.push(layer);
+            }
+        }
+        
+        if (!shapeLayer) {
+            DEBUG_JSX.error("No shape layer found in selection");
+            alert("No shape layer found. Please select at least one shape layer.");
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No shape layer|" + debugMessages.join("|");
+        }
+        
+        if (otherLayers.length === 0) {
+            DEBUG_JSX.error("No content layers found", "Need at least one content layer plus shape layer");
+            alert("Please select at least two layers (one shape layer to define the area, and one or more layers for content).");
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No content layers|" + debugMessages.join("|");
+        }
+        
+        DEBUG_JSX.log("Final selection - Shape layer: " + shapeLayer.name + ", Content layers: " + otherLayers.length);
+    
+    app.beginUndoGroup("Apply Fit: " + mode);
+    
+    try {
+        // Make shape layer visible
+        shapeLayer.enabled = true;
+        
+        // Process each other layer (content layers only, not the shape layer)
+        for (var layerIndex = 0; layerIndex < otherLayers.length; layerIndex++) {
+            var otherLayer = otherLayers[layerIndex];
+            
+            DEBUG_JSX.log("Processing layer " + layerIndex + ": " + otherLayer.name + " (mode: " + mode + ")");
+            
+            // Skip individual layer processing for fitNone - we'll handle everything after precomp
+            if (mode === "fitNone") {
+                DEBUG_JSX.log("Skipping individual processing for fitNone mode");
+                continue;
+            }
+            
+            // Skip if this is somehow the shape layer (safety check)
+            if (otherLayer === shapeLayer) {
+                DEBUG_JSX.log("Skipping shape layer in content processing: " + otherLayer.name);
+                continue;
+            }
+            
+            DEBUG_JSX.log("Applying FitToShape to content layer: " + otherLayer.name);
+            
+            // Parent the other layer to the shape layer
+            otherLayer.parent = shapeLayer;
+            
+            // Set up track matte - works regardless of layer positions
+            otherLayer.setTrackMatte(shapeLayer, TrackMatteType.ALPHA);
+            
+            // Make layer visible
+            otherLayer.enabled = true;
+            
+            // Keep shape layer visible (track matte automatically hides it)
+            shapeLayer.enabled = true;
+            
+            // Split dimensions on position for the other layer
+            if (!otherLayer.property("Transform").property("Position").dimensionsSeparated) {
+                otherLayer.property("Transform").property("Position").dimensionsSeparated = true;
+            }
+            
+            // Add Fit to shape effect for fitWidth mode
+            if (mode === "fitWidth") {
+                // Double-check this isn't the shape layer
+                if (otherLayer === shapeLayer) {
+                    DEBUG_JSX.error("CRITICAL: Shape layer reached effect application", "Layer: " + otherLayer.name);
+                    continue;
+                }
+                
+                var effects = otherLayer.property("Effects");
+                
+                // Check if Fit to shape effect already exists
+                var fitEffect = null;
+                for (var j = 1; j <= effects.numProperties; j++) {
+                    var effectName = effects.property(j).name;
+                    if (effectName === "Fit to shape" || effectName === "Fit to shape - v3") {
+                        fitEffect = effects.property(j);
+                        // Rename it to what our expressions expect
+                        if (effectName === "Fit to shape - v3") {
+                            fitEffect.name = "Fit to shape";
+                        }
+                        break;
+                    }
+                }
+                
+                // Debug: Log current state
+                DEBUG_JSX.log("Layer " + otherLayer.name + " has " + effects.numProperties + " effects, fitEffect found: " + (fitEffect ? "yes" : "no"));
+                
+                // Try to add the effect using the preset file
+                if (!fitEffect) {
+                    try {
+                        // Import the FitToShape preset from assets/presets
+                        var presetPath = extensionRoot + "/assets/presets/FitToShape.ffx";
+                        var presetFile = new File(presetPath);
+                        
+                        // Check alternate path separator
+                        if (!presetFile.exists) {
+                            presetPath = extensionRoot + "\\assets\\presets\\FitToShape.ffx";
+                            presetFile = new File(presetPath);
+                        }
+                        
+                        if (presetFile.exists) {
+                            // Count effects before applying preset
+                            var effectCountBefore = effects.numProperties;
+                            DEBUG_JSX.log("Before preset: " + effectCountBefore + " effects");
+                            
+                            // Clear all layer selections before applying preset to prevent affecting other layers
+                            try {
+                                for (var clearIdx = 1; clearIdx <= comp.numLayers; clearIdx++) {
+                                    comp.layer(clearIdx).selected = false;
+                                }
+                                // Select only the target layer
+                                otherLayer.selected = true;
+                                DEBUG_JSX.log("Cleared selections, only targeting: " + otherLayer.name);
+                            } catch(selectionError) {
+                                DEBUG_JSX.log("Selection clearing error: " + selectionError.toString());
+                            }
+                            
+                            // Apply the preset to the layer
+                            otherLayer.applyPreset(presetFile);
+                            
+                            DEBUG_JSX.log("After preset: " + effects.numProperties + " effects");
+                            
+                            // Find the first newly applied "Fit to shape" effect
+                            for (var k = effectCountBefore + 1; k <= effects.numProperties; k++) {
+                                var effectName = effects.property(k).name;
+                                DEBUG_JSX.log("Checking effect " + k + ": " + effectName);
+                                if (effectName === "Fit to shape - v3" || effectName === "Fit to shape" || effectName.indexOf("Fit to shape") === 0) {
+                                    fitEffect = effects.property(k);
+                                    // Force rename to exact name we need
+                                    try {
+                                        fitEffect.name = "Fit to shape";
+                                        DEBUG_JSX.log("Renamed effect to: " + fitEffect.name);
+                                    } catch(renameError) {
+                                        DEBUG_JSX.error("Failed to rename effect", renameError.toString());
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            // Remove any duplicate "Fit to shape" effects that may have been added
+                            // Only remove effects that haven't been renamed yet (still have original names)
+                            for (var m = effects.numProperties; m >= effectCountBefore + 1; m--) {
+                                try {
+                                    var currentEffect = effects.property(m);
+                                    var effectName = currentEffect.name;
+                                    // Only remove effects with original names, not the renamed one
+                                    if ((effectName === "Fit to shape - v3" || effectName === "Fit to shape 2" || effectName === "Fit to shape 3") && currentEffect !== fitEffect) {
+                                        DEBUG_JSX.log("Removing duplicate effect: " + effectName + " (index: " + m + ")");
+                                        currentEffect.remove();
+                                    }
+                                } catch(removeError) {
+                                    DEBUG_JSX.log("Error removing effect at index " + m + ": " + removeError.toString());
+                                }
+                            }
+                            
+                            // If we still don't have the effect, log error but don't create fallback
+                            if (!fitEffect) {
+                                DEBUG_JSX.error("Preset failed and no effect found", "Layer: " + otherLayer.name);
+                                // Don't create fallback effects - this causes the duplicate effects problem
+                            }
+                        } else {
+                            DEBUG_JSX.error("Preset file not found", "Path: " + presetPath);
+                            // Don't create fallback effects - rely on preset file being present
+                        }
+                    } catch (e) {
+                        DEBUG_JSX.error("Exception during preset application", e.toString());
+                        // Don't create fallback effects - this causes duplicate effects
+                    }
+                }
+            }
+            
+            // Store initial dimensions for reference
+            var otherWidth, otherHeight;
+            if (otherLayer instanceof TextLayer || otherLayer instanceof ShapeLayer) {
+                var layerRect = otherLayer.sourceRectAtTime(comp.time, false);
+                otherWidth = layerRect.width;
+                otherHeight = layerRect.height;
+            } else {
+                otherWidth = otherLayer.width;
+                otherHeight = otherLayer.height;
+            }
+            
+            // Apply expressions based on mode
+            if (mode === "fitWidth") {
+                // Scale expression that respects Scale To dropdown
+                var scaleExpr = [
+                    "var shapeLayer = parent;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "var shapeWidth = shapeBounds.width;",
+                    "var shapeHeight = shapeBounds.height;",
+                    "var myWidth = " + otherWidth + ";",
+                    "var myHeight = " + otherHeight + ";",
+                    "var baseScale = value;",
+                    "",
+                    "// Get Scale To value from effect",
+                    "var scaleToValue;",
+                    "try {",
+                    "  scaleToValue = effect(\"Fit to shape\")(\"Scale To\");",
+                    "} catch(e) {",
+                    "  try {",
+                    "    scaleToValue = effect(\"Fit to shape - Scale To\")(\"Menu\");",
+                    "  } catch(e2) {",
+                    "    scaleToValue = 1; // Default to Width",
+                    "  }",
+                    "}",
+                    "",
+                    "// Scale based on Scale To setting",
+                    "// 1 = Width, 2 = Height, 3 = Stretch, 4 = None",
+                    "var scaleX, scaleY;",
+                    "if (scaleToValue == 1) { // Width",
+                    "  var scaleFactor = (shapeWidth / myWidth) * 100;",
+                    "  scaleX = scaleY = scaleFactor;",
+                    "} else if (scaleToValue == 2) { // Height",
+                    "  var scaleFactor = (shapeHeight / myHeight) * 100;",
+                    "  scaleX = scaleY = scaleFactor;",
+                    "} else if (scaleToValue == 3) { // Stretch",
+                    "  scaleX = (shapeWidth / myWidth) * 100;",
+                    "  scaleY = (shapeHeight / myHeight) * 100;",
+                    "} else { // None",
+                    "  scaleX = scaleY = 100;",
+                    "}",
+                    "",
+                    "[scaleX, scaleY] + (baseScale - [100, 100]);"
+                ].join("\n");
+                
+                otherLayer.property("Transform").property("Scale").expression = scaleExpr;
+                
+                // X Position expression with 9-point alignment
+                var xPosExpr = [
+                    "var shapeLayer = parent;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "var myScale = transform.scale[0] / 100;",
+                    "var myWidth = " + otherWidth + " * myScale;",
+                    "",
+                    "// Get alignment value from effect",
+                    "var alignmentValue;",
+                    "try {",
+                    "  alignmentValue = effect(\"Fit to shape\")(\"Alignment\");",
+                    "} catch(e) {",
+                    "  try {",
+                    "    alignmentValue = effect(\"Fit to shape - Alignment\")(\"Menu\");",
+                    "  } catch(e2) {",
+                    "    alignmentValue = 1; // Default to Center",
+                    "  }",
+                    "}",
+                    "",
+                    "// Calculate X position based on alignment",
+                    "var xPos;",
+                    "if (alignmentValue == 2 || alignmentValue == 6 || alignmentValue == 10) {",
+                    "  // Left alignment",
+                    "  xPos = shapeBounds.left + myWidth/2;",
+                    "} else if (alignmentValue == 3 || alignmentValue == 7 || alignmentValue == 11) {",
+                    "  // Right alignment", 
+                    "  xPos = shapeBounds.left + shapeBounds.width - myWidth/2;",
+                    "} else {",
+                    "  // Center alignment",
+                    "  xPos = shapeBounds.left + shapeBounds.width/2;",
+                    "}",
+                    "",
+                    "// Allow manual animation",
+                    "if (numKeys > 0) {",
+                    "  xPos + (value - valueAtTime(key(1).time));",
+                    "} else {",
+                    "  xPos;",
+                    "}"
+                ].join("\n");
+                
+                // Y Position expression with 9-point alignment
+                var yPosExpr = [
+                    "var shapeLayer = parent;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "var myScale = transform.scale[1] / 100;",
+                    "var myHeight = " + otherHeight + " * myScale;",
+                    "",
+                    "// Get alignment value from effect",
+                    "var alignmentValue;",
+                    "try {",
+                    "  alignmentValue = effect(\"Fit to shape\")(\"Alignment\");",
+                    "} catch(e) {",
+                    "  try {",
+                    "    alignmentValue = effect(\"Fit to shape - Alignment\")(\"Menu\");",
+                    "  } catch(e2) {",
+                    "    alignmentValue = 1; // Default to Center",
+                    "  }",
+                    "}",
+                    "",
+                    "// Calculate Y position based on alignment",
+                    "var yPos;",
+                    "if (alignmentValue >= 5 && alignmentValue <= 7) {",
+                    "  // Top alignment",
+                    "  yPos = shapeBounds.top + myHeight/2;",
+                    "} else if (alignmentValue >= 9 && alignmentValue <= 11) {",
+                    "  // Bottom alignment",
+                    "  yPos = shapeBounds.top + shapeBounds.height - myHeight/2;",
+                    "} else {",
+                    "  // Center alignment",
+                    "  yPos = shapeBounds.top + shapeBounds.height/2;",
+                    "}",
+                    "",
+                    "// Allow manual animation",
+                    "if (numKeys > 0) {",
+                    "  yPos + (value - valueAtTime(key(1).time));",
+                    "} else {",
+                    "  yPos;",
+                    "}"
+                ].join("\n");
+                
+                otherLayer.property("Transform").property("X Position").expression = xPosExpr;
+                otherLayer.property("Transform").property("Y Position").expression = yPosExpr;
+            }
+        } // End of loop for each other layer
+        
+        // Handle fitNone mode with precomp (Layers + Padding functionality)
+        if (mode === "fitNone" && otherLayers.length > 0) {
+            // Get shape info
+            var shapeBounds = shapeLayer.sourceRectAtTime(comp.time, false);
+            var shapeWidth = shapeBounds.width;
+            var shapeHeight = shapeBounds.height;
+            
+            // Collect all other layers for precomposing
+            var validLayers = otherLayers;
+            
+            if (validLayers.length === 0) {
+                alert("No layers to precompose");
+                return;
+            }
+            
+            // Collect indices for precompose
+            var indices = [];
+            for (var i = 0; i < validLayers.length; i++) {
+                indices.push(validLayers[i].index);
+            }
+            
+            // Precompose the layers with "Move all attributes"
+            var precompName = shapeLayer.name + " - Content";
+            
+            // Store the lowest index before precomposing to find the precomp after
+            var lowestIndex = Infinity;
+            for (var i = 0; i < indices.length; i++) {
+                if (indices[i] < lowestIndex) {
+                    lowestIndex = indices[i];
+                }
+            }
+            
+            comp.layers.precompose(indices, precompName, true);
+            
+            // Get the precomp layer
+            var precomp = comp.layer(lowestIndex);
+            
+            // Make sure precomp was created and resize its composition
+            if (precomp && precomp.source) {
+                // Get the precomp composition
+                var precompComp = precomp.source;
+                
+                // Calculate positioning
+                var shapePos = shapeLayer.position.value;
+                var shapeCenterX = shapePos[0] + shapeBounds.left + shapeBounds.width/2;
+                var shapeCenterY = shapePos[1] + shapeBounds.top + shapeBounds.height/2;
+                
+                // Resize the precomp to match the shape size
+                precompComp.width = Math.ceil(shapeWidth);
+                precompComp.height = Math.ceil(shapeHeight);
+                
+                // Calculate the offset needed to center content in the resized precomp
+                var offsetX = precompComp.width/2 - shapeCenterX;
+                var offsetY = precompComp.height/2 - shapeCenterY;
+                
+                // Move all layers in the precomp by this offset
+                for (var j = 1; j <= precompComp.numLayers; j++) {
+                    try {
+                        var layer = precompComp.layer(j);
+                        if (!layer.locked) {
+                            var pos = layer.position.value;
+                            layer.position.setValue([pos[0] + offsetX, pos[1] + offsetY]);
+                        }
+                    } catch (e) {
+                        // Skip if error
+                    }
+                }
+                
+                // Set precomp anchor to center
+                precomp.anchorPoint.setValue([precompComp.width/2, precompComp.height/2]);
+                
+                // Position the precomp at the shape center
+                precomp.position.setValue([shapeCenterX, shapeCenterY]);
+                
+                // Parent the precomp to the shape layer
+                precomp.parent = shapeLayer;
+                
+                // Convert position to parent space
+                var parentSpacePos = [
+                    shapeCenterX - shapeLayer.position.value[0],
+                    shapeCenterY - shapeLayer.position.value[1]
+                ];
+                precomp.position.setValue(parentSpacePos);
+                
+                // Set collapse transformations
+                precomp.collapseTransformation = true;
+                
+                // Set up track matte
+                try {
+                    precomp.setTrackMatte(shapeLayer, TrackMatteType.ALPHA);
+                } catch (e) {
+                    precomp.trackMatteType = TrackMatteType.ALPHA;
+                }
+                
+                // Enable visibility
+                shapeLayer.enabled = true;
+                precomp.enabled = true;
+                
+                // Split position dimensions
+                if (!precomp.property("Transform").property("Position").dimensionsSeparated) {
+                    precomp.property("Transform").property("Position").dimensionsSeparated = true;
+                }
+                
+                // Add Fit to shape effect to precomp
+                var effects = precomp.property("Effects");
+                
+                // Check if effect already exists first
+                var fitEffect = null;
+                for (var j = 1; j <= effects.numProperties; j++) {
+                    var effectName = effects.property(j).name;
+                    if (effectName === "Fit to shape" || effectName === "Fit to shape - v3") {
+                        fitEffect = effects.property(j);
+                        if (effectName === "Fit to shape - v3") {
+                            fitEffect.name = "Fit to shape";
+                        }
+                        break;
+                    }
+                }
+                
+                if (!fitEffect) {
+                    try {
+                        // Import the FitToShape preset from assets/presets
+                        var presetPath = extensionRoot + "/assets/presets/FitToShape.ffx";
+                        var presetFile = new File(presetPath);
+                        
+                        // Check alternate path separator
+                        if (!presetFile.exists) {
+                            presetPath = extensionRoot + "\\assets\\presets\\FitToShape.ffx";
+                            presetFile = new File(presetPath);
+                        }
+                        
+                        if (presetFile.exists) {
+                            // Count effects before applying preset
+                            var effectCountBefore = effects.numProperties;
+                            DEBUG_JSX.log("Precomp before preset: " + effectCountBefore + " effects");
+                            
+                            // Apply the preset to the precomp
+                            precomp.applyPreset(presetFile);
+                            
+                            DEBUG_JSX.log("Precomp after preset: " + effects.numProperties + " effects");
+                            
+                            // Find the first newly applied "Fit to shape" effect
+                            for (var k = effectCountBefore + 1; k <= effects.numProperties; k++) {
+                                var effectName = effects.property(k).name;
+                                DEBUG_JSX.log("Checking precomp effect " + k + ": " + effectName);
+                                if (effectName === "Fit to shape - v3" || effectName === "Fit to shape" || effectName.indexOf("Fit to shape") === 0) {
+                                    fitEffect = effects.property(k);
+                                    // Force rename to exact name we need
+                                    try {
+                                        fitEffect.name = "Fit to shape";
+                                        DEBUG_JSX.log("Renamed precomp effect to: " + fitEffect.name);
+                                    } catch(renameError) {
+                                        DEBUG_JSX.error("Failed to rename precomp effect", renameError.toString());
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            // Remove any duplicate "Fit to shape" effects that may have been added
+                            // Only remove effects that haven't been renamed yet (still have original names)
+                            for (var m = effects.numProperties; m >= effectCountBefore + 1; m--) {
+                                try {
+                                    var currentEffect = effects.property(m);
+                                    var effectName = currentEffect.name;
+                                    // Only remove effects with original names, not the renamed one
+                                    if ((effectName === "Fit to shape - v3" || effectName === "Fit to shape 2" || effectName === "Fit to shape 3") && currentEffect !== fitEffect) {
+                                        DEBUG_JSX.log("Removing duplicate precomp effect: " + effectName + " (index: " + m + ")");
+                                        currentEffect.remove();
+                                    }
+                                } catch(removeError) {
+                                    DEBUG_JSX.log("Error removing precomp effect at index " + m + ": " + removeError.toString());
+                                }
+                            }
+                            
+                            // If we still don't have the effect, log error but don't create fallback
+                            if (!fitEffect) {
+                                DEBUG_JSX.error("Precomp preset failed and no effect found", "Precomp: " + precomp.name);
+                                // Don't create fallback effects - this causes the duplicate effects problem
+                            }
+                        } else {
+                            DEBUG_JSX.error("Precomp preset file not found", "Path: " + presetPath);
+                            // Don't create fallback effects - rely on preset file being present
+                        }
+                    } catch (e) {
+                        DEBUG_JSX.error("Exception during precomp preset application", e.toString());
+                        // Don't create fallback effects - this causes duplicate effects
+                    }
+                }
+                
+                // Get precomp actual content size  
+                var precompBounds = precomp.sourceRectAtTime(comp.time, false);
+                var precompWidth = precompBounds.width;
+                var precompHeight = precompBounds.height;
+                
+                // Calculate padding
+                var padding = (shapeWidth - precompWidth) / 2;
+                
+                // Scale expression that respects Scale To dropdown
+                var scaleExpr = [
+                    "var shapeLayer = parent;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "var shapeWidth = shapeBounds.width;",
+                    "var shapeHeight = shapeBounds.height;",
+                    "var originalWidth = " + precompWidth + ";",
+                    "var originalHeight = " + precompHeight + ";",
+                    "var padding = " + padding + ";",
+                    "var baseScale = value;",
+                    "",
+                    "// Get Scale To value from effect",
+                    "var scaleToValue;",
+                    "try {",
+                    "  scaleToValue = effect(\"Fit to shape\")(\"Scale To\");",
+                    "} catch(e) {",
+                    "  try {",
+                    "    scaleToValue = effect(\"Fit to shape - Scale To\")(\"Menu\");",
+                    "  } catch(e2) {",
+                    "    scaleToValue = 1; // Default to Width",
+                    "  }",
+                    "}",
+                    "",
+                    "// Scale based on Scale To setting",
+                    "// 1 = Width, 2 = Height, 3 = Stretch, 4 = None",
+                    "var scaleX, scaleY;",
+                    "if (scaleToValue == 1) { // Width",
+                    "  var targetWidth = shapeWidth - (padding * 2);",
+                    "  var scaleFactor = (targetWidth / originalWidth) * 100;",
+                    "  scaleFactor = Math.max(0, scaleFactor);",
+                    "  scaleX = scaleY = scaleFactor;",
+                    "} else if (scaleToValue == 2) { // Height",
+                    "  var targetHeight = shapeHeight - (padding * 2);",
+                    "  var scaleFactor = (targetHeight / originalHeight) * 100;",
+                    "  scaleFactor = Math.max(0, scaleFactor);",
+                    "  scaleX = scaleY = scaleFactor;",
+                    "} else if (scaleToValue == 3) { // Stretch",
+                    "  var targetWidth = shapeWidth - (padding * 2);",
+                    "  var targetHeight = shapeHeight - (padding * 2);",
+                    "  scaleX = Math.max(0, (targetWidth / originalWidth) * 100);",
+                    "  scaleY = Math.max(0, (targetHeight / originalHeight) * 100);",
+                    "} else { // None",
+                    "  scaleX = scaleY = 100;",
+                    "}",
+                    "",
+                    "[scaleX, scaleY] + (baseScale - [100, 100]);"
+                ].join("\n");
+                
+                precomp.property("Transform").property("Scale").expression = scaleExpr;
+                
+                // X Position with 9-point alignment
+                var xPosExpr = [
+                    "var shapeLayer = parent;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "var myScale = transform.scale[0] / 100;",
+                    "var myWidth = " + precompWidth + " * myScale;",
+                    "",
+                    "// Get alignment value from effect",
+                    "var alignmentValue;",
+                    "try {",
+                    "  alignmentValue = effect(\"Fit to shape\")(\"Alignment\");",
+                    "} catch(e) {",
+                    "  try {",
+                    "    alignmentValue = effect(\"Fit to shape - Alignment\")(\"Menu\");",
+                    "  } catch(e2) {",
+                    "    alignmentValue = 1; // Default to Center",
+                    "  }",
+                    "}",
+                    "",
+                    "// Calculate X position based on alignment",
+                    "var xPos;",
+                    "if (alignmentValue == 2 || alignmentValue == 6 || alignmentValue == 10) {",
+                    "  // Left alignment",
+                    "  xPos = shapeBounds.left + myWidth/2;",
+                    "} else if (alignmentValue == 3 || alignmentValue == 7 || alignmentValue == 11) {",
+                    "  // Right alignment",
+                    "  xPos = shapeBounds.left + shapeBounds.width - myWidth/2;",
+                    "} else {",
+                    "  // Center alignment",
+                    "  xPos = shapeBounds.left + shapeBounds.width/2;",
+                    "}",
+                    "",
+                    "if (numKeys > 0) {",
+                    "  xPos + (value - valueAtTime(key(1).time));",
+                    "} else {",
+                    "  xPos;",
+                    "}"
+                ].join("\n");
+                
+                // Y Position with 9-point alignment
+                var yPosExpr = [
+                    "var shapeLayer = parent;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "var myScale = transform.scale[1] / 100;",
+                    "var myHeight = " + precompHeight + " * myScale;",
+                    "",
+                    "// Get alignment value from effect",
+                    "var alignmentValue;",
+                    "try {",
+                    "  alignmentValue = effect(\"Fit to shape\")(\"Alignment\");",
+                    "} catch(e) {",
+                    "  try {",
+                    "    alignmentValue = effect(\"Fit to shape - Alignment\")(\"Menu\");",
+                    "  } catch(e2) {",
+                    "    alignmentValue = 1; // Default to Center",
+                    "  }",
+                    "}",
+                    "",
+                    "// Calculate Y position based on alignment",
+                    "var yPos;",
+                    "if (alignmentValue >= 5 && alignmentValue <= 7) {",
+                    "  // Top alignment",
+                    "  yPos = shapeBounds.top + myHeight/2;",
+                    "} else if (alignmentValue >= 9 && alignmentValue <= 11) {",
+                    "  // Bottom alignment",
+                    "  yPos = shapeBounds.top + shapeBounds.height - myHeight/2;",
+                    "} else {",
+                    "  // Center alignment",
+                    "  yPos = shapeBounds.top + shapeBounds.height/2;",
+                    "}",
+                    "",
+                    "if (numKeys > 0) {",
+                    "  yPos + (value - valueAtTime(key(1).time));",
+                    "} else {",
+                    "  yPos;",
+                    "}"
+                ].join("\n");
+                
+                precomp.property("Transform").property("X Position").expression = xPosExpr;
+                precomp.property("Transform").property("Y Position").expression = yPosExpr;
+            }
+        }
+        
+        // Restore original selection
+        try {
+            for (var restoreIdx = 1; restoreIdx <= comp.numLayers; restoreIdx++) {
+                comp.layer(restoreIdx).selected = false;
+            }
+            // Restore original selection
+            shapeLayer.selected = true;
+            for (var k = 0; k < otherLayers.length; k++) {
+                otherLayers[k].selected = true;
+            }
+            DEBUG_JSX.log("Restored original layer selection");
+        } catch(restoreError) {
+            DEBUG_JSX.log("Selection restore error: " + restoreError.toString());
+        }
+        
+        DEBUG_JSX.log("FitToShape operation completed successfully");
+        
+        // Include debug messages in result
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|Applied " + mode + " to " + otherLayers.length + " layers|" + debugMessages.join("|");
+        
+    } catch (error) {
+        DEBUG_JSX.error("FitToShape operation failed", error.toString());
+        alert("Error: " + error.toString());
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + error.toString() + "|" + debugMessages.join("|");
+    } finally {
+        app.endUndoGroup();
+    }
+    } catch(mainError) {
+        DEBUG_JSX.error("Main function error", mainError.toString());
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + mainError.toString() + "|" + debugMessages.join("|");
     }
 }
 
@@ -6413,6 +7151,18 @@ function addNulls(nullType) {
         return;
     }
 
+    // Handle FitToShape functionality first (these don't need the single layer validation)
+    if (nullType === "layers") {
+        // Fit to width functionality (equivalent to FitToShape "fit to width")
+        // This requires multiple layers selected (shape + content)
+        return applyFitToShape("fitWidth");
+    } else if (nullType === "layers-padding") {
+        // Fit original size functionality (equivalent to FitToShape "fit original size")
+        // This requires multiple layers selected (shape + content)
+        return applyFitToShape("fitNone");
+    }
+
+    // The rest of this function is only for vertex-nulls
     var sel = comp.selectedLayers;
     if (sel.length !== 1) {
         alert("Select exactly one shape layer.");
@@ -6422,13 +7172,28 @@ function addNulls(nullType) {
     var baseLayer = sel[0];
     var baseName = baseLayer.name;
 
-    app.beginUndoGroup("Add " + (nullType === "midpoints" ? "Midpoint" : "Corner") + " Nulls");
+    app.beginUndoGroup("Add Vertex Nulls");
 
     // Define points based on nullType
     var points = [];
     
-    if (nullType === "midpoints") {
-        // Midpoints: Top, Left, Center, Right, Bottom
+    if (nullType === "vertex-nulls") {
+        // All 9 vertex points: 4 corners + 5 midpoints
+        points = [
+            // Corners
+            { name: "Top Left",     exprX: "r.left", exprY: "r.top" },
+            { name: "Top Right",    exprX: "r.left + r.width", exprY: "r.top" },
+            { name: "Bottom Left",  exprX: "r.left", exprY: "r.top + r.height" },
+            { name: "Bottom Right", exprX: "r.left + r.width", exprY: "r.top + r.height" },
+            // Midpoints
+            { name: "Top",     exprX: "r.left + r.width/2", exprY: "r.top" },
+            { name: "Left",    exprX: "r.left", exprY: "r.top + r.height/2" },
+            { name: "Center",  exprX: "r.left + r.width/2", exprY: "r.top + r.height/2" },
+            { name: "Right",   exprX: "r.left + r.width", exprY: "r.top + r.height/2" },
+            { name: "Bottom",  exprX: "r.left + r.width/2", exprY: "r.top + r.height" }
+        ];
+    } else if (nullType === "midpoints") {
+        // Legacy support: Midpoints only
         points = [
             { name: "Top",     exprX: "r.left + r.width/2", exprY: "r.top" },
             { name: "Left",    exprX: "r.left", exprY: "r.top + r.height/2" },
@@ -6437,7 +7202,7 @@ function addNulls(nullType) {
             { name: "Bottom",  exprX: "r.left + r.width/2", exprY: "r.top + r.height" }
         ];
     } else if (nullType === "corners") {
-        // Corners: Top left, Top right, Bottom left, Bottom right
+        // Legacy support: Corners only
         points = [
             { name: "Top Left",     exprX: "r.left", exprY: "r.top" },
             { name: "Top Right",    exprX: "r.left + r.width", exprY: "r.top" },
@@ -6523,6 +7288,9 @@ function addNulls(nullType) {
     }
 
     app.endUndoGroup();
+    
+    // Return success for vertex nulls
+    return "success|Created " + created.length + " vertex null guides";
 }
 
 // Apply the complete preset

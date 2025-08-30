@@ -72,7 +72,7 @@ body {
 
 /* Subsection titles within sections */
 .subsection-title {
-    color: #cccccc;
+    color: #f0f0f0;
     font-size: 10px;
     font-weight: 400;
     margin: 4px 0 6px 0; /* Reduced top margin, added bottom padding */
@@ -89,7 +89,7 @@ body {
 
 /* Spaced subsection titles (Effects, Shimmer) - extra top margin */
 .subsection-title.spaced {
-    margin-top: 14px; /* 10px extra + 4px base = 14px total */
+    margin-top: 18px; /* 14px extra + 4px additional = 18px total */
 }
 
 /* Section controls container */

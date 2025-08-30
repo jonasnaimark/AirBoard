@@ -1753,9 +1753,43 @@ document.addEventListener('DOMContentLoaded', function() {
         // Call the After Effects script with the null type
         csInterface.evalScript('addNullsFromPanel("' + nullType + '")', function(result) {
             console.log('Add Nulls result:', result);
+            
+            // Extract debug messages if present
+            if (result && result.indexOf('|') !== -1) {
+                var parts = result.split('|');
+                var status = parts[0];
+                
+                // Extract debug messages (everything after main result parts)
+                var debugMessages = [];
+                for (var i = 2; i < parts.length; i++) {
+                    if (parts[i] && parts[i].trim()) {
+                        debugMessages.push(parts[i]);
+                    }
+                }
+                
+                // Display debug messages in debug panel
+                if (debugMessages.length > 0) {
+                    var debugLog = document.getElementById('debug-log');
+                    if (debugLog) {
+                        debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Fit To Rect Debug:</div>';
+                        for (var j = 0; j < debugMessages.length; j++) {
+                            debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                        }
+                        debugLog.scrollTop = debugLog.scrollHeight;
+                    }
+                }
+                
+                // Show result status
+                if (status === 'error') {
+                    console.error('Fit To Rect failed:', parts[1] || 'Unknown error');
+                } else {
+                    console.log('Fit To Rect succeeded:', parts[1] || 'Success');
+                }
+            }
+            
             // Re-enable button
             addNullButton.disabled = false;
-            addNullButton.textContent = 'Add Nulls';
+            addNullButton.textContent = 'Fit To Rect';
         });
     });
     
