@@ -41,7 +41,7 @@ echo "✅ Production files cleaned"
 
 # Navigate to temp directory and create ZXP
 cd temp-package
-../ZXPSignCmd -sign . ../dist/AirBoard-v4.11.2.zxp ../new-cert.p12 mypassword
+../ZXPSignCmd -sign . ../dist/AirBoard-v4.12.0.zxp ../new-cert.p12 mypassword
 
 # Return to parent directory
 cd ..
@@ -50,9 +50,9 @@ cd ..
 rm -rf temp-package
 
 # Verify the file was created
-if [ -f "dist/AirBoard-v4.11.2.zxp" ]; then
-    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.11.2.zxp"
-    ls -la dist/AirBoard-v4.11.2.zxp
+if [ -f "dist/AirBoard-v4.12.0.zxp" ]; then
+    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.12.0.zxp"
+    ls -la dist/AirBoard-v4.12.0.zxp
 else
     echo "❌ ERROR: ZXP file was not created"
 fi
