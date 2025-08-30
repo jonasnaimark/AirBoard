@@ -10,7 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.11.2] - 2024-12-28 📦 **LATEST BUILD**
+## [4.12.2] - 2025-08-30 🔧 **LATEST BUILD - NUDGE FUNCTIONALITY FIX**
+### 🔧 Fixed - MULTIPLE POSITION PROPERTY NUDGING
+- **Fixed Multi-Layer Position Nudging**: Position nudge buttons now move ALL selected position properties across multiple layers, not just one
+- **Corrected Display Values**: Fixed display showing incorrect values (49999999.5px) when nudging multiple properties with "Multiple" flag
+- **Enhanced Error Handling**: Added proper error handling and logging for each position property during nudging operations
+- **Improved Backend Logic**: Modified `nudgePositionAxis()` function to process all collected position properties individually
+- **Frontend Display Fix**: Added check for -999999 "Multiple" flag to prevent math operations that caused display errors
+
+### 🎮 User Experience - SEAMLESS MULTI-LAYER WORKFLOW
+- **Consistent Nudging Behavior**: All selected position keyframes now move simultaneously when using X/Y nudge buttons
+- **Accurate Value Display**: Position distances show actual values when same across layers, "Multiple" when different
+- **No More Display Errors**: Eliminated 49999999.5px errors caused by calculations on flag values
+- **Universal Multi-Layer Support**: Works with position properties across any number of selected layers
+
+### 🔧 Technical Implementation - ROBUST POSITION PROCESSING
+- **Enhanced Collection Logic**: Improved `allPropertiesToNudge` array to gather all position properties from all selected layers
+- **Individual Property Processing**: Changed from single property processing to loop-based processing of all collected properties
+- **Smart Flag Handling**: Frontend JavaScript now checks for special flag values before performing calculations
+- **Comprehensive Logging**: Added detailed debug logging for each position property processing step
+
+## [4.11.2] - 2024-12-28 📦 **PREVIOUS BUILD**
 ### 📦 Updated
 - **New build**: Latest production build with all recent improvements
 
