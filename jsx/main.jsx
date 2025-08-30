@@ -7258,20 +7258,22 @@ function addNulls(nullType) {
         vertStroke.property("Color").setValue([1,0.5,0]);
         vertStroke.property("Stroke Width").setValue(2);
 
-        // Position expressions
+        // Parent the null guide to the shape layer so it follows rotations and scaling
+        shapeLayer.parent = baseLayer;
+        
+        // Position expressions - now working in parent space (relative to shape layer)
         var pos = shapeLayer.property("Transform").property("Position");
         pos.dimensionsSeparated = true;
 
         var xProp = shapeLayer.property("Transform").property("X Position");
         var yProp = shapeLayer.property("Transform").property("Y Position");
 
+        // Parent space expressions - much simpler since we're parented to the shape layer
         var exprHeader =
-            "var l = thisComp.layer('" + baseName + "');\n" +
-            "var r = l.sourceRectAtTime(time,false);\n" +
-            "var p = l.toComp([0,0]) - l.anchorPoint;\n";
+            "var r = parent.sourceRectAtTime(time,false);\n";
 
-        xProp.expression = exprHeader + "p[0] + (" + exprX + ");";
-        yProp.expression = exprHeader + "p[1] + (" + exprY + ");";
+        xProp.expression = exprHeader + exprX + ";";
+        yProp.expression = exprHeader + exprY + ";";
 
         return shapeLayer;
     }
