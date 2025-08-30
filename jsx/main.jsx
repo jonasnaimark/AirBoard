@@ -330,9 +330,66 @@ function readKeyframesSmart() {
                     resultDurationFrames = Math.round((resultDurationMs / 1000) * frameRate);
                     DEBUG_JSX.log("All properties have same duration: " + resultDurationMs + "ms");
                 } else {
-                    resultDurationMs = -1; // Flag for "Multiple" durations
-                    resultDurationFrames = -1;
-                    DEBUG_JSX.log("Properties have different durations");
+                    // Calculate total duration span from first to last keyframe across all properties
+                    var earliestTime = Infinity;
+                    var latestTime = -Infinity;
+                    
+                    // Group propertyTimes by property to find first and last keyframes for each property
+                    var propertyGroups = {};
+                    for (var k = 0; k < propertyTimes.length; k++) {
+                        var propInfo = propertyTimes[k];
+                        var propKey = propInfo.name + "_" + propInfo.layer.index; // Unique key per property per layer
+                        
+                        if (!propertyGroups[propKey]) {
+                            propertyGroups[propKey] = {
+                                property: propInfo.property,
+                                times: []
+                            };
+                        }
+                        propertyGroups[propKey].times.push(propInfo.time);
+                    }
+                    
+                    // For each property group, find the earliest and latest selected keyframe times
+                    for (var propKey in propertyGroups) {
+                        var group = propertyGroups[propKey];
+                        var prop = group.property;
+                        var selectedTimes = [];
+                        
+                        // Get all selected keyframe times for this property
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (prop.keySelected(j)) {
+                                selectedTimes.push(prop.keyTime(j));
+                            }
+                        }
+                        
+                        if (selectedTimes.length > 0) {
+                            // Sort times to get first and last
+                            selectedTimes.sort(function(a, b) { return a - b; });
+                            var propFirstTime = selectedTimes[0];
+                            var propLastTime = selectedTimes[selectedTimes.length - 1];
+                            
+                            // Update global earliest and latest
+                            if (propFirstTime < earliestTime) {
+                                earliestTime = propFirstTime;
+                            }
+                            if (propLastTime > latestTime) {
+                                latestTime = propLastTime;
+                            }
+                        }
+                    }
+                    
+                    // Check if we found valid times
+                    if (earliestTime !== Infinity && latestTime !== -Infinity) {
+                        var totalSpanSeconds = latestTime - earliestTime;
+                        resultDurationMs = roundMs(totalSpanSeconds);
+                        resultDurationFrames = Math.round(totalSpanSeconds * frameRate);
+                        DEBUG_JSX.log("Properties have different durations, total span: " + resultDurationMs + "ms (from " + (earliestTime * 1000) + "ms to " + (latestTime * 1000) + "ms)");
+                    } else {
+                        // Fallback if we couldn't find valid times
+                        resultDurationMs = -1;
+                        resultDurationFrames = -1;
+                        DEBUG_JSX.log("Could not calculate total span, using Multiple");
+                    }
                 }
             }
             
@@ -340,6 +397,8 @@ function readKeyframesSmart() {
             var xDistance = 0, yDistance = 0, hasXDistance = false, hasYDistance = false;
             var positionPropertiesCount = 0;
             var positionLayers = {}; // Track which layers have position properties
+            var allXDistances = []; // Track all X distances to check if they're the same
+            var allYDistances = []; // Track all Y distances to check if they're the same
             
             try {
                 DEBUG_JSX.log("CROSS-PROPERTY DEBUG: Searching propertyTimes for position data");
@@ -373,11 +432,11 @@ function readKeyframesSmart() {
                             DEBUG_JSX.log("Position distance calculated: x=" + distance.x + ", y=" + distance.y + ", hasX=" + distance.hasX + ", hasY=" + distance.hasY);
                             
                             if (distance.hasX) {
-                                xDistance += distance.x;
+                                allXDistances.push(distance.x);
                                 hasXDistance = true;
                             }
                             if (distance.hasY) {
-                                yDistance += distance.y;
+                                allYDistances.push(distance.y);
                                 hasYDistance = true;
                             }
                         }
@@ -390,14 +449,48 @@ function readKeyframesSmart() {
                     layerCount++;
                 }
                 
-                // If we have position properties from multiple layers, set special "Multiple" values
+                // If we have multiple position properties, check if they all have the same distance
                 if (layerCount > 1 || positionPropertiesCount > 1) {
                     DEBUG_JSX.log("Multiple position properties detected across " + layerCount + " layers");
-                    if (hasXDistance) {
-                        xDistance = -999999; // Special value to indicate "Multiple"
+                    
+                    // Check if all X distances are the same
+                    if (hasXDistance && allXDistances.length > 1) {
+                        var firstX = allXDistances[0];
+                        var allXSame = true;
+                        for (var i = 1; i < allXDistances.length; i++) {
+                            if (Math.abs(allXDistances[i] - firstX) > 0.5) { // 0.5px tolerance
+                                allXSame = false;
+                                break;
+                            }
+                        }
+                        xDistance = allXSame ? firstX : -999999; // Use actual value if all same, otherwise "Multiple"
+                        DEBUG_JSX.log("X distances: [" + allXDistances.join(", ") + "], all same: " + allXSame + ", result: " + xDistance);
+                    } else if (hasXDistance && allXDistances.length === 1) {
+                        xDistance = allXDistances[0]; // Single distance
                     }
-                    if (hasYDistance) {
-                        yDistance = -999999; // Special value to indicate "Multiple"
+                    
+                    // Check if all Y distances are the same
+                    if (hasYDistance && allYDistances.length > 1) {
+                        var firstY = allYDistances[0];
+                        var allYSame = true;
+                        for (var i = 1; i < allYDistances.length; i++) {
+                            if (Math.abs(allYDistances[i] - firstY) > 0.5) { // 0.5px tolerance
+                                allYSame = false;
+                                break;
+                            }
+                        }
+                        yDistance = allYSame ? firstY : -999999; // Use actual value if all same, otherwise "Multiple"
+                        DEBUG_JSX.log("Y distances: [" + allYDistances.join(", ") + "], all same: " + allYSame + ", result: " + yDistance);
+                    } else if (hasYDistance && allYDistances.length === 1) {
+                        yDistance = allYDistances[0]; // Single distance
+                    }
+                } else {
+                    // Single position property - use the distance directly
+                    if (hasXDistance && allXDistances.length > 0) {
+                        xDistance = allXDistances[0];
+                    }
+                    if (hasYDistance && allYDistances.length > 0) {
+                        yDistance = allYDistances[0];
                     }
                 }
                 
@@ -4015,9 +4108,7 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         
         var selectedLayers = comp.selectedLayers;
         var processedAny = false;
-        
-        // Use first selected layer
-        var layer = selectedLayers[0];
+        var allPropertiesToNudge = []; // Collect all position properties from all layers
         
         // Function to recursively search for selected keyframes with matching axis
         function findAxisProperty(propGroup, targetAxis) {
@@ -4063,29 +4154,25 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
             return null;
         }
         
-        // Find the property for this axis
-        var axisPropertyData = findAxisProperty(layer, axis);
-        if (!axisPropertyData) {
+        // Collect all position properties from all selected layers
+        for (var layerIndex = 0; layerIndex < selectedLayers.length; layerIndex++) {
+            var layer = selectedLayers[layerIndex];
+            var axisPropertyData = findAxisProperty(layer, axis);
+            if (axisPropertyData && axisPropertyData.keys.length >= 2) {
+                allPropertiesToNudge.push({
+                    layer: layer,
+                    property: axisPropertyData.property,
+                    keys: axisPropertyData.keys
+                });
+            }
+        }
+        
+        if (allPropertiesToNudge.length === 0) {
             app.endUndoGroup();
             return "error|Select " + axis.toUpperCase() + " position keyframes";
         }
         
-        var prop = axisPropertyData.property;
-        var selKeys = axisPropertyData.keys;
-        
-        if (selKeys.length < 2) {
-            app.endUndoGroup();
-            if (selKeys.length === 1) {
-                return "error|Select > 1 " + axis.toUpperCase() + " position keyframe";
-            } else {
-                return "error|Select " + axis.toUpperCase() + " position keyframes";
-            }
-        }
-        
         processedAny = true;
-        
-        // Sort selected key indices
-        selKeys.sort(function(a, b) { return a - b; });
         
         // Get the current resolution multiplier
         var resolutionMultiplier = 2; // Default to 2x
@@ -4105,117 +4192,133 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
         var baseMovement = 5;
         var scaledIncrement = baseMovement * resolutionMultiplier;
         
-        // Determine which keyframe to move
-        var keyIndexToMove;
-        if (direction === 'in') {
-            // "In" mode: move first keyframe
-            keyIndexToMove = selKeys[0];
-        } else {
-            // "Out" mode: move last keyframe  
-            keyIndexToMove = selKeys[selKeys.length - 1];
-        }
+        DEBUG_JSX.log("Processing " + allPropertiesToNudge.length + " position properties");
         
-        // Get current keyframe value and extract coordinate for this axis
-        var currentValue = prop.keyValue(keyIndexToMove);
-        var currentCoord;
-        
-        if (currentValue instanceof Array && currentValue.length >= 2) {
-            // 2D Position case [x, y]
-            currentCoord = axis === 'x' ? currentValue[0] : currentValue[1];
-        } else if (typeof currentValue === "number") {
-            // 1D Position case
-            currentCoord = currentValue;
-        } else {
-            app.endUndoGroup();
-            return "error|Invalid position value type";
-        }
-        
-        // Get the other keyframe to calculate current distance
-        var otherKeyIndex = (keyIndexToMove === selKeys[0]) ? selKeys[selKeys.length - 1] : selKeys[0];
-        var otherValue = prop.keyValue(otherKeyIndex);
-        var otherCoord;
-        
-        if (otherValue instanceof Array && otherValue.length >= 2) {
-            // 2D Position case [x, y]
-            otherCoord = axis === 'x' ? otherValue[0] : otherValue[1];
-        } else if (typeof otherValue === "number") {
-            // 1D Position case
-            otherCoord = otherValue;
-        } else {
-            app.endUndoGroup();
-            return "error|Invalid other keyframe position value type";
-        }
-        
-        // Calculate current distance between keyframes
-        var currentDistance = Math.abs(currentCoord - otherCoord);
-        
-        // Smart snapping: check if current DISTANCE is aligned to scaledIncrement boundary
-        var distanceRemainder = Math.abs(currentDistance % scaledIncrement);
-        var tolerance = 0.1;
-        var isDistanceAlreadySnapped = (distanceRemainder < tolerance) || (distanceRemainder > (scaledIncrement - tolerance));
-        
-        DEBUG_JSX.log("Position snapping debug:");
-        DEBUG_JSX.log("  currentCoord: " + currentCoord + "px");
-        DEBUG_JSX.log("  otherCoord: " + otherCoord + "px");  
-        DEBUG_JSX.log("  currentDistance: " + currentDistance + "px");
-        DEBUG_JSX.log("  scaledIncrement: " + scaledIncrement + "px");
-        DEBUG_JSX.log("  distanceRemainder: " + distanceRemainder);
-        DEBUG_JSX.log("  isDistanceAlreadySnapped: " + isDistanceAlreadySnapped);
-        DEBUG_JSX.log("  nudgeDirection: " + nudgeDirection);
-        
-        var newCoord;
-        if (isDistanceAlreadySnapped) {
-            // Distance already snapped - move by exact increment to maintain snapping
-            newCoord = currentCoord + (nudgeDirection * scaledIncrement);
-            DEBUG_JSX.log("  INCREMENTAL: " + currentCoord + " + " + (nudgeDirection * scaledIncrement) + " = " + newCoord);
-        } else {
-            // Distance not snapped - snap the distance to nearest multiple in the nudge direction
-            var targetDistance;
-            if (nudgeDirection > 0) {
-                // Positive direction: snap to next higher distance multiple
-                targetDistance = Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
-                DEBUG_JSX.log("  SNAP DISTANCE UP: ceil(" + currentDistance + " / " + scaledIncrement + ") * " + scaledIncrement + " = " + targetDistance);
+        // Process each position property
+        for (var propIndex = 0; propIndex < allPropertiesToNudge.length; propIndex++) {
+            var propData = allPropertiesToNudge[propIndex];
+            var prop = propData.property;
+            var selKeys = propData.keys;
+            var layer = propData.layer;
+            
+            DEBUG_JSX.log("Processing property " + prop.name + " on layer " + layer.name + " with " + selKeys.length + " selected keyframes");
+            
+            // Sort selected key indices
+            selKeys.sort(function(a, b) { return a - b; });
+            
+            // Determine which keyframe to move
+            var keyIndexToMove;
+            if (direction === 'in') {
+                // "In" mode: move first keyframe
+                keyIndexToMove = selKeys[0];
             } else {
-                // Negative direction: snap to next lower distance multiple  
-                targetDistance = Math.floor(currentDistance / scaledIncrement) * scaledIncrement;
-                DEBUG_JSX.log("  SNAP DISTANCE DOWN: floor(" + currentDistance + " / " + scaledIncrement + ") * " + scaledIncrement + " = " + targetDistance);
+                // "Out" mode: move last keyframe  
+                keyIndexToMove = selKeys[selKeys.length - 1];
             }
             
-            // Calculate new coordinate to achieve target distance
-            if (currentCoord > otherCoord) {
-                // Moving keyframe is on the positive side
-                newCoord = otherCoord + targetDistance;
+            // Get current keyframe value and extract coordinate for this axis
+            var currentValue = prop.keyValue(keyIndexToMove);
+            var currentCoord;
+            
+            if (currentValue instanceof Array && currentValue.length >= 2) {
+                // 2D Position case [x, y]
+                currentCoord = axis === 'x' ? currentValue[0] : currentValue[1];
+            } else if (typeof currentValue === "number") {
+                // 1D Position case
+                currentCoord = currentValue;
             } else {
-                // Moving keyframe is on the negative side
-                newCoord = otherCoord - targetDistance;
+                DEBUG_JSX.log("Skipping property " + prop.name + " - invalid position value type");
+                continue;
             }
-            DEBUG_JSX.log("  NEW COORD FOR DISTANCE: " + newCoord);
-        }
-        
-        // Apply the new coordinate to the keyframe value
-        var newValue;
-        if (currentValue instanceof Array && currentValue.length >= 2) {
-            // 2D Position case [x, y]
-            newValue = [currentValue[0], currentValue[1]];
-            if (axis === 'x') {
-                newValue[0] = newCoord;
+            
+            // Get the other keyframe to calculate current distance
+            var otherKeyIndex = (keyIndexToMove === selKeys[0]) ? selKeys[selKeys.length - 1] : selKeys[0];
+            var otherValue = prop.keyValue(otherKeyIndex);
+            var otherCoord;
+            
+            if (otherValue instanceof Array && otherValue.length >= 2) {
+                // 2D Position case [x, y]
+                otherCoord = axis === 'x' ? otherValue[0] : otherValue[1];
+            } else if (typeof otherValue === "number") {
+                // 1D Position case
+                otherCoord = otherValue;
             } else {
-                newValue[1] = newCoord;
+                DEBUG_JSX.log("Skipping property " + prop.name + " - invalid other keyframe position value type");
+                continue;
             }
-        } else if (typeof currentValue === "number") {
-            // 1D Position case
-            newValue = newCoord;
-        } else {
-            app.endUndoGroup();
-            return "error|Invalid position value type";
-        }
-        
-        // Apply the new keyframe value
-        try {
-            prop.setValueAtKey(keyIndexToMove, newValue);
-        } catch(e) {
-            app.endUndoGroup();
-            return "error|Failed to set keyframe value: " + e.toString();
+            
+            // Calculate current distance between keyframes
+            var currentDistance = Math.abs(currentCoord - otherCoord);
+            
+            // Smart snapping: check if current DISTANCE is aligned to scaledIncrement boundary
+            var distanceRemainder = Math.abs(currentDistance % scaledIncrement);
+            var tolerance = 0.1;
+            var isDistanceAlreadySnapped = (distanceRemainder < tolerance) || (distanceRemainder > (scaledIncrement - tolerance));
+            
+            DEBUG_JSX.log("Position snapping debug for " + prop.name + ":");
+            DEBUG_JSX.log("  currentCoord: " + currentCoord + "px");
+            DEBUG_JSX.log("  otherCoord: " + otherCoord + "px");  
+            DEBUG_JSX.log("  currentDistance: " + currentDistance + "px");
+            DEBUG_JSX.log("  scaledIncrement: " + scaledIncrement + "px");
+            DEBUG_JSX.log("  distanceRemainder: " + distanceRemainder);
+            DEBUG_JSX.log("  isDistanceAlreadySnapped: " + isDistanceAlreadySnapped);
+            DEBUG_JSX.log("  nudgeDirection: " + nudgeDirection);
+            
+            var newCoord;
+            if (isDistanceAlreadySnapped) {
+                // Distance already snapped - move by exact increment to maintain snapping
+                newCoord = currentCoord + (nudgeDirection * scaledIncrement);
+                DEBUG_JSX.log("  INCREMENTAL: " + currentCoord + " + " + (nudgeDirection * scaledIncrement) + " = " + newCoord);
+            } else {
+                // Distance not snapped - snap the distance to nearest multiple in the nudge direction
+                var targetDistance;
+                if (nudgeDirection > 0) {
+                    // Positive direction: snap to next higher distance multiple
+                    targetDistance = Math.ceil(currentDistance / scaledIncrement) * scaledIncrement;
+                    DEBUG_JSX.log("  SNAP DISTANCE UP: ceil(" + currentDistance + " / " + scaledIncrement + ") * " + scaledIncrement + " = " + targetDistance);
+                } else {
+                    // Negative direction: snap to next lower distance multiple  
+                    targetDistance = Math.floor(currentDistance / scaledIncrement) * scaledIncrement;
+                    DEBUG_JSX.log("  SNAP DISTANCE DOWN: floor(" + currentDistance + " / " + scaledIncrement + ") * " + scaledIncrement + " = " + targetDistance);
+                }
+                
+                // Calculate new coordinate to achieve target distance
+                if (currentCoord > otherCoord) {
+                    // Moving keyframe is on the positive side
+                    newCoord = otherCoord + targetDistance;
+                } else {
+                    // Moving keyframe is on the negative side
+                    newCoord = otherCoord - targetDistance;
+                }
+                DEBUG_JSX.log("  NEW COORD FOR DISTANCE: " + newCoord);
+            }
+            
+            // Apply the new coordinate to the keyframe value
+            var newValue;
+            if (currentValue instanceof Array && currentValue.length >= 2) {
+                // 2D Position case [x, y]
+                newValue = [currentValue[0], currentValue[1]];
+                if (axis === 'x') {
+                    newValue[0] = newCoord;
+                } else {
+                    newValue[1] = newCoord;
+                }
+            } else if (typeof currentValue === "number") {
+                // 1D Position case
+                newValue = newCoord;
+            } else {
+                DEBUG_JSX.log("Skipping property " + prop.name + " - invalid position value type for new value");
+                continue;
+            }
+            
+            // Apply the new keyframe value
+            try {
+                prop.setValueAtKey(keyIndexToMove, newValue);
+                DEBUG_JSX.log("Successfully updated " + prop.name + " keyframe " + keyIndexToMove + " to " + newCoord);
+            } catch(e) {
+                DEBUG_JSX.log("Failed to set keyframe value for " + prop.name + ": " + e.toString());
+                continue;
+            }
         }
         
         app.endUndoGroup();

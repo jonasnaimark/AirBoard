@@ -604,9 +604,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Update duration display
                         var durationText = document.getElementById('durationText');
                         if (durationMs === -1) {
-                            durationText.textContent = 'Duration: Multiple';
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Multiple</span>';
                         } else {
-                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">' + durationMs + 'ms / ' + durationFrames + 'f</span>';
                         }
                         durationText.style.opacity = '1';
                         
@@ -614,13 +614,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (status === 'error') {
                         // Use consistent error message for duration buttons
                         var durationText = document.getElementById('durationText');
-                        durationText.textContent = 'Select > 1 Keyframe';
+                        durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                         durationText.style.opacity = '1';
                     }
                 } else {
                     // Unexpected result format
                     var durationText = document.getElementById('durationText');
-                    durationText.textContent = 'Select > 1 Keyframe';
+                    durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                     durationText.style.opacity = '1';
                 }
             });
@@ -678,9 +678,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Update duration display
                         var durationText = document.getElementById('durationText');
                         if (durationMs === -1) {
-                            durationText.textContent = 'Duration: Multiple';
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Multiple</span>';
                         } else {
-                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">' + durationMs + 'ms / ' + durationFrames + 'f</span>';
                         }
                         durationText.style.opacity = '1';
                         
@@ -688,13 +688,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (status === 'error') {
                         // Use consistent error message for duration buttons
                         var durationText = document.getElementById('durationText');
-                        durationText.textContent = 'Select > 1 Keyframe';
+                        durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                         durationText.style.opacity = '1';
                     }
                 } else {
                     // Unexpected result format
                     var durationText = document.getElementById('durationText');
-                    durationText.textContent = 'Select > 1 Keyframe';
+                    durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                     durationText.style.opacity = '1';
                 }
             });
@@ -739,9 +739,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Update delay display
                         var delayText = document.getElementById('delayText');
                         if (delayMs === -1) {
-                            delayText.textContent = 'Delay: Multiple';
+                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
                         } else {
-                            delayText.textContent = 'Delay: ' + delayMs + 'ms / ' + delayFrames + 'f';
+                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
                         }
                         delayText.style.opacity = '1';
                         
@@ -749,13 +749,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (status === 'error') {
                         // Use consistent error message for delay buttons
                         var delayText = document.getElementById('delayText');
-                        delayText.textContent = 'Select > 1 Keyframe';
+                        delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                         delayText.style.opacity = '1';
                     }
                 } else {
                     // Unexpected result format
                     var delayText = document.getElementById('delayText');
-                    delayText.textContent = 'Select > 1 Keyframe';
+                    delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                     delayText.style.opacity = '1';
                 }
             });
@@ -793,9 +793,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Update delay display
                         var delayText = document.getElementById('delayText');
                         if (delayMs === -1) {
-                            delayText.textContent = 'Delay: Multiple';
+                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
                         } else {
-                            delayText.textContent = 'Delay: ' + delayMs + 'ms / ' + delayFrames + 'f';
+                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
                         }
                         delayText.style.opacity = '1';
                         
@@ -803,13 +803,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (status === 'error') {
                         // Use consistent error message for delay buttons
                         var delayText = document.getElementById('delayText');
-                        delayText.textContent = 'Select > 1 Keyframe';
+                        delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                         delayText.style.opacity = '1';
                     }
                 } else {
                     // Unexpected result format
                     var delayText = document.getElementById('delayText');
-                    delayText.textContent = 'Select > 1 Keyframe';
+                    delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
                     delayText.style.opacity = '1';
                 }
             });
@@ -873,21 +873,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     var xDistanceText = document.getElementById('xDistanceText');
                     var yDistanceText = document.getElementById('yDistanceText');
                     
-                    // Simple logic: if error is "Select > 1 Keyframe", show this message in all 4 rows
+                    // Show 0 values for any error
                     if (errorMsg === 'Select > 1 Keyframe') {
-                        // Show "Select > 1 Keyframe" in all 5 rows
-                        durationText.textContent = 'Select > 1 Keyframe';
+                        // Show 0 values in all rows
+                        durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
                         durationText.style.opacity = '1';
-                        delayText.textContent = 'Select > 1 Keyframe';
+                        delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
                         delayText.style.opacity = '1';
                         var staggerTextElement = document.getElementById('staggerText');
                         if (staggerTextElement) {
-                            staggerTextElement.textContent = 'Select > 1 Keyframe';
+                            staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
                             staggerTextElement.style.opacity = '1';
                         }
-                        xDistanceText.textContent = 'Select > 1 Keyframe';
+                        xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
                         xDistanceText.style.opacity = '1';
-                        yDistanceText.textContent = 'Select > 1 Keyframe';
+                        yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
                         yDistanceText.style.opacity = '1';
                     } else {
                         // Other errors: reset to default text
@@ -958,24 +958,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Handle duration display
                         if (durationMs === -1) {
-                            durationText.textContent = 'Duration: Multiple';
-                            durationText.style.opacity = '1';
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Multiple</span>';
                         } else if (durationMs === -999) {
-                            // For layer selections, show default text for duration (not applicable)
-                            durationText.textContent = 'Duration';
-                            durationText.style.opacity = '0.75';
+                            // For single keyframe or no valid duration, show 0
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
                         } else {
-                            durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                            durationText.style.opacity = '1';
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">' + durationMs + 'ms / ' + durationFrames + 'f</span>';
                         }
+                        durationText.style.opacity = '1';
                         
                         // Handle delay display
                         if (delayMs === -1) {
-                            delayText.textContent = 'Delay: Multiple';
-                        } else if (delayMs === 0) {
-                            delayText.textContent = 'Delay: 0ms / 0f';
+                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
                         } else {
-                            delayText.textContent = 'Delay: ' + delayMs + 'ms / ' + delayFrames + 'f';
+                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
                         }
                         delayText.style.opacity = '1';
                         
@@ -987,19 +983,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (staggerTextElement) {
                             console.log('handleReadKeyframes: Updating stagger display with staggerText="' + staggerText + '"');
                             if (staggerText === "Stagger") {
-                                // Default text - show with dimmed opacity and reset cumulative tracking
-                                staggerTextElement.textContent = staggerText;
-                                staggerTextElement.style.opacity = '0.5';
+                                // No stagger - show 0 
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
+                                staggerTextElement.style.opacity = '1';
                                 resetCumulativeStagger();
-                                console.log('handleReadKeyframes: Set stagger to default "Stagger"');
+                                console.log('handleReadKeyframes: Set stagger to 0');
                             } else if (staggerText === "Multiple") {
                                 // Multiple stagger values - show with prefix
-                                staggerTextElement.textContent = 'Stagger: Multiple';
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Multiple</span>';
                                 staggerTextElement.style.opacity = '1';
                                 console.log('handleReadKeyframes: Set stagger to "Stagger: Multiple"');
                             } else {
                                 // Show stagger value
-                                staggerTextElement.textContent = 'Stagger: ' + staggerText;
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">' + staggerText + '</span>';
                                 staggerTextElement.style.opacity = '1';
                                 console.log('handleReadKeyframes: Set stagger to "Stagger: ' + staggerText + '"');
                             }
@@ -1008,13 +1004,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Single-property mode: show duration info in duration row
                         DEBUG.log('ENTERING SINGLE-PROPERTY MODE BLOCK');
                         DEBUG.log('About to update delayText');
-                        delayText.textContent = 'Delay';
-                        delayText.style.opacity = '0.75';
+                        delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
+                        delayText.style.opacity = '1';
                         DEBUG.log('delayText updated');
                         
                         DEBUG.log('About to update durationText with: ' + durationMs + 'ms / ' + durationFrames + 'f');
-                        durationText.textContent = 'Duration: ' + durationMs + 'ms / ' + durationFrames + 'f';
-                        DEBUG.log('durationText.textContent set');
+                        durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">' + durationMs + 'ms / ' + durationFrames + 'f</span>';
+                        DEBUG.log('durationText.innerHTML set');
                         durationText.style.opacity = '1';
                         DEBUG.log('durationText.opacity set');
                         // durationValue.value = durationMs; // This element doesn't exist and isn't needed
@@ -1046,27 +1042,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (hasXDistance) {
                             // Check for special "Multiple" value
                             if (xDistance === -999999) {
-                                xDistanceText.textContent = 'X: Multiple';
+                                xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">Multiple</span>';
                                 DEBUG.log('Set X distance to Multiple');
                             } else {
                                 var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
                                 DEBUG.log('Scaled X distance:', scaledXDistance);
                                 
                                 if (scaledXDistance === 0) {
-                                    xDistanceText.textContent = 'X: 0px @1x';
+                                    xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
                                 } else {
                                     // Show directional format
                                     var direction = scaledXDistance > 0 ? 'Right' : 'Left';
                                     var absScaledXDistance = Math.abs(scaledXDistance);
-                                    xDistanceText.textContent = 'X: ' + direction + ' ' + absScaledXDistance + 'px @1x';
-                                    DEBUG.log('Set X distance text to:', xDistanceText.textContent);
+                                    xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">' + direction + ' ' + absScaledXDistance + 'px @1x</span>';
+                                    DEBUG.log('Set X distance text to:', xDistanceText.innerHTML);
                                 }
                             }
                             xDistanceText.style.opacity = '1';
                         } else {
-                            // No X position keyframes selected - return to default text
-                            xDistanceText.textContent = 'X distance';
-                            xDistanceText.style.opacity = '0.75';
+                            // No X position keyframes selected - show 0
+                            xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
+                            xDistanceText.style.opacity = '1';
                         }
                     
                         // Update Y Distance display
@@ -1074,25 +1070,25 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (hasYDistance) {
                             // Check for special "Multiple" value
                             if (yDistance === -999999) {
-                                yDistanceText.textContent = 'Y: Multiple';
+                                yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">Multiple</span>';
                                 DEBUG.log('Set Y distance to Multiple');
                             } else {
                                 var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
                                 
                                 if (scaledYDistance === 0) {
-                                    yDistanceText.textContent = 'Y: 0px @1x';
+                                    yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
                                 } else {
                                     // Show directional format
                                     var direction = scaledYDistance > 0 ? 'Down' : 'Up';
                                     var absScaledYDistance = Math.abs(scaledYDistance);
-                                    yDistanceText.textContent = 'Y: ' + direction + ' ' + absScaledYDistance + 'px @1x';
+                                    yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">' + direction + ' ' + absScaledYDistance + 'px @1x</span>';
                                 }
                             }
                             yDistanceText.style.opacity = '1';
                         } else {
-                            // No Y position keyframes selected - return to default text
-                            yDistanceText.textContent = 'Y distance';
-                            yDistanceText.style.opacity = '0.75';
+                            // No Y position keyframes selected - show 0
+                            yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
+                            yDistanceText.style.opacity = '1';
                         }
                     
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
@@ -1104,17 +1100,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             } else {
-                // Reset all displays to default text  
-                durationText.textContent = 'Duration';
-                durationText.style.opacity = '0.75';
-                delayText.textContent = 'Delay';
-                delayText.style.opacity = '0.75';
+                // Reset all displays to 0 values
+                durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
+                durationText.style.opacity = '1';
+                delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
+                delayText.style.opacity = '1';
                 
-                // Reset X and Y distance displays to default text
-                xDistanceText.textContent = 'X distance';
-                xDistanceText.style.opacity = '0.5';
-                yDistanceText.textContent = 'Y distance';
-                yDistanceText.style.opacity = '0.5';
+                // Reset X and Y distance displays to 0
+                xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
+                xDistanceText.style.opacity = '1';
+                yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
+                yDistanceText.style.opacity = '1';
                 
                 console.log('Unexpected result:', result);
             }
@@ -1164,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     padding: 4px 8px;
                     border-radius: 4px;
                     font-size: 10px;
-                    font-weight: 500;
+                    font-weight: 600;
                     white-space: nowrap;
                     border: 1px solid rgba(255, 255, 255, 0.12);
                     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -1532,13 +1528,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 var staggerMs = Math.round((cumulativeStaggerFrames / 60) * 1000);
                 
                 // Show the cumulative stagger amount (handles both positive and negative)
-                staggerText.textContent = 'Stagger: ' + staggerMs + 'ms / ' + cumulativeStaggerFrames + 'f';
+                staggerText.innerHTML = 'Stagger: <span style="opacity: 0.75;">' + staggerMs + 'ms / ' + cumulativeStaggerFrames + 'f</span>';
                 staggerText.style.opacity = '1';
                 
                 console.log('Updated stagger display: cumulative ' + cumulativeStaggerFrames + ' frames = ' + staggerMs + 'ms');
             } else {
                 // Reset to zero display when exactly zero
-                staggerText.textContent = 'Stagger: 0ms / 0f';
+                staggerText.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
                 staggerText.style.opacity = '1';
                 cumulativeStaggerFrames = 0; // Ensure it's exactly zero
             }
@@ -1550,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', function() {
         cumulativeStaggerFrames = 0;
         var staggerText = document.getElementById('staggerText');
         if (staggerText) {
-            staggerText.textContent = 'Stagger: 0ms / 0f';
+            staggerText.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
             staggerText.style.opacity = '1';
         }
     }
@@ -1592,37 +1588,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
                 
                 if (hasDistance) {
-                    // Show directional values with Up/Down/Left/Right
-                    var scaledDistance = parseFloat((distance / resolutionMultiplier).toFixed(2));
-                    
-                    if (scaledDistance === 0) {
-                        // Zero distance
-                        textElement.textContent = axis.toUpperCase() + ': 0px @1x';
+                    // Check for special "Multiple" flag value
+                    if (distance === -999999) {
+                        textElement.innerHTML = axis.toUpperCase() + ': <span style="opacity: 0.75;">Multiple</span>';
+                        textElement.style.opacity = '1';
                     } else {
-                        // Determine direction based on axis and sign
-                        var direction = '';
-                        var absScaledDistance = Math.abs(scaledDistance);
+                        // Show directional values with Up/Down/Left/Right
+                        var scaledDistance = parseFloat((distance / resolutionMultiplier).toFixed(2));
                         
-                        if (axis === 'x') {
-                            direction = scaledDistance > 0 ? 'Right' : 'Left';
-                        } else { // y axis
-                            direction = scaledDistance > 0 ? 'Down' : 'Up';
+                        if (scaledDistance === 0) {
+                            // Zero distance
+                            textElement.innerHTML = axis.toUpperCase() + ': <span style="opacity: 0.75;">0px @1x</span>';
+                        } else {
+                            // Determine direction based on axis and sign
+                            var direction = '';
+                            var absScaledDistance = Math.abs(scaledDistance);
+                            
+                            if (axis === 'x') {
+                                direction = scaledDistance > 0 ? 'Right' : 'Left';
+                            } else { // y axis
+                                direction = scaledDistance > 0 ? 'Down' : 'Up';
+                            }
+                            
+                            textElement.innerHTML = axis.toUpperCase() + ': <span style="opacity: 0.75;">' + direction + ' ' + absScaledDistance + 'px @1x</span>';
                         }
-                        
-                        textElement.textContent = axis.toUpperCase() + ': ' + direction + ' ' + absScaledDistance + 'px @1x';
+                        textElement.style.opacity = '1';
                     }
-                    textElement.style.opacity = '1';
                 } else {
-                    textElement.textContent = 'Select > 1 Keyframe';
+                    textElement.innerHTML = axis.toUpperCase() + ': <span style="opacity: 0.75;">0px @1x</span>';
                     textElement.style.opacity = '1';
                 }
             } else if (status === 'error') {
                 // Use consistent error message for all distance buttons
-                textElement.textContent = 'Select > 1 Keyframe';
+                textElement.innerHTML = axis.toUpperCase() + ': <span style="opacity: 0.75;">0px @1x</span>';
                 textElement.style.opacity = '1';
             }
         } else {
-            textElement.textContent = 'Select > 1 Keyframe';
+            textElement.innerHTML = axis.toUpperCase() + ': <span style="opacity: 0.75;">0px @1x</span>';
             textElement.style.opacity = '1';
         }
     }
