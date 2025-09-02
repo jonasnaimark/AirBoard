@@ -5159,8 +5159,8 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                         temporalContinuous: prop.keyTemporalContinuous(keyIndex),
                         temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
                         // Temporal ease data
-                        inEase: prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER ? prop.keyInTemporalEase(keyIndex) : null,
-                        outEase: prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER ? prop.keyOutTemporalEase(keyIndex) : null,
+                        inEase: (prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER || prop.keyOutInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER) ? prop.keyInTemporalEase(keyIndex) : undefined,
+                        outEase: (prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER || prop.keyOutInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER) ? prop.keyOutTemporalEase(keyIndex) : undefined,
                         // Spatial data for position properties
                         spatialContinuous: prop.isSpatial ? prop.keySpatialContinuous(keyIndex) : null,
                         spatialAutoBezier: prop.isSpatial ? prop.keySpatialAutoBezier(keyIndex) : null,
@@ -5185,7 +5185,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                     
                     // Restore temporal properties
-                    if (data.inEase !== null && data.outEase !== null) {
+                    if (data.inEase !== undefined) {
                         prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                     }
                     prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
