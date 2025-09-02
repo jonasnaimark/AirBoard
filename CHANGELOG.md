@@ -10,7 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.12.2] - 2025-08-30 🔧 **LATEST BUILD - NUDGE FUNCTIONALITY FIX**
+## [4.12.3] - 2025-09-02 📦 **LATEST BUILD**
+### 📦 Updated
+- **New build**: Latest production build with version increment
+- **Associated with AirBoard-v4.12.3.zxp**
+
+## [4.12.2] - 2025-08-30 🔧 **NUDGE FUNCTIONALITY FIX**
 ### 🔧 Fixed - MULTIPLE POSITION PROPERTY NUDGING
 - **Fixed Multi-Layer Position Nudging**: Position nudge buttons now move ALL selected position properties across multiple layers, not just one
 - **Corrected Display Values**: Fixed display showing incorrect values (49999999.5px) when nudging multiple properties with "Multiple" flag
