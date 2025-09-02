@@ -10,7 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.12.3] - 2025-09-02 📦 **LATEST BUILD**
+## [4.12.4] - 2025-09-02 🔧 **LATEST BUILD - STAGGER EASING FIX**
+### 🔧 Fixed - STAGGER KEYFRAME EASING PRESERVATION
+- **Fixed Stagger Easing Bug**: Stagger +/- buttons now preserve exact keyframe easing curves like delay/duration buttons
+- **Scale Keyframes**: Scale (and all other properties) maintain their original bezier easing during stagger operations
+- **Temporal Ease Logic**: Fixed collection and restoration of temporal ease data to match working delay/duration pattern
+- **Associated with AirBoard-v4.12.4.zxp**
+
+### 🔧 Technical Implementation - EASING PRESERVATION FIX
+- **Collection Logic**: Changed from individual interpolation checks to OR logic (if EITHER inInterp OR outInterp is bezier, collect both eases)
+- **Storage Format**: Changed from null to undefined to match working delay/duration pattern  
+- **Restoration Check**: Changed from requiring both eases to checking only inEase !== undefined
+- **Pattern Consistency**: Stagger easing now uses exact same logic as delay/duration buttons (jsx/main.jsx:5162-5163, 5188)
+
+## [4.12.3] - 2025-09-02 📦 **VERSION INCREMENT**
 ### 📦 Updated
 - **New build**: Latest production build with version increment
 - **Associated with AirBoard-v4.12.3.zxp**
