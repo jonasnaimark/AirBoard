@@ -4340,6 +4340,115 @@ function nudgeDelayTimelineMode(direction, frames) {
         var movedCount = 0;
         var processedSelections = [];
         
+        // Collect first keyframe times for each property (for marker syncing)
+        var propertyFirstKeyframeTimes = [];
+        for (var i = 0; i < cachedSelections.length; i++) {
+            var cached = cachedSelections[i];
+            var prop = cached.property;
+            var selKeys = cached.selectedIndices;
+            
+            // Find the first selected keyframe time for this property
+            var firstKeyTime = Infinity;
+            for (var k = 0; k < selKeys.length; k++) {
+                var keyTime = prop.keyTime(selKeys[k]);
+                if (keyTime < firstKeyTime) {
+                    firstKeyTime = keyTime;
+                }
+            }
+            
+            if (firstKeyTime !== Infinity) {
+                propertyFirstKeyframeTimes.push({
+                    layer: cached.layer,
+                    property: cached.propertyName,
+                    firstTime: firstKeyTime
+                });
+                DEBUG_JSX.log("Property " + cached.propertyName + " on layer " + cached.layerName + " has first keyframe at " + firstKeyTime + "s");
+            }
+        }
+        
+        // Collect markers that need to move with the keyframes
+        var markersToMove = [];
+        
+        // Check each property's first keyframe time against all markers
+        for (var p = 0; p < propertyFirstKeyframeTimes.length; p++) {
+            var propTiming = propertyFirstKeyframeTimes[p];
+            var firstKeyframeTime = propTiming.firstTime;
+            
+            // Check composition markers
+            if (comp.markerProperty && comp.markerProperty.numKeys > 0) {
+                for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
+                    var markerTime = comp.markerProperty.keyTime(m);
+                    
+                    // Check if marker is at same time as this property's first keyframe (with small tolerance)
+                    if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
+                        var markerValue = comp.markerProperty.keyValue(m);
+                        var markerComment = markerValue.comment || "";
+                        
+                        // Check if we already have this marker queued
+                        var alreadyQueued = false;
+                        for (var q = 0; q < markersToMove.length; q++) {
+                            if (markersToMove[q].type === "comp" && markersToMove[q].markerIndex === m) {
+                                alreadyQueued = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!alreadyQueued) {
+                            DEBUG_JSX.log("Found comp marker '" + markerComment + "' at property first keyframe time " + markerTime + "s (matched with " + propTiming.property + ")");
+                            
+                            markersToMove.push({
+                                type: "comp",
+                                markerIndex: m,
+                                oldTime: markerTime,
+                                newTime: markerTime + timeOffset,
+                                markerValue: markerValue,
+                                comment: markerComment
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Check layer markers on the same layer as the property
+            var layer = propTiming.layer;
+            if (layer.marker && layer.marker.numKeys > 0) {
+                for (var m = 1; m <= layer.marker.numKeys; m++) {
+                    var markerTime = layer.marker.keyTime(m);
+                    
+                    // Check if marker is at same time as this property's first keyframe
+                    if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
+                        var markerValue = layer.marker.keyValue(m);
+                        var markerComment = markerValue.comment || "";
+                        
+                        // Check if we already have this marker queued
+                        var alreadyQueued = false;
+                        for (var q = 0; q < markersToMove.length; q++) {
+                            if (markersToMove[q].type === "layer" && 
+                                markersToMove[q].layer === layer && 
+                                markersToMove[q].markerIndex === m) {
+                                alreadyQueued = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!alreadyQueued) {
+                            DEBUG_JSX.log("Found layer marker '" + markerComment + "' on layer " + layer.name + " at property first keyframe time");
+                            
+                            markersToMove.push({
+                                type: "layer",
+                                layer: layer,
+                                markerIndex: m,
+                                oldTime: markerTime,
+                                newTime: markerTime + timeOffset,
+                                markerValue: markerValue,
+                                comment: markerComment
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
         // STEP 2: PROCESS USING CACHED SELECTIONS
         for (var i = 0; i < cachedSelections.length; i++) {
             var cached = cachedSelections[i];
@@ -4444,6 +4553,33 @@ function nudgeDelayTimelineMode(direction, frames) {
                 propertyName: cached.propertyName,
                 indices: newIndices
             });
+        }
+        
+        // Move markers that were at the same time as the earliest keyframe
+        for (var i = markersToMove.length - 1; i >= 0; i--) {
+            var markerInfo = markersToMove[i];
+            
+            try {
+                if (markerInfo.type === "comp") {
+                    // Move composition marker
+                    comp.markerProperty.removeKey(markerInfo.markerIndex);
+                    if (markerInfo.newTime >= 0) { // Only add if new time is valid
+                        var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
+                        comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                        DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' from " + markerInfo.oldTime + "s to " + markerInfo.newTime + "s");
+                    }
+                } else if (markerInfo.type === "layer") {
+                    // Move layer marker
+                    markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
+                    if (markerInfo.newTime >= 0) { // Only add if new time is valid
+                        var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
+                        markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                        DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + markerInfo.oldTime + "s to " + markerInfo.newTime + "s");
+                    }
+                }
+            } catch(markerError) {
+                DEBUG_JSX.log("Failed to move marker: " + markerError.toString());
+            }
         }
         
         app.endUndoGroup();
