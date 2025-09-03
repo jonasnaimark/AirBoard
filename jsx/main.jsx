@@ -4007,7 +4007,7 @@ function nudgeDelay(direction) {
                                 var markerValue = comp.markerProperty.keyValue(m);
                                 var markerComment = markerValue.comment || ""; // Get marker comment/label
                                 
-                                DEBUG_JSX.log("Found marker at frame " + markerFrameNumber + " (time " + markerTime + "s) with comment: '" + markerComment + "'");
+                                DEBUG_JSX.log("Found comp marker at frame " + markerFrameNumber + " (time " + markerTime + "s) with comment: '" + markerComment + "'");
                                 
                                 // Calculate new marker time based on the same offset as the keyframe
                                 var currentTime = propData.currentDelay;
@@ -4032,12 +4032,12 @@ function nudgeDelay(direction) {
                                 // Ensure marker doesn't go to negative time
                                 newMarkerTime = Math.max(0, newMarkerTime);
                                 
-                                DEBUG_JSX.log("Marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
+                                DEBUG_JSX.log("Comp marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
                                 
                                 // Store marker info for movement (avoid duplicate moves)
                                 var alreadyQueued = false;
                                 for (var q = 0; q < markersToMove.length; q++) {
-                                    if (markersToMove[q].markerIndex === m) {
+                                    if (markersToMove[q].type === "comp" && markersToMove[q].markerIndex === m) {
                                         alreadyQueued = true;
                                         break;
                                     }
@@ -4045,6 +4045,7 @@ function nudgeDelay(direction) {
                                 
                                 if (!alreadyQueued) {
                                     markersToMove.push({
+                                        type: "comp",
                                         markerIndex: m,
                                         oldTime: markerTime,
                                         newTime: newMarkerTime,
@@ -4052,6 +4053,83 @@ function nudgeDelay(direction) {
                                         property: propData.property,
                                         comment: markerComment
                                     });
+                                }
+                            }
+                        }
+                        
+                        // Also check layer markers on the same layer as this property
+                        // Extract layer from property name (format is "LayerName:PropertyName")
+                        var layerName = propData.property.split(":")[0];
+                        var targetLayer = null;
+                        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                            if (selectedLayers[layerIdx].name === layerName) {
+                                targetLayer = selectedLayers[layerIdx];
+                                break;
+                            }
+                        }
+                        
+                        if (targetLayer && targetLayer.marker && targetLayer.marker.numKeys > 0) {
+                            DEBUG_JSX.log("Checking layer markers on " + layerName + " for property " + propData.property);
+                            
+                            for (var m = 1; m <= targetLayer.marker.numKeys; m++) {
+                                var markerTime = targetLayer.marker.keyTime(m);
+                                var markerFrameNumber = Math.round(markerTime * frameRate) + 1;
+                                
+                                // Check if marker is at same frame as first keyframe (with small tolerance for floating point)
+                                if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
+                                    var markerValue = targetLayer.marker.keyValue(m);
+                                    var markerComment = markerValue.comment || ""; // Get marker comment/label
+                                    
+                                    DEBUG_JSX.log("Found layer marker at frame " + markerFrameNumber + " (time " + markerTime + "s) with comment: '" + markerComment + "' on layer " + layerName);
+                                    
+                                    // Calculate new marker time based on the same offset as the keyframe
+                                    var currentTime = propData.currentDelay;
+                                    var newKeyframeTime;
+                                    
+                                    if (useIndividualDelays) {
+                                        var targetDelaySeconds = propData.targetDelay / 1000;
+                                        newKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                                    } else {
+                                        if (propData.isOriginalBaseline) {
+                                            newKeyframeTime = originalEarliestTime; // Baseline stays at original time
+                                        } else {
+                                            var targetDelaySeconds = targetDelayMs / 1000;
+                                            newKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                                        }
+                                    }
+                                    
+                                    // Calculate the time offset applied to the keyframe
+                                    var keyframeOffset = newKeyframeTime - currentTime;
+                                    var newMarkerTime = markerTime + keyframeOffset;
+                                    
+                                    // Ensure marker doesn't go to negative time
+                                    newMarkerTime = Math.max(0, newMarkerTime);
+                                    
+                                    DEBUG_JSX.log("Layer marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
+                                    
+                                    // Store marker info for movement (avoid duplicate moves)
+                                    var alreadyQueued = false;
+                                    for (var q = 0; q < markersToMove.length; q++) {
+                                        if (markersToMove[q].type === "layer" && 
+                                            markersToMove[q].layer === targetLayer && 
+                                            markersToMove[q].markerIndex === m) {
+                                            alreadyQueued = true;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (!alreadyQueued) {
+                                        markersToMove.push({
+                                            type: "layer",
+                                            layer: targetLayer,
+                                            markerIndex: m,
+                                            oldTime: markerTime,
+                                            newTime: newMarkerTime,
+                                            markerValue: markerValue,
+                                            property: propData.property,
+                                            comment: markerComment
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -4069,15 +4147,27 @@ function nudgeDelay(direction) {
                         var markerInfo = markersToMove[m];
                         
                         try {
-                            // Remove the old marker
-                            comp.markerProperty.removeKey(markerInfo.markerIndex);
-                            
-                            // Add new marker at the new time with same properties
-                            var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
-                            comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                            
-                            DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms (synced with " + markerInfo.property + ")");
-                            debugInfo.push("Synced marker '" + markerInfo.comment + "' with " + markerInfo.property);
+                            if (markerInfo.type === "comp") {
+                                // Remove the old composition marker
+                                comp.markerProperty.removeKey(markerInfo.markerIndex);
+                                
+                                // Add new marker at the new time with same properties
+                                var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
+                                comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                
+                                DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms (synced with " + markerInfo.property + ")");
+                                debugInfo.push("Synced comp marker '" + markerInfo.comment + "' with " + markerInfo.property);
+                            } else if (markerInfo.type === "layer") {
+                                // Remove the old layer marker
+                                markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
+                                
+                                // Add new marker at the new time with same properties
+                                var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
+                                markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                
+                                DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms (synced with " + markerInfo.property + ")");
+                                debugInfo.push("Synced layer marker '" + markerInfo.comment + "' with " + markerInfo.property);
+                            }
                             
                         } catch(markerMoveError) {
                             DEBUG_JSX.log("Failed to move marker " + markerInfo.comment + ": " + markerMoveError.toString());
@@ -4085,7 +4175,7 @@ function nudgeDelay(direction) {
                         }
                     }
                 } else {
-                    DEBUG_JSX.log("No composition markers found at first keyframe times");
+                    DEBUG_JSX.log("No markers found at first keyframe times");
                 }
                 
             } catch(markerSyncError) {
