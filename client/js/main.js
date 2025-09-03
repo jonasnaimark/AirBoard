@@ -707,8 +707,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Create tooltip for delay input
         createTooltip(delayInputField, 'Frames');
         
-        delayIncrementBtn.addEventListener('click', function() {
-            console.log('Delay increment (nudge forward) clicked');
+        delayIncrementBtn.addEventListener('click', function(event) {
+            var isShiftHeld = event.shiftKey;
+            console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Timeline Mode]' : ' [Normal - Baseline Mode]'));
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -717,52 +718,61 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get delay frames from input field
             var delayFrames = parseFloat(delayInputField.value) || 3;
-            console.log('Applying +' + delayFrames + ' frame delay nudge');
+            console.log('Applying +' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (timeline mode - all keyframes move)' : ' (baseline mode - baseline stays fixed)'));
             
             delayIncrementBtn.disabled = true;
             
-            // Call the ExtendScript function with +1 direction and frame count
-            var script = 'nudgeDelayWithFrames(1, ' + delayFrames + ')';
+            // Choose function based on shift key
+            var script = isShiftHeld 
+                ? 'nudgeDelayTimelineMode(1, ' + delayFrames + ')'  // Timeline mode: move all keyframes
+                : 'nudgeDelayWithFrames(1, ' + delayFrames + ')';   // Baseline mode: respect baseline
+            
             csInterface.evalScript(script, function(result) {
-                console.log('Delay nudge forward result:', result);
-                
-                delayIncrementBtn.disabled = false;
-                
-                if (result && result.indexOf('|') !== -1) {
-                    var parts = result.split('|');
-                    var status = parts[0];
-                    
-                    if (status === 'success') {
-                        var delayMs = parseInt(parts[1]);
-                        var delayFrames = parseInt(parts[2]);
-                        
-                        // Update delay display
-                        var delayText = document.getElementById('delayText');
-                        if (delayMs === -1) {
-                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
-                        } else {
-                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
-                        }
-                        delayText.style.opacity = '1';
-                        
-                        console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
-                    } else if (status === 'error') {
-                        // Use consistent error message for delay buttons
-                        var delayText = document.getElementById('delayText');
-                        delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
-                        delayText.style.opacity = '1';
-                    }
-                } else {
-                    // Unexpected result format
-                    var delayText = document.getElementById('delayText');
-                    delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
-                    delayText.style.opacity = '1';
-                }
+                console.log('Delay nudge forward result' + (isShiftHeld ? ' [TIMELINE MODE]' : ' [BASELINE MODE]') + ':', result);
+                handleDelayResult(result, delayIncrementBtn);
             });
         });
         
-        delayDecrementBtn.addEventListener('click', function() {
-            console.log('Delay decrement (nudge backward) clicked');
+        // Helper function to handle delay result processing
+        function handleDelayResult(result, button) {
+            button.disabled = false;
+            
+            if (result && result.indexOf('|') !== -1) {
+                var parts = result.split('|');
+                var status = parts[0];
+                
+                if (status === 'success') {
+                    var delayMs = parseInt(parts[1]);
+                    var delayFrames = parseInt(parts[2]);
+                    
+                    // Update delay display
+                    var delayText = document.getElementById('delayText');
+                    
+                    if (delayMs === -1) {
+                        delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
+                    } else {
+                        delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
+                    }
+                    delayText.style.opacity = '1';
+                    
+                    console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
+                } else if (status === 'error') {
+                    // Use consistent error message for delay buttons
+                    var delayText = document.getElementById('delayText');
+                    delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
+                    delayText.style.opacity = '1';
+                }
+            } else {
+                // Unexpected result format
+                var delayText = document.getElementById('delayText');
+                delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
+                delayText.style.opacity = '1';
+            }
+        }
+        
+        delayDecrementBtn.addEventListener('click', function(event) {
+            var isShiftHeld = event.shiftKey;
+            console.log('Delay decrement (nudge backward) clicked' + (isShiftHeld ? ' [SHIFT - Timeline Mode]' : ' [Normal - Baseline Mode]'));
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -771,47 +781,18 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get delay frames from input field
             var delayFrames = parseFloat(delayInputField.value) || 3;
-            console.log('Applying -' + delayFrames + ' frame delay nudge');
+            console.log('Applying -' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (timeline mode - all keyframes move)' : ' (baseline mode - baseline stays fixed)'));
             
             delayDecrementBtn.disabled = true;
             
-            // Call the ExtendScript function with -1 direction and frame count
-            var script = 'nudgeDelayWithFrames(-1, ' + delayFrames + ')';
+            // Choose function based on shift key
+            var script = isShiftHeld 
+                ? 'nudgeDelayTimelineMode(-1, ' + delayFrames + ')'  // Timeline mode: move all keyframes
+                : 'nudgeDelayWithFrames(-1, ' + delayFrames + ')';   // Baseline mode: respect baseline
+            
             csInterface.evalScript(script, function(result) {
-                console.log('Delay nudge backward result:', result);
-                
-                delayDecrementBtn.disabled = false;
-                
-                if (result && result.indexOf('|') !== -1) {
-                    var parts = result.split('|');
-                    var status = parts[0];
-                    
-                    if (status === 'success') {
-                        var delayMs = parseInt(parts[1]);
-                        var delayFrames = parseInt(parts[2]);
-                        
-                        // Update delay display
-                        var delayText = document.getElementById('delayText');
-                        if (delayMs === -1) {
-                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
-                        } else {
-                            delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
-                        }
-                        delayText.style.opacity = '1';
-                        
-                        console.log('Updated delay to:', delayMs + 'ms /', delayFrames + 'f');
-                    } else if (status === 'error') {
-                        // Use consistent error message for delay buttons
-                        var delayText = document.getElementById('delayText');
-                        delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
-                        delayText.style.opacity = '1';
-                    }
-                } else {
-                    // Unexpected result format
-                    var delayText = document.getElementById('delayText');
-                    delayText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
-                    delayText.style.opacity = '1';
-                }
+                console.log('Delay nudge backward result' + (isShiftHeld ? ' [TIMELINE MODE]' : ' [BASELINE MODE]') + ':', result);
+                handleDelayResult(result, delayDecrementBtn);
             });
         });
     }

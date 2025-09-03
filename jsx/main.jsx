@@ -139,6 +139,9 @@ function readKeyframesSmart() {
         // Reset baseline cache when reading keyframes fresh
         BASELINE_CACHE.reset();
         
+        // Reset timeline mode cumulative offset when reading fresh
+        TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+        
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             return "error|No composition selected";
@@ -4198,6 +4201,9 @@ function nudgeDelayWithFrames(direction, frames) {
     try {
         DEBUG_JSX.log("nudgeDelayWithFrames called with direction: " + direction + ", frames: " + frames);
         
+        // Reset timeline mode cumulative offset when switching to normal mode
+        TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+        
         var comp = app.project.activeItem;
         if (!(comp && comp instanceof CompItem)) {
             return "error|No composition selected";
@@ -4214,6 +4220,306 @@ function nudgeDelayWithFrames(direction, frames) {
     } catch(e) {
         return "error|Failed to nudge delay with frames: " + e.toString();
     }
+}
+
+// Timeline mode - moves ALL selected keyframes by the same amount (no baseline logic)
+// Uses the complete 4-step selection preservation pattern from KEYFRAME_SYSTEM_SUMMARY.md
+// Global variable to track cumulative timeline mode offset
+var TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+
+function nudgeDelayTimelineMode(direction, frames) {
+    try {
+        DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames");
+        
+        app.beginUndoGroup("Timeline Mode Nudge");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|No composition selected";
+        }
+        
+        var frameRate = comp.frameRate || 30;
+        var timeOffset = (frames * direction) / frameRate; // Time offset in seconds
+        
+        // Update cumulative offset
+        TIMELINE_MODE_CUMULATIVE_OFFSET += timeOffset;
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            return "error|No layers selected";
+        }
+        
+        // STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
+        var cachedSelections = [];
+        var hasSelectedKeyframes = false;
+        
+        // First check if there are any selected keyframes
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            var selectedProps = layer.selectedProperties;
+            
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                
+                // Skip invalid properties
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+                
+                // Skip Time Remap properties (they can't be manipulated the same way)
+                try {
+                    if (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping") {
+                        DEBUG_JSX.log("Skipping Time Remap property");
+                        continue;
+                    }
+                } catch(e) {
+                    // Continue if we can't check the name
+                }
+                
+                // CRITICAL: Manually check EVERY keyframe for selection
+                var selKeys = [];
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        selKeys.push(k);
+                    }
+                }
+                
+                if (selKeys.length > 0) {
+                    hasSelectedKeyframes = true;
+                    cachedSelections.push({
+                        layer: layer,
+                        layerName: layer.name,
+                        property: prop,
+                        propertyName: prop.name,
+                        selectedIndices: selKeys.slice() // Make a copy!
+                    });
+                    DEBUG_JSX.log("Cached " + prop.name + " with " + selKeys.length + " selected keyframes");
+                }
+            }
+        }
+        
+        // If no keyframes are selected, nudge the layers themselves (adjust start/end times)
+        if (!hasSelectedKeyframes) {
+            DEBUG_JSX.log("No keyframes selected - will nudge layer start times");
+            
+            // Move layers by adjusting their start times
+            var movedLayers = 0;
+            for (var i = 0; i < selectedLayers.length; i++) {
+                var layer = selectedLayers[i];
+                var oldStartTime = layer.startTime;
+                var newStartTime = oldStartTime + timeOffset;
+                
+                // Only move if the new start time is valid (not negative)
+                if (newStartTime >= 0) {
+                    layer.startTime = newStartTime;
+                    movedLayers++;
+                    DEBUG_JSX.log("Moved layer " + layer.name + " from " + oldStartTime + "s to " + newStartTime + "s");
+                } else {
+                    DEBUG_JSX.log("Skipped layer " + layer.name + " (would have negative start time)");
+                }
+            }
+            
+            app.endUndoGroup();
+            
+            if (movedLayers === 0) {
+                return "error|No layers were moved (would result in negative times)";
+            }
+            
+            // Return success with the CUMULATIVE amount moved (with sign preserved)
+            var cumulativeMs = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * 1000);
+            var cumulativeFrames = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * frameRate);
+            return "success|" + cumulativeMs + "|" + cumulativeFrames + "|Moved " + movedLayers + " layers";
+        }
+        
+        if (cachedSelections.length === 0) {
+            app.endUndoGroup();
+            return "error|No keyframes selected";
+        }
+        
+        var movedCount = 0;
+        var processedSelections = [];
+        
+        // STEP 2: PROCESS USING CACHED SELECTIONS
+        for (var i = 0; i < cachedSelections.length; i++) {
+            var cached = cachedSelections[i];
+            var prop = cached.property;
+            var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
+            
+            // Collect complete keyframe data including easing
+            var keyframesToMove = [];
+            for (var k = 0; k < selKeys.length; k++) {
+                var keyIndex = selKeys[k];
+                var oldTime = prop.keyTime(keyIndex);
+                var newTime = oldTime + timeOffset;
+                
+                // Only add if new time is valid
+                if (newTime >= 0) {
+                    var keyData = {
+                        index: keyIndex,
+                        oldTime: oldTime,
+                        newTime: newTime,
+                        value: prop.keyValue(keyIndex),
+                        inInterp: prop.keyInInterpolationType(keyIndex),
+                        outInterp: prop.keyOutInterpolationType(keyIndex),
+                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                    };
+                    
+                    // Preserve temporal ease for bezier keyframes
+                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                        keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        } catch(e) {
+                            // Temporal ease might not be available
+                        }
+                    }
+                    
+                    // Preserve spatial properties for position keyframes
+                    if (prop.isSpatial) {
+                        try {
+                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                        } catch(e) {
+                            // Spatial properties might not be available
+                        }
+                    }
+                    
+                    keyframesToMove.push(keyData);
+                } else {
+                    DEBUG_JSX.log("Skipped keyframe at " + oldTime + "s (would be negative)");
+                }
+            }
+            
+            // Remove old keyframes (in reverse order to avoid index issues)
+            for (var k = keyframesToMove.length - 1; k >= 0; k--) {
+                prop.removeKey(keyframesToMove[k].index);
+            }
+            
+            // Add new keyframes at new times with all properties preserved
+            var newIndices = [];
+            for (var k = 0; k < keyframesToMove.length; k++) {
+                var data = keyframesToMove[k];
+                var newIdx = prop.addKey(data.newTime);
+                
+                // Restore all keyframe properties
+                prop.setValueAtKey(newIdx, data.value);
+                prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                
+                // Restore temporal ease if it exists
+                if (data.inEase !== undefined && data.outEase !== undefined) {
+                    try {
+                        prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                    } catch(e) {
+                        // Some properties might not support temporal ease
+                    }
+                }
+                
+                prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                
+                // Restore spatial properties if they exist
+                if (data.spatialContinuous !== undefined) {
+                    try {
+                        prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                        prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                        prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                    } catch(e) {
+                        // Some properties might not support spatial settings
+                    }
+                }
+                
+                newIndices.push(newIdx);
+                movedCount++;
+                DEBUG_JSX.log("Moved keyframe from " + data.oldTime + "s to " + data.newTime + "s");
+            }
+            
+            // Store selections for restoration
+            processedSelections.push({
+                layer: cached.layer,
+                propertyName: cached.propertyName,
+                indices: newIndices
+            });
+        }
+        
+        app.endUndoGroup();
+        
+        // STEP 3 & 4: RESTORE SELECTION WITH FRESH REFERENCES (only if we had selected keyframes originally)
+        if (hasSelectedKeyframes) {
+            // Helper function to find property by name
+            function findPropertyByName(layer, targetName) {
+                function searchGroup(group) {
+                    for (var i = 1; i <= group.numProperties; i++) {
+                        var prop = group.property(i);
+                        if (prop && prop.name === targetName && prop.canVaryOverTime) {
+                            return prop;
+                        }
+                        if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                                   prop.propertyType === PropertyType.NAMED_GROUP)) {
+                            var found = searchGroup(prop);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                }
+                return searchGroup(layer);
+            }
+            
+            // Restore selections on fresh property references
+            for (var i = 0; i < processedSelections.length; i++) {
+                var selData = processedSelections[i];
+                
+                // Get fresh property reference
+                var freshProp = findPropertyByName(selData.layer, selData.propertyName);
+                if (!freshProp) continue;
+                
+                // CRITICAL: First deselect ALL keyframes on this property
+                for (var k = 1; k <= freshProp.numKeys; k++) {
+                    try {
+                        freshProp.setSelectedAtKey(k, false);
+                    } catch(e) {
+                        // Ignore deselection errors
+                    }
+                }
+                
+                // Now select only the keyframes we moved
+                for (var j = 0; j < selData.indices.length; j++) {
+                    try {
+                        freshProp.setSelectedAtKey(selData.indices[j], true);
+                    } catch(e) {
+                        // Ignore selection errors
+                    }
+                }
+            }
+        }
+        // If we moved all keyframes (no selection), don't restore any selection
+        
+        if (movedCount === 0) {
+            return "error|No keyframes were moved";
+        }
+        
+        // Return success with the CUMULATIVE amount moved (with sign preserved)
+        var cumulativeMs = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * 1000);
+        var cumulativeFrames = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * frameRate);
+        return "success|" + cumulativeMs + "|" + cumulativeFrames + "|Moved " + movedCount + " keyframes";
+        
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Timeline mode failed: " + e.toString();
+    }
+}
+
+
+// Simple test function to verify ExtendScript loading
+function testTimelineModeFunction() {
+    DEBUG_JSX.clear();
+    DEBUG_JSX.log("✅ testTimelineModeFunction called successfully!");
+    var debugMessages = DEBUG_JSX.getMessages();
+    return "success|Timeline mode function exists and is callable|" + debugMessages.join("|");
 }
 
 
