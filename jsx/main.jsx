@@ -212,6 +212,64 @@ function readKeyframesSmart() {
             }
         }
         
+        // CHECK FOR INSUFFICIENT KEYFRAMES FOR DURATION OPERATIONS
+        // Count total selected keyframes across all properties
+        var totalSelectedKeyframes = 0;
+        for (var layerIndex = 0; layerIndex < selectedLayers.length; layerIndex++) {
+            var layer = selectedLayers[layerIndex];
+            
+            function countSelectedInPropertyGroup(propGroup) {
+                var count = 0;
+                for (var i = 1; i <= propGroup.numProperties; i++) {
+                    var prop = propGroup.property(i);
+                    
+                    if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (prop.keySelected(j)) {
+                                count++;
+                            }
+                        }
+                    }
+                    
+                    // Recurse into property groups
+                    if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                               prop.propertyType === PropertyType.NAMED_GROUP)) {
+                        count += countSelectedInPropertyGroup(prop);
+                    }
+                }
+                return count;
+            }
+            
+            totalSelectedKeyframes += countSelectedInPropertyGroup(layer);
+            
+            // Also count Time Remap
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                        if (layer.timeRemap.keySelected(j)) {
+                            totalSelectedKeyframes++;
+                        }
+                    }
+                }
+            } catch(e) {
+                // Time remap might not be accessible
+            }
+        }
+        
+        DEBUG_JSX.log("Total selected keyframes count: " + totalSelectedKeyframes);
+        
+        // If only 1 keyframe selected total, return special result with duration error
+        if (totalSelectedKeyframes === 1) {
+            DEBUG_JSX.log("Only 1 keyframe selected - showing duration error");
+            
+            // Return success but with -999 duration to signal error
+            var frameRate = comp.frameRate || 30;
+            var delayMs = 0, delayFrames = 0; // No delay for single keyframe
+            var debugInfo = "Single keyframe selected - duration operations require 2+ keyframes";
+            
+            // Use -999 as a special flag for "Select > 1 Keyframe" in duration field
+            return "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|0|0|0|0|1|Stagger|" + debugInfo;
+        }
         
         // CROSS-PROPERTY MODE: Multiple properties with selected keyframes
         if (propertyTimes.length >= 2) {

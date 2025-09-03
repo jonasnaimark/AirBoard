@@ -612,15 +612,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                     } else if (status === 'error') {
-                        // Use consistent error message for duration buttons
+                        var errorMsg = parts[1] || 'Unknown error';
                         var durationText = document.getElementById('durationText');
-                        durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
+                        
+                        if (errorMsg === 'Select > 1 Keyframe') {
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                        } else {
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
+                        }
                         durationText.style.opacity = '1';
                     }
                 } else {
                     // Unexpected result format
                     var durationText = document.getElementById('durationText');
-                    durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
+                    durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
                     durationText.style.opacity = '1';
                 }
             });
@@ -686,15 +691,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                     } else if (status === 'error') {
-                        // Use consistent error message for duration buttons
+                        var errorMsg = parts[1] || 'Unknown error';
                         var durationText = document.getElementById('durationText');
-                        durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
+                        
+                        if (errorMsg === 'Select > 1 Keyframe') {
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                        } else {
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
+                        }
                         durationText.style.opacity = '1';
                     }
                 } else {
                     // Unexpected result format
                     var durationText = document.getElementById('durationText');
-                    durationText.innerHTML = '<span style="opacity: 0.75;">0ms / 0f</span>';
+                    durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
                     durationText.style.opacity = '1';
                 }
             });
@@ -941,8 +951,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (durationMs === -1) {
                             durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Multiple</span>';
                         } else if (durationMs === -999) {
-                            // For single keyframe or no valid duration, show 0
-                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
+                            // For single keyframe or insufficient keyframes for duration operations
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                        } else if (durationMs === 0) {
+                            // For keyframes with no meaningful duration (e.g., 1 keyframe per property across different properties)
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
                         } else {
                             durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">' + durationMs + 'ms / ' + durationFrames + 'f</span>';
                         }

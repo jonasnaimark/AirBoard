@@ -10,7 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.14.0] - 2025-09-03 🎯 **LATEST BUILD - EASING PRESERVATION FIX**
+## [4.15.0] - 2025-09-03 🎯 **LATEST BUILD - ENHANCED ERROR MESSAGING**
+### 🎯 Added - COMPREHENSIVE ERROR MESSAGING
+- **Duration Error Clarity**: Added "Select > 1 Keyframe" error message throughout all duration controls
+- **Smart Keyframe Detection**: Automatically detects insufficient keyframes for duration operations
+- **Read Keyframes Integration**: Shows error in duration row when only 1 keyframe selected or no duration span
+- **Cross-Property Awareness**: Handles multiple keyframes across different properties with no meaningful duration (0ms)
+- **Zero Duration Detection**: Identifies when keyframes provide no duration span for stretch operations
+- **Consistent UX**: Unified error messaging across duration buttons and keyframe reader
+- **Special Flag System**: Uses -999 duration flag to communicate error states between ExtendScript and JavaScript
+- **Selective Error Display**: Shows errors only in duration field while preserving other field values
+- **Associated with AirBoard-v4.15.0.zxp**
+
+## [4.14.0] - 2025-09-03 🎯 **EASING PRESERVATION FIX**
 ### 🎯 Fixed - COMPREHENSIVE EASING PRESERVATION
 - **Baseline Keyframe Easing**: Fixed baseline keyframes losing easing curves during delay nudging operations
 - **Duration Operation Easing**: Applied comprehensive easing preservation fix to all duration stretching functions

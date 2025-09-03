@@ -4,24 +4,24 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/jonasnaimark/AirBoard?include_prereleases)](https://github.com/jonasnaimark/AirBoard/releases)
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
-[![Version](https://img.shields.io/badge/version-4.14.0-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.14.0)
+[![Version](https://img.shields.io/badge/version-4.15.0-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.15.0)
 
 > Transform your After Effects workflow with precision keyframe control, automated device compositions, gesture animations, and professional effects.
 
-## 🎯 What's New in v4.14.0 - Latest Build!
+## 🎯 What's New in v4.15.0 - Latest Build!
 
-### 🎯 **MAJOR FIX: Perfect Easing Preservation**
-- **Baseline Keyframe Easing**: Fixed baseline keyframes losing easing curves during delay nudging
-- **Duration Operation Easing**: Comprehensive easing preservation across all duration stretching functions
-- **Mixed Easing Support**: Now handles Ease In, Ease Out, and all easing types correctly (not just full bezier)
-- **Universal Pattern**: Applied timeline mode's proven easing preservation to all keyframe operations
-- **Spatial Properties**: Position keyframes now preserve spatial curves and tangents perfectly
-- **Error Handling**: Added robust try-catch protection around all temporal ease operations
+### 🎯 **NEW: Enhanced Error Messaging**
+- **Duration Error Clarity**: Added "Select > 1 Keyframe" error message throughout duration controls
+- **Smart Keyframe Detection**: Automatically detects insufficient keyframes for duration operations
+- **Read Keyframes Integration**: Shows error in duration row when only 1 keyframe or no duration span
+- **Cross-Property Awareness**: Handles multiple keyframes across properties with no meaningful duration
+- **Consistent UX**: Unified error messaging across duration buttons and keyframe reader
 
-### 🔧 Technical Improvements
-- **Zero Easing Loss**: All keyframe manipulations now preserve easing perfectly
-- **Selection Maintenance**: Baseline keyframes maintain selection while preserving curves
-- **Cross-Operation Consistency**: Delay, duration, and stagger operations all use identical easing preservation
+### 🔧 Technical Improvements  
+- **Comprehensive Keyframe Counting**: Counts all selected keyframes across all layers and properties
+- **Zero Duration Detection**: Identifies when keyframes provide no duration span (0ms)
+- **Special Flag System**: Uses -999 duration flag to communicate error states
+- **Selective Error Display**: Shows errors only in duration field while preserving other values
 
 ## ✨ Core Features
 
@@ -84,13 +84,13 @@
 
 #### 📥 **Download Latest Version**
 
-**[⬇️ Download AirBoard v4.14.0.zxp](https://github.com/jonasnaimark/AirBoard/releases/latest/download/AirBoard-v4.14.0.zxp)**
+**[⬇️ Download AirBoard v4.15.0.zxp](https://github.com/jonasnaimark/AirBoard/releases/latest/download/AirBoard-v4.15.0.zxp)**
 
 *Alternative: Browse all versions at [GitHub Releases](https://github.com/jonasnaimark/AirBoard/releases)*
 
 #### 🔧 **Install Steps**
 
-1. **Download** the latest `AirBoard-v4.14.0.zxp` from the link above
+1. **Download** the latest `AirBoard-v4.15.0.zxp` from the link above
 2. **Install** using [ZXP Installer](https://aescripts.com/learn/zxp-installer/) or Adobe Extension Manager
 3. **Access** via `Window > Extensions > AirBoard` in After Effects
 
@@ -252,7 +252,7 @@ Proprietary - All rights reserved
 
 <div align="center">
   
-**AirBoard v4.14.0** - Precision Keyframe Control for After Effects
+**AirBoard v4.15.0** - Precision Keyframe Control for After Effects
   
 Made with ❤️ for the motion design community
   
