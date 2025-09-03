@@ -1494,9 +1494,13 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                                try {
+                                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                                } catch(e) {
+                                    // Some properties might not support temporal ease
+                                }
                             }
                             
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -1804,9 +1808,13 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                                try {
+                                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                                } catch(e) {
+                                    // Some properties might not support temporal ease
+                                }
                             }
                             
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -1987,6 +1995,24 @@ function stretchKeyframesWithFrames(direction, frames) {
     try {
         DEBUG_JSX.clear();
         DEBUG_JSX.log("🎬🎬🎬 FRAME-BASED FUNCTION IS BEING CALLED! Direction: " + direction + ", Frames: " + frames + " 🎬🎬🎬");
+        
+        // CRITICAL FIX: This function should ONLY be used for duration stretching, never for delay nudging
+        // If this is being called from delay nudging, redirect to proper delay handling
+        DEBUG_JSX.log("🎬 WARNING: stretchKeyframesWithFrames should only be used for duration operations, not delay operations");
+        
+        // SAFEGUARD: Detect if this is being called incorrectly from delay operations
+        // Check the call stack to see if this is coming from delay functions
+        try {
+            var errorStack = (new Error()).stack || "";
+            if (errorStack.indexOf("nudgeDelay") >= 0 || errorStack.indexOf("Nudge Delay") >= 0) {
+                DEBUG_JSX.log("🎬 SAFEGUARD: Detected incorrect call from delay operation, blocking duration stretch");
+                var debugMessages = DEBUG_JSX.getMessages();
+                return "error|Duration stretch incorrectly called from delay operation - using delay nudging functions instead|" + debugMessages.join("|");
+            }
+        } catch(e) {
+            // Stack trace detection failed, continue normally
+            DEBUG_JSX.log("🎬 Stack trace detection failed: " + e.toString());
+        }
         
         // Safety checks
         if (typeof direction === 'undefined' || typeof frames === 'undefined') {
@@ -2360,9 +2386,13 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
             prop.setValueAtKey(newIdx, data.value);
             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
             
-            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-            if (data.inEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+            // Restore temporal ease if it exists (same as timeline mode)
+            if (data.inEase !== undefined && data.outEase !== undefined) {
+                try {
+                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                } catch(e) {
+                    // Some properties might not support temporal ease
+                }
             }
             
             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -2480,9 +2510,13 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
             prop.setValueAtKey(newIdx, data.value);
             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
             
-            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-            if (data.inEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+            // Restore temporal ease if it exists (same as timeline mode)
+            if (data.inEase !== undefined && data.outEase !== undefined) {
+                try {
+                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                } catch(e) {
+                    // Some properties might not support temporal ease
+                }
             }
             
             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -2905,9 +2939,13 @@ function stretchMultiPropertyDuration(direction) {
                     prop.setValueAtKey(newIdx, keyData.value);
                     prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
-                    // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-                    if (keyData.inEase !== undefined && keyData.inInterp === KeyframeInterpolationType.BEZIER && keyData.outInterp === KeyframeInterpolationType.BEZIER) {
-                        prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                    // Restore temporal ease if it exists (same as timeline mode)
+                    if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                        } catch(e) {
+                            // Some properties might not support temporal ease
+                        }
                     }
                     
                     prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
@@ -3309,13 +3347,26 @@ function nudgeDelay(direction) {
                                 temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
                             };
                             
-                            // Only collect temporal ease if bezier interpolation
-                            if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
+                            if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                                keyData.outInterp === KeyframeInterpolationType.BEZIER) {
                                 try {
                                     keyData.inEase = prop.keyInTemporalEase(keyIndex);
                                     keyData.outEase = prop.keyOutTemporalEase(keyIndex);
                                 } catch(e) {
                                     // Temporal ease might not be available for some properties
+                                }
+                            }
+                            
+                            // CRITICAL FIX: Preserve spatial properties for position keyframes (same as timeline mode)
+                            if (prop.isSpatial) {
+                                try {
+                                    keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                                    keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                                    keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                                    keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                                } catch(e) {
+                                    // Spatial properties might not be available
                                 }
                             }
                             
@@ -3347,9 +3398,13 @@ function nudgeDelay(direction) {
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                                try {
+                                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                                } catch(e) {
+                                    // Some properties might not support temporal ease
+                                }
                             }
                             
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -3685,13 +3740,26 @@ function nudgeDelay(direction) {
                                 temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
                             };
                             
-                            // Only collect temporal ease if bezier interpolation
-                            if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
+                            if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                                keyData.outInterp === KeyframeInterpolationType.BEZIER) {
                                 try {
                                     keyData.inEase = prop.keyInTemporalEase(keyIndex);
                                     keyData.outEase = prop.keyOutTemporalEase(keyIndex);
                                 } catch(e) {
                                     // Temporal ease might not be available for some properties
+                                }
+                            }
+                            
+                            // CRITICAL FIX: Preserve spatial properties for position keyframes (same as timeline mode)
+                            if (prop.isSpatial) {
+                                try {
+                                    keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                                    keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                                    keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                                    keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                                } catch(e) {
+                                    // Spatial properties might not be available
                                 }
                             }
                             
@@ -3719,6 +3787,23 @@ function nudgeDelay(direction) {
                             var newIdx = prop.addKey(data.newTime);
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                            
+                            // CRITICAL FIX: Restore temporal ease for perfect easing preservation
+                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
+                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            }
+                            
+                            // CRITICAL FIX: Restore temporal properties
+                            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                            
+                            // CRITICAL FIX: Restore spatial properties if they exist (Position, etc.)
+                            if (data.spatialContinuous !== undefined) {
+                                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            }
+                            
                             newSelIndices.push(newIdx);
                         }
                         
@@ -3895,6 +3980,12 @@ function nudgeDelay(direction) {
                     }
                 }
                 
+                // Baseline keyframes: process them with timeOffset = 0 to preserve easing while maintaining selection
+                if (propData.isOriginalBaseline && useIndividualDelays) {
+                    timeOffset = 0; // No movement, but still recreate for easing preservation
+                    debugInfo.push("BASELINE property " + propData.property + " - recreating at same position for easing preservation");
+                }
+                
                 // Move all selected keyframes of this property by the time offset using remove/recreate approach
                 var prop = propData.propObject;
                 var keyframesToMove = [];
@@ -3916,10 +4007,15 @@ function nudgeDelay(direction) {
                             temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
                         };
                         
-                        // Only collect temporal ease if bezier interpolation
-                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
-                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
-                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        // Preserve temporal ease for bezier keyframes (same as timeline mode)
+                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                            keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            try {
+                                keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                                keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                            } catch(e) {
+                                // Temporal ease might not be available
+                            }
                         }
                         
                         // Handle spatial properties if applicable
@@ -3957,9 +4053,13 @@ function nudgeDelay(direction) {
                     prop.setValueAtKey(newIdx, keyData.value);
                     prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
-                    // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-                    if (keyData.inEase !== undefined && keyData.inInterp === KeyframeInterpolationType.BEZIER && keyData.outInterp === KeyframeInterpolationType.BEZIER) {
-                        prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                    // Restore temporal ease if it exists (same as timeline mode)
+                    if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                        } catch(e) {
+                            // Some properties might not support temporal ease
+                        }
                     }
                     
                     prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
@@ -5710,9 +5810,13 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 prop.setValueAtKey(newIdx, data.value);
                 prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                 
-                // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
-                if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                // Restore temporal ease if it exists (same as timeline mode)
+                if (data.inEase !== undefined && data.outEase !== undefined) {
+                    try {
+                        prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                    } catch(e) {
+                        // Some properties might not support temporal ease
+                    }
                 }
                 
                 prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -6152,23 +6256,40 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     
                     DEBUG_JSX.log("Moving keyframe from " + (oldTime * 1000) + "ms to " + (finalTime * 1000) + "ms");
                     
-                    keyframeData.push({
+                    var keyData = {
                         oldIndex: keyIndex,
                         newTime: finalTime,
                         value: prop.keyValue(keyIndex),
                         inInterp: prop.keyInInterpolationType(keyIndex),
                         outInterp: prop.keyOutInterpolationType(keyIndex),
                         temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
-                        // Temporal ease data
-                        inEase: (prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER || prop.keyOutInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER) ? prop.keyInTemporalEase(keyIndex) : undefined,
-                        outEase: (prop.keyInInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER || prop.keyOutInterpolationType(keyIndex) === KeyframeInterpolationType.BEZIER) ? prop.keyOutTemporalEase(keyIndex) : undefined,
-                        // Spatial data for position properties
-                        spatialContinuous: prop.isSpatial ? prop.keySpatialContinuous(keyIndex) : null,
-                        spatialAutoBezier: prop.isSpatial ? prop.keySpatialAutoBezier(keyIndex) : null,
-                        inTangent: prop.isSpatial ? prop.keyInSpatialTangent(keyIndex) : null,
-                        outTangent: prop.isSpatial ? prop.keyOutSpatialTangent(keyIndex) : null
-                    });
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                    };
+                    
+                    // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
+                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                        keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        } catch(e) {
+                            // Temporal ease might not be available for some properties
+                        }
+                    }
+                    
+                    // CRITICAL FIX: Preserve spatial properties for position keyframes (same as timeline mode)
+                    if (prop.isSpatial) {
+                        try {
+                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                        } catch(e) {
+                            // Spatial properties might not be available
+                        }
+                    }
+                    
+                    keyframeData.push(keyData);
                 }
                 
                 // Remove old keyframes (in reverse order to maintain indices)
@@ -6186,18 +6307,26 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     prop.setValueAtKey(newIdx, data.value);
                     prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                     
-                    // Only set temporal ease if BOTH sides are bezier (preserves Ease In/Out labels)
-                    if (data.inEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                        prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                    // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+                    if (data.inEase !== undefined && data.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                        } catch(e) {
+                            // Some properties might not support temporal ease
+                        }
                     }
                     prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                     prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
                     
-                    // Restore spatial properties for position
-                    if (data.spatialContinuous !== null) {
-                        prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
-                        prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                        prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                    // CRITICAL FIX: Restore spatial properties if they exist (same as timeline mode)
+                    if (data.spatialContinuous !== undefined) {
+                        try {
+                            prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                            prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                            prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                        } catch(e) {
+                            // Some properties might not support spatial settings
+                        }
                     }
                     
                     newSelIndices.push(newIdx);
