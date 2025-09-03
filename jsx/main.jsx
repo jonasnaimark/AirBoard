@@ -42,6 +42,7 @@ function roundMs(seconds) {
     return Math.round(ms);
 }
 
+
 // User Preferences - Save/Load resolution multiplier
 function saveResolutionPreference(multiplier) {
     try {
@@ -1486,8 +1487,8 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            // Only set temporal ease for bezier keyframes to preserve linear keyframes
-                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
                                 prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                             }
                             
@@ -1792,8 +1793,8 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            // Only set temporal ease for bezier keyframes to preserve linear keyframes
-                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
                                 prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                             }
                             
@@ -2006,23 +2007,19 @@ function stretchKeyframesWithFrames(direction, frames) {
         }
         
         if (crossPropertyResult.isCrossProperty) {
-            // For cross-property mode, use delay nudging with frames
-            DEBUG_JSX.log("🎬 Using CROSS-PROPERTY mode - calling nudgeDelayWithFrames");
+            // For cross-property mode, stretch each property's duration individually
+            DEBUG_JSX.log("🎬 Using CROSS-PROPERTY mode - calling stretchKeyframesForCrossProperty");
             var result;
             try {
-                if (direction > 0) {
-                    result = nudgeDelayWithFrames(1, frames);
-                } else {  
-                    result = nudgeDelayWithFrames(-1, frames);
-                }
-                DEBUG_JSX.log("🎬 nudgeDelayWithFrames returned: " + result);
+                result = stretchKeyframesForCrossProperty(direction, frames);
+                DEBUG_JSX.log("🎬 stretchKeyframesForCrossProperty returned: " + result);
                 // Add our debug messages to the result
                 var debugMessages = DEBUG_JSX.getMessages();
                 return result + "|" + debugMessages.join("|");
             } catch(e) {
-                DEBUG_JSX.error("nudgeDelayWithFrames failed", e);
+                DEBUG_JSX.error("stretchKeyframesForCrossProperty failed", e);
                 var debugMessages = DEBUG_JSX.getMessages();
-                return "error|nudgeDelayWithFrames failed: " + e.toString() + "|" + debugMessages.join("|");
+                return "error|stretchKeyframesForCrossProperty failed: " + e.toString() + "|" + debugMessages.join("|");
             }
         } else {
             // For single-property mode, modify the original approach
@@ -2043,6 +2040,471 @@ function stretchKeyframesWithFrames(direction, frames) {
         DEBUG_JSX.error("stretchKeyframesWithFrames failed", e);
         var debugMessages = DEBUG_JSX.getMessages();
         return "error|Failed to stretch keyframes with frames: " + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+// Cross-property duration stretching function - WITH COMPLETE SELECTION PRESERVATION
+function stretchKeyframesForCrossProperty(direction, frames) {
+    try {
+        DEBUG_JSX.log("🎬 stretchKeyframesForCrossProperty called with direction: " + direction + ", frames: " + frames);
+        
+        app.beginUndoGroup("Stretch Cross-Property Duration");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|No composition selected";
+        }
+        
+        var frameRate = comp.frameRate || 30;
+        var framesToSeconds = frames / frameRate;
+        
+        DEBUG_JSX.log("🎬 Converting " + frames + " frames to " + (framesToSeconds * 1000) + "ms at " + frameRate + "fps");
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            return "error|No layers selected";
+        }
+        
+        // STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
+        DEBUG_JSX.log("🎬 STEP 1: Caching all selected keyframes before manipulation");
+        var cachedSelections = [];
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            var selectedProps = layer.selectedProperties;
+            
+            DEBUG_JSX.log("🎬 CACHING: Layer " + layer.name + " has " + selectedProps.length + " selected properties");
+            
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                
+                if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys < 2) {
+                    continue;
+                }
+                
+                // CRITICAL: Manually check EVERY keyframe for selection
+                // DO NOT trust prop.selectedKeys after this point!
+                var selKeys = [];
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        selKeys.push(k);
+                    }
+                }
+                
+                if (selKeys.length >= 2) {
+                    cachedSelections.push({
+                        layer: layer,
+                        layerName: layer.name,
+                        property: prop,
+                        propertyName: prop.name,
+                        selectedIndices: selKeys.slice() // Make a copy!
+                    });
+                    DEBUG_JSX.log("🎬 CACHED: " + prop.name + " with " + selKeys.length + " selected keyframes: " + selKeys.join(", "));
+                }
+            }
+        }
+        
+        DEBUG_JSX.log("🎬 Cached " + cachedSelections.length + " properties with selected keyframes");
+        
+        if (cachedSelections.length === 0) {
+            app.endUndoGroup();
+            return "error|No properties were processed - need at least 2 keyframes per property";
+        }
+        
+        // STEP 2: PROCESS USING CACHED SELECTIONS
+        DEBUG_JSX.log("🎬 STEP 2: Processing keyframes using cached selections");
+        var processedProperties = 0;
+        var allProcessedSelections = []; // Collect ALL selections for final restoration
+        var allProcessedKeyframeTimes = []; // Collect ALL new keyframe times for total span calculation
+        
+        for (var i = 0; i < cachedSelections.length; i++) {
+            var cached = cachedSelections[i];
+            var prop = cached.property;
+            var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
+            
+            DEBUG_JSX.log("🎬 Processing cached property " + cached.propertyName + " with " + selKeys.length + " selected keyframes");
+            
+            // Use the duration stretching logic with cached selections
+            var result = stretchPropertyDurationWithCache(prop, selKeys, direction * framesToSeconds, cached);
+            if (result.success) {
+                processedProperties++;
+                
+                // COLLECT selections for GLOBAL restoration at the very end
+                allProcessedSelections.push({
+                    property: prop,
+                    indices: result.newSelIndices,
+                    propertyName: cached.propertyName,
+                    layer: cached.layer  // Store layer reference for fresh property lookup
+                });
+                
+                // COLLECT all new keyframe times for total span calculation (like readKeyframesSmart does)
+                for (var t = 0; t < result.newKeyframeTimes.length; t++) {
+                    allProcessedKeyframeTimes.push(result.newKeyframeTimes[t]);
+                }
+                
+                DEBUG_JSX.log("🎬 COLLECTED " + result.newSelIndices.length + " keyframe selections for property " + cached.propertyName + " with times: " + result.newKeyframeTimes.join(", "));
+            }
+        }
+        
+        // STEP 3: RESTORE SELECTION WITH FRESH REFERENCES
+        DEBUG_JSX.log("🎬 STEP 3: Restoring selections with fresh property references");
+        
+        // Helper function to find property by name in layer hierarchy
+        function findPropertyByName(layer, propertyName) {
+            function searchPropertyGroup(propGroup) {
+                for (var i = 1; i <= propGroup.numProperties; i++) {
+                    var prop = propGroup.property(i);
+                    if (prop && prop.name === propertyName && prop.canVaryOverTime) {
+                        return prop;
+                    }
+                    // Recurse into property groups
+                    if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                               prop.propertyType === PropertyType.NAMED_GROUP)) {
+                        var found = searchPropertyGroup(prop);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            }
+            
+            // Search layer properties
+            var found = searchPropertyGroup(layer);
+            if (found) return found;
+            
+            // Check special properties like Time Remap
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.name === propertyName) {
+                    return layer.timeRemap;
+                }
+            } catch(e) {
+                // Time remap might not be available
+            }
+            
+            return null;
+        }
+        
+        // Re-acquire fresh references and restore selections
+        var freshSelectionData = [];
+        for (var i = 0; i < allProcessedSelections.length; i++) {
+            var selectionData = allProcessedSelections[i];
+            var originalLayer = selectionData.layer; // Use stored layer reference
+            
+            // Re-acquire fresh property reference from the stored layer
+            var freshProp = findPropertyByName(originalLayer, selectionData.propertyName);
+            if (freshProp) {
+                DEBUG_JSX.log("🎬 Found fresh reference for " + selectionData.propertyName + " on layer " + originalLayer.name);
+                
+                freshSelectionData.push({
+                    property: freshProp,
+                    indices: selectionData.indices,
+                    propertyName: selectionData.propertyName,
+                    layerName: originalLayer.name
+                });
+            } else {
+                DEBUG_JSX.log("🎬 WARNING: Could not find fresh reference for " + selectionData.propertyName + " on layer " + originalLayer.name);
+            }
+        }
+        
+        // STEP 4: GLOBAL SELECTION RESTORATION
+        DEBUG_JSX.log("🎬 STEP 4: Global selection restoration for " + freshSelectionData.length + " fresh properties");
+        for (var i = 0; i < freshSelectionData.length; i++) {
+            var selectionData = freshSelectionData[i];
+            var prop = selectionData.property;
+            var indices = selectionData.indices;
+            
+            // CRITICAL: First deselect ALL keyframes on this property
+            DEBUG_JSX.log("🎬 Deselecting all keyframes on " + selectionData.propertyName + " (has " + prop.numKeys + " total keyframes)");
+            for (var k = 1; k <= prop.numKeys; k++) {
+                try {
+                    prop.setSelectedAtKey(k, false);
+                } catch(e) {
+                    // Ignore deselection errors
+                }
+            }
+            
+            // Now select only the keyframes we want
+            DEBUG_JSX.log("🎬 Restoring selection for " + selectionData.propertyName + " on layer " + selectionData.layerName + " - " + indices.length + " keyframes");
+            for (var j = 0; j < indices.length; j++) {
+                try {
+                    prop.setSelectedAtKey(indices[j], true);
+                    DEBUG_JSX.log("🎬 FRESH Selected keyframe at index " + indices[j] + " on " + selectionData.propertyName);
+                } catch(e) {
+                    DEBUG_JSX.log("🎬 FRESH Failed to select keyframe at index " + indices[j] + ": " + e.toString());
+                }
+            }
+        }
+        
+        app.endUndoGroup();
+        
+        // Calculate total span duration like readKeyframesSmart does for cross-property mode
+        var totalDurationMs = 0;
+        var totalDurationFrames = 0;
+        
+        if (allProcessedKeyframeTimes.length > 0) {
+            // Sort all keyframe times to find earliest and latest
+            allProcessedKeyframeTimes.sort(function(a, b) { return a - b; });
+            var earliestTime = allProcessedKeyframeTimes[0];
+            var latestTime = allProcessedKeyframeTimes[allProcessedKeyframeTimes.length - 1];
+            var totalSpanSeconds = latestTime - earliestTime;
+            
+            totalDurationMs = Math.round(totalSpanSeconds * 1000);
+            totalDurationFrames = Math.round(totalSpanSeconds * frameRate);
+            
+            DEBUG_JSX.log("🎬 Total span calculation: " + allProcessedKeyframeTimes.length + " keyframes from " + (earliestTime * 1000).toFixed(1) + "ms to " + (latestTime * 1000).toFixed(1) + "ms = " + totalDurationMs + "ms span");
+        }
+        
+        DEBUG_JSX.log("🎬 Cross-property duration stretch completed: " + processedProperties + " properties, " + totalDurationMs + "ms / " + totalDurationFrames + "f");
+        
+        // Return success with cross-property flag
+        return "success|" + totalDurationMs + "|" + totalDurationFrames + "|1|CROSSDURATION";
+        
+    } catch(e) {
+        app.endUndoGroup();
+        DEBUG_JSX.log("🎬 stretchKeyframesForCrossProperty error: " + e.toString());
+        return "error|Cross-property duration stretch failed: " + e.toString();
+    }
+}
+
+// Helper function to stretch duration of a single property with cached selection support
+function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cached) {
+    try {
+        // Collect keyframe data
+        var keyframeData = [];
+        for (var k = 0; k < selectedKeys.length; k++) {
+            var keyIndex = selectedKeys[k];
+            var data = {
+                oldIndex: keyIndex,
+                time: prop.keyTime(keyIndex),
+                value: prop.keyValue(keyIndex),
+                inInterp: prop.keyInInterpolationType(keyIndex),
+                outInterp: prop.keyOutInterpolationType(keyIndex),
+                temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+            };
+            
+            // Only collect temporal ease if BOTH sides are bezier
+            if (data.inInterp === KeyframeInterpolationType.BEZIER || data.outInterp === KeyframeInterpolationType.BEZIER) {
+                try {
+                    data.inEase = prop.keyInTemporalEase(keyIndex);
+                    data.outEase = prop.keyOutTemporalEase(keyIndex);
+                } catch(e) {
+                    // Temporal ease might not be available for some properties
+                }
+            }
+            
+            // Handle spatial properties if applicable
+            if (prop.isSpatial) {
+                data.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                data.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                data.inTangent = prop.keyInSpatialTangent(keyIndex);
+                data.outTangent = prop.keyOutSpatialTangent(keyIndex);
+            }
+            
+            keyframeData.push(data);
+        }
+        
+        // Sort by time to identify first and last keyframes
+        keyframeData.sort(function(a, b) { return a.time - b.time; });
+        var firstTime = keyframeData[0].time;
+        var lastTime = keyframeData[keyframeData.length - 1].time;
+        var currentDuration = lastTime - firstTime;
+        
+        // Calculate new duration
+        var newDuration = Math.max(0, currentDuration + deltaSeconds);
+        DEBUG_JSX.log("🎬 " + prop.name + " duration: " + (currentDuration * 1000) + "ms → " + (newDuration * 1000) + "ms");
+        
+        // Calculate new times - stretch proportionally
+        for (var k = 0; k < keyframeData.length; k++) {
+            var data = keyframeData[k];
+            if (k === 0) {
+                // First keyframe stays at same time
+                data.newTime = data.time;
+            } else {
+                // Other keyframes get stretched proportionally
+                var progress = (data.time - firstTime) / currentDuration;
+                data.newTime = firstTime + (progress * newDuration);
+            }
+        }
+        
+        // Remove old keyframes in reverse order
+        var indices = [];
+        for (var k = 0; k < keyframeData.length; k++) {
+            indices.push(keyframeData[k].oldIndex);
+        }
+        indices.sort(function(a, b) { return b - a; }); // Reverse order
+        
+        for (var k = 0; k < indices.length; k++) {
+            prop.removeKey(indices[k]);
+        }
+        
+        // Create new keyframes at new times
+        var newSelIndices = [];
+        var newKeyframeTimes = [];
+        for (var k = 0; k < keyframeData.length; k++) {
+            var data = keyframeData[k];
+            var newIdx = prop.addKey(data.newTime);
+            
+            // Restore all attributes
+            prop.setValueAtKey(newIdx, data.value);
+            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+            
+            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+            if (data.inEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
+                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+            }
+            
+            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+            
+            if (data.spatialContinuous !== undefined) {
+                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+            }
+            
+            // COLLECT indices first, DON'T select yet (global selection will handle this)
+            newSelIndices.push(newIdx);
+            // COLLECT times for total span calculation
+            newKeyframeTimes.push(data.newTime);
+        }
+        
+        return {
+            success: true,
+            durationMs: newDuration * 1000,
+            newSelIndices: newSelIndices,  // Return for global selection restoration
+            newKeyframeTimes: newKeyframeTimes  // Return for total span calculation
+        };
+        
+    } catch(e) {
+        DEBUG_JSX.log("🎬 stretchPropertyDurationWithCache error for " + prop.name + ": " + e.toString());
+        return {
+            success: false,
+            durationMs: 0,
+            newSelIndices: [],
+            newKeyframeTimes: []
+        };
+    }
+}
+
+// Helper function to stretch duration of a single property
+function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
+    try {
+        // Collect keyframe data
+        var keyframeData = [];
+        for (var k = 0; k < selectedKeys.length; k++) {
+            var keyIndex = selectedKeys[k];
+            var data = {
+                oldIndex: keyIndex,
+                time: prop.keyTime(keyIndex),
+                value: prop.keyValue(keyIndex),
+                inInterp: prop.keyInInterpolationType(keyIndex),
+                outInterp: prop.keyOutInterpolationType(keyIndex),
+                temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+            };
+            
+            // Only collect temporal ease if BOTH sides are bezier
+            if (data.inInterp === KeyframeInterpolationType.BEZIER || data.outInterp === KeyframeInterpolationType.BEZIER) {
+                try {
+                    data.inEase = prop.keyInTemporalEase(keyIndex);
+                    data.outEase = prop.keyOutTemporalEase(keyIndex);
+                } catch(e) {
+                    // Temporal ease might not be available for some properties
+                }
+            }
+            
+            // Handle spatial properties if applicable
+            if (prop.isSpatial) {
+                data.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                data.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                data.inTangent = prop.keyInSpatialTangent(keyIndex);
+                data.outTangent = prop.keyOutSpatialTangent(keyIndex);
+            }
+            
+            keyframeData.push(data);
+        }
+        
+        // Sort by time to identify first and last keyframes
+        keyframeData.sort(function(a, b) { return a.time - b.time; });
+        var firstTime = keyframeData[0].time;
+        var lastTime = keyframeData[keyframeData.length - 1].time;
+        var currentDuration = lastTime - firstTime;
+        
+        // Calculate new duration
+        var newDuration = Math.max(0, currentDuration + deltaSeconds);
+        DEBUG_JSX.log("🎬 " + prop.name + " duration: " + (currentDuration * 1000) + "ms → " + (newDuration * 1000) + "ms");
+        
+        // Calculate new times - stretch proportionally
+        for (var k = 0; k < keyframeData.length; k++) {
+            var data = keyframeData[k];
+            if (k === 0) {
+                // First keyframe stays at same time
+                data.newTime = data.time;
+            } else {
+                // Other keyframes get stretched proportionally
+                var progress = (data.time - firstTime) / currentDuration;
+                data.newTime = firstTime + (progress * newDuration);
+            }
+        }
+        
+        // Remove old keyframes in reverse order
+        var indices = [];
+        for (var k = 0; k < keyframeData.length; k++) {
+            indices.push(keyframeData[k].oldIndex);
+        }
+        indices.sort(function(a, b) { return b - a; }); // Reverse order
+        
+        for (var k = 0; k < indices.length; k++) {
+            prop.removeKey(indices[k]);
+        }
+        
+        // Create new keyframes at new times
+        var newSelIndices = [];
+        for (var k = 0; k < keyframeData.length; k++) {
+            var data = keyframeData[k];
+            var newIdx = prop.addKey(data.newTime);
+            
+            // Restore all attributes
+            prop.setValueAtKey(newIdx, data.value);
+            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+            
+            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+            if (data.inEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
+                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+            }
+            
+            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+            
+            if (data.spatialContinuous !== undefined) {
+                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+            }
+            
+            newSelIndices.push(newIdx);
+        }
+        
+        // Restore selection
+        for (var i = 1; i <= prop.numKeys; i++) {
+            prop.setSelectedAtKey(i, false);
+        }
+        for (var k = 0; k < newSelIndices.length; k++) {
+            prop.setSelectedAtKey(newSelIndices[k], true);
+        }
+        
+        return {
+            success: true,
+            durationMs: newDuration * 1000
+        };
+        
+    } catch(e) {
+        DEBUG_JSX.log("🎬 stretchPropertyDuration error for " + prop.name + ": " + e.toString());
+        return {
+            success: false,
+            durationMs: 0
+        };
     }
 }
 
@@ -2432,8 +2894,8 @@ function stretchMultiPropertyDuration(direction) {
                     prop.setValueAtKey(newIdx, keyData.value);
                     prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
-                    // Only set temporal ease if it was bezier
-                    if (keyData.inEase !== undefined) {
+                    // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+                    if (keyData.inEase !== undefined && keyData.inInterp === KeyframeInterpolationType.BEZIER && keyData.outInterp === KeyframeInterpolationType.BEZIER) {
                         prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
                     }
                     
@@ -2874,8 +3336,8 @@ function nudgeDelay(direction) {
                             prop.setValueAtKey(newIdx, data.value);
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            // Apply easing if it exists (same as duration/baseline modes)
-                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                            // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
                                 prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                             }
                             
@@ -3484,8 +3946,8 @@ function nudgeDelay(direction) {
                     prop.setValueAtKey(newIdx, keyData.value);
                     prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
-                    // Only set temporal ease if it was bezier
-                    if (keyData.inEase !== undefined) {
+                    // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+                    if (keyData.inEase !== undefined && keyData.inInterp === KeyframeInterpolationType.BEZIER && keyData.outInterp === KeyframeInterpolationType.BEZIER) {
                         prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
                     }
                     
@@ -4708,8 +5170,8 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 prop.setValueAtKey(newIdx, data.value);
                 prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                 
-                // Apply easing if it exists (same as delay nudging)
-                if (data.inEase !== undefined && data.outEase !== undefined) {
+                // Only set temporal ease if BOTH sides are bezier (preserves Hold/Ease In/Out labels)
+                if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                 }
                 
@@ -5184,8 +5646,8 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     prop.setValueAtKey(newIdx, data.value);
                     prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                     
-                    // Restore temporal properties
-                    if (data.inEase !== undefined) {
+                    // Only set temporal ease if BOTH sides are bezier (preserves Ease In/Out labels)
+                    if (data.inEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
                         prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
                     }
                     prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);

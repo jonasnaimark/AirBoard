@@ -10,7 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.12.4] - 2025-09-02 🔧 **LATEST BUILD - STAGGER EASING FIX**
+## [4.12.5] - 2025-09-03 🔧 **LATEST BUILD - DURATION FIXES**
+### 🔧 Fixed - DURATION BUTTON IMPROVEMENTS
+- **Duration Display Calculation**: Fixed cross-property duration readout showing incorrect values after stretching
+- **Selection Preservation**: Duration buttons now maintain selections across all properties (no more deselection)
+- **Total Span Logic**: Duration display now calculates total span from earliest to latest keyframe (matches reading function)
+- **Cross-Property Support**: Proper handling of multiple properties with different duration spans
+- **Associated with AirBoard-v4.12.5.zxp**
+
+### 🔧 Technical Implementation - DURATION SYSTEM OVERHAUL
+- **Selection System**: Implemented complete 4-step selection preservation from KEYFRAME_SYSTEM_SUMMARY.md
+- **Cache Strategy**: Cache all selections before manipulation, use fresh property references after
+- **Span Calculation**: Changed from Math.max(individual durations) to total earliestTime→latestTime span
+- **Debug Logging**: Added comprehensive step-by-step debugging for selection preservation process
+- **Pattern Consistency**: Duration now uses same selection preservation as working delay/stagger functions
+
+## [4.12.4] - 2025-09-02 🔧 **STAGGER EASING FIX**
 ### 🔧 Fixed - STAGGER KEYFRAME EASING PRESERVATION
 - **Fixed Stagger Easing Bug**: Stagger +/- buttons now preserve exact keyframe easing curves like delay/duration buttons
 - **Scale Keyframes**: Scale (and all other properties) maintain their original bezier easing during stagger operations
