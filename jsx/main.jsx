@@ -786,27 +786,56 @@ function readLayerDelays(selectedLayers, comp) {
         
         var frameRate = comp.frameRate || 30;
         
-        // Collect layer startTimes (same approach as keyframe reading)
+        // Collect layer startTimes and calculate duration info (same approach as keyframe reading)
         var layerTimes = [];
+        var earliestInPoint = Infinity;
+        var latestOutPoint = -Infinity;
         
         for (var i = 0; i < selectedLayers.length; i++) {
             var layer = selectedLayers[i];
+            var inPoint = layer.inPoint;
+            var outPoint = layer.outPoint;
+            
+            // Track earliest inPoint and latest outPoint for duration calculation
+            if (inPoint < earliestInPoint) {
+                earliestInPoint = inPoint;
+            }
+            if (outPoint > latestOutPoint) {
+                latestOutPoint = outPoint;
+            }
+            
             layerTimes.push({
                 name: layer.name,
                 time: layer.startTime,
+                inPoint: inPoint,
+                outPoint: outPoint,
                 index: layer.index // Add layer index for proper stagger calculation
             });
         }
         
+        // Calculate total duration from first inPoint to last outPoint
+        var totalDurationSeconds = (earliestInPoint !== Infinity && latestOutPoint !== -Infinity) 
+            ? latestOutPoint - earliestInPoint 
+            : 0;
+        var totalDurationMs = roundMs(totalDurationSeconds);
+        var totalDurationFrames = Math.round(totalDurationSeconds * frameRate);
+        
+        DEBUG_JSX.log("Layer duration calculation: earliest inPoint=" + earliestInPoint + "s, latest outPoint=" + latestOutPoint + "s, total duration=" + totalDurationMs + "ms");
+        
         DEBUG_JSX.log("Found " + layerTimes.length + " layers with startTimes");
         
         if (layerTimes.length === 1) {
-            // Single layer - show its startTime as delay
+            // Single layer - show its startTime as delay and calculate its duration
             var delayMs = roundMs(layerTimes[0].time);
             var delayFrames = Math.round(layerTimes[0].time * frameRate);
             
-            // Single layer mode - return with cross-property format and duration -999 (not applicable for layers)
-            var result = "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|0|0|0|0|1|Stagger|Layer " + layerTimes[0].name + " at " + delayMs + "ms";
+            // Calculate duration for single layer (outPoint - inPoint)
+            var singleLayerDuration = layerTimes[0].outPoint - layerTimes[0].inPoint;
+            var singleDurationMs = roundMs(singleLayerDuration);
+            var singleDurationFrames = Math.round(singleLayerDuration * frameRate);
+            
+            // Single layer mode - return with actual layer duration
+            var result = "success|" + delayMs + "|" + delayFrames + "|" + singleDurationMs + "|" + singleDurationFrames + "|1|0|0|0|0|1|Stagger|Layer " + layerTimes[0].name + " at " + delayMs + "ms, duration " + singleDurationMs + "ms";
             DEBUG_JSX.log("Single layer result: " + result);
             return result;
         }
@@ -896,7 +925,7 @@ function readLayerDelays(selectedLayers, comp) {
         }
         
         // Return in same format as keyframe reading but with stagger: success|delayMs|delayFrames|durationMs|durationFrames|crossProperty|xDist|yDist|hasX|hasY|isCrossProperty|stagger|debug
-        var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|-999|-999|1|0|0|0|0|1|" + staggerText + "|Found " + layerTimes.length + " layers across " + selectedLayers.length + " layers | " + debugStrings.join(" | ");
+        var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + totalDurationMs + "|" + totalDurationFrames + "|1|0|0|0|0|1|" + staggerText + "|Found " + layerTimes.length + " layers, total duration " + totalDurationMs + "ms (from " + Math.round(earliestInPoint * 1000) + "ms to " + Math.round(latestOutPoint * 1000) + "ms) | " + debugStrings.join(" | ");
         
         DEBUG_JSX.log("Layer delays result: " + result);
         return result;
