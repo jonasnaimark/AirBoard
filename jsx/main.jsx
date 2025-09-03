@@ -1408,7 +1408,11 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                     continue;
                 }
                 
-                totalDuration = newDuration; // Store for return value
+                // Store the maximum duration across all properties
+                if (newDuration > totalDuration) {
+                    totalDuration = newDuration;
+                    DEBUG_JSX.log("New maximum duration: " + (newDuration * 1000) + "ms from " + (prop.name || "unknown property"));
+                }
                 
                 if (isTimeRemap) {
                     // TIME REMAPPING: Special handling to avoid deletion
@@ -1707,7 +1711,11 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                 // Convert back to seconds
                 var newDuration = newDurationMs / 1000;
                 
-                totalDuration = newDuration; // Store for return value
+                // Store the maximum duration across all properties
+                if (newDuration > totalDuration) {
+                    totalDuration = newDuration;
+                    DEBUG_JSX.log("New maximum duration: " + (newDuration * 1000) + "ms from " + (prop.name || "unknown property"));
+                }
                 
                 if (isTimeRemap) {
                     // TIME REMAPPING: Special handling to avoid deletion (same as original)
