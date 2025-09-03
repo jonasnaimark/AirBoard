@@ -4,22 +4,24 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/jonasnaimark/AirBoard?include_prereleases)](https://github.com/jonasnaimark/AirBoard/releases)
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
-[![Version](https://img.shields.io/badge/version-4.11.2-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.11.2)
+[![Version](https://img.shields.io/badge/version-4.14.0-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.14.0)
 
 > Transform your After Effects workflow with precision keyframe control, automated device compositions, gesture animations, and professional effects.
 
-## 🎯 What's New in v4.11.2 - Latest Build!
+## 🎯 What's New in v4.14.0 - Latest Build!
 
-### 🎨 Enhanced Stagger Control
-- **Stagger Direction Toggle**: Switch between bottom-to-top and top-to-bottom layer ordering
-- **Layer Marker Syncing**: Labels/markers now move with keyframes during stagger operations
-- **Visual Direction Indicator**: Icon flips to show active stagger direction
-- **Improved Tooltips**: Clear hover hints for all control buttons
+### 🎯 **MAJOR FIX: Perfect Easing Preservation**
+- **Baseline Keyframe Easing**: Fixed baseline keyframes losing easing curves during delay nudging
+- **Duration Operation Easing**: Comprehensive easing preservation across all duration stretching functions
+- **Mixed Easing Support**: Now handles Ease In, Ease Out, and all easing types correctly (not just full bezier)
+- **Universal Pattern**: Applied timeline mode's proven easing preservation to all keyframe operations
+- **Spatial Properties**: Position keyframes now preserve spatial curves and tangents perfectly
+- **Error Handling**: Added robust try-catch protection around all temporal ease operations
 
-### 🔧 Precision Improvements  
-- **Fixed Rounding Errors**: No more 1ms showing instead of 0ms
-- **Better Float Precision**: Improved accuracy for small time values
-- **Consistent Calculations**: All timing operations use enhanced rounding
+### 🔧 Technical Improvements
+- **Zero Easing Loss**: All keyframe manipulations now preserve easing perfectly
+- **Selection Maintenance**: Baseline keyframes maintain selection while preserving curves
+- **Cross-Operation Consistency**: Delay, duration, and stagger operations all use identical easing preservation
 
 ## ✨ Core Features
 
@@ -80,9 +82,19 @@
 
 ### Installation
 
-1. **Download** the latest `AirBoard-v4.11.2.zxp` from [Releases](https://github.com/jonasnaimark/AirBoard/releases)
+#### 📥 **Download Latest Version**
+
+**[⬇️ Download AirBoard v4.14.0.zxp](https://github.com/jonasnaimark/AirBoard/releases/latest/download/AirBoard-v4.14.0.zxp)**
+
+*Alternative: Browse all versions at [GitHub Releases](https://github.com/jonasnaimark/AirBoard/releases)*
+
+#### 🔧 **Install Steps**
+
+1. **Download** the latest `AirBoard-v4.14.0.zxp` from the link above
 2. **Install** using [ZXP Installer](https://aescripts.com/learn/zxp-installer/) or Adobe Extension Manager
 3. **Access** via `Window > Extensions > AirBoard` in After Effects
+
+> **Note**: Requires After Effects 2020 or later. Compatible with macOS and Windows.
 
 ### Using the Keyframe Nudger
 
@@ -240,10 +252,10 @@ Proprietary - All rights reserved
 
 <div align="center">
   
-**AirBoard v4.11.2** - Precision Keyframe Control for After Effects
+**AirBoard v4.14.0** - Precision Keyframe Control for After Effects
   
 Made with ❤️ for the motion design community
   
-[Download](https://github.com/jonasnaimark/AirBoard/releases) • [Documentation](KEYFRAME_SYSTEM_SUMMARY.md) • [Changelog](CHANGELOG.md)
+[Download Latest](https://github.com/jonasnaimark/AirBoard/releases/latest) • [All Releases](https://github.com/jonasnaimark/AirBoard/releases) • [Documentation](KEYFRAME_SYSTEM_SUMMARY.md) • [Changelog](CHANGELOG.md) • [Easing Deep Dive](EASING_PRESERVATION_DEEP_DIVE.md)
 
 </div>
