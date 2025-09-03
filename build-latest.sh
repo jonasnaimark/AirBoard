@@ -37,6 +37,9 @@ sed -i '' '/\/\/ Add debug panel for testing (DEV MODE)/d' temp-package/client/j
 sed -i '' 's/com\.airboard\.panel\.dev/com.airboard.panel/g' temp-package/CSXS/manifest.xml
 sed -i '' 's/AirBoard Dev/AirBoard/g' temp-package/CSXS/manifest.xml
 
+# Update version number in manifest to match ZXP filename
+sed -i '' 's/ExtensionBundleVersion="[^"]*"/ExtensionBundleVersion="4.12.8"/g' temp-package/CSXS/manifest.xml
+
 echo "✅ Production files cleaned"
 
 # Navigate to temp directory and create ZXP
