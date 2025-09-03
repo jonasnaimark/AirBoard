@@ -9529,9 +9529,29 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
             debugInfo.push("🎭 Effect count after: " + effectCountAfter);
             debugInfo.push("🎭 Effects added: " + (effectCountAfter - effectCountBefore));
             
-            // List all effects after preset application for debugging
-            debugInfo.push("📋 Current effects on layer:");
+            // Rename ALL Drop Shadow effects to match elevation type (handles both new and replaced effects)
             var effects = targetLayer.Effects;
+            var dropShadowCount = 0;
+            
+            // Find and rename ALL Drop Shadow effects on the layer
+            for (var e = 1; e <= effects.numProperties; e++) {
+                var effect = effects.property(e);
+                if (effect && (effect.name === "Drop Shadow" || effect.name.indexOf("Drop Shadow") === 0)) {
+                    dropShadowCount++;
+                    var newName = "Elevation " + elevationType;
+                    
+                    // If there are multiple drop shadows, keep them numbered for clarity
+                    if (dropShadowCount > 1) {
+                        newName = "Elevation " + elevationType + " (" + dropShadowCount + ")";
+                    }
+                    
+                    effect.name = newName;
+                    debugInfo.push("🏷️ Renamed effect " + e + " to: " + newName);
+                }
+            }
+            
+            // List all effects after preset application and renaming for debugging
+            debugInfo.push("📋 Current effects on layer:");
             for (var e = 1; e <= effects.numProperties; e++) {
                 var effect = effects.property(e);
                 debugInfo.push("  " + e + ". " + effect.name);
@@ -10131,6 +10151,55 @@ function addBlurFromPanel(materialType) {
             }
             
             materialDebugInfo.push("✅ Preset applied successfully");
+            
+            // Rename ALL material effects to include material type prefix
+            var effects = targetLayer.Effects;
+            var renamedCount = 0;
+            
+            // List of common material effect names to rename
+            var materialEffectNames = [
+                "Hue/Saturation", "Tint", "Brightness & Contrast", "Curves", "Levels",
+                "Color Balance", "Photo Filter", "Vibrance", "Channel Mixer", "Selective Color",
+                "Color Lookup", "Exposure", "Shadows/Highlights", "Tritone", "Fast Blur",
+                "Gaussian Blur", "Motion Blur", "Radial Blur", "Directional Blur", "Box Blur",
+                "Fast Box Blur"
+            ];
+            
+            // Find and rename material effects on the layer
+            for (var e = 1; e <= effects.numProperties; e++) {
+                var effect = effects.property(e);
+                if (effect) {
+                    var originalName = effect.name;
+                    var shouldRename = false;
+                    
+                    // Check if this effect should be renamed
+                    for (var i = 0; i < materialEffectNames.length; i++) {
+                        if (originalName === materialEffectNames[i] || originalName.indexOf(materialEffectNames[i]) === 0) {
+                            shouldRename = true;
+                            break;
+                        }
+                    }
+                    
+                    // Also rename any effect that doesn't already have the material type prefix
+                    if (shouldRename && originalName.indexOf(materialType + " - ") !== 0) {
+                        var newName = materialType + " - " + originalName;
+                        effect.name = newName;
+                        renamedCount++;
+                        materialDebugInfo.push("🏷️ Renamed effect: " + originalName + " → " + newName);
+                    }
+                }
+            }
+            
+            if (renamedCount > 0) {
+                materialDebugInfo.push("✅ Renamed " + renamedCount + " material effects with prefix: " + materialType + " -");
+            }
+            
+            // List all effects after renaming for debugging
+            materialDebugInfo.push("📋 Final effects on layer:");
+            for (var e = 1; e <= effects.numProperties; e++) {
+                var effect = effects.property(e);
+                materialDebugInfo.push("  " + e + ". " + effect.name);
+            }
             
             // Return success with debug info
             return "success|" + materialDebugInfo.join("|");
