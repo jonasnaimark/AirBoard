@@ -10,7 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.12.5] - 2025-09-03 🔧 **LATEST BUILD - DURATION FIXES**
+## [4.14.0] - 2025-09-03 🎯 **LATEST BUILD - EASING PRESERVATION FIX**
+### 🎯 Fixed - COMPREHENSIVE EASING PRESERVATION
+- **Baseline Keyframe Easing**: Fixed baseline keyframes losing easing curves during delay nudging operations
+- **Duration Operation Easing**: Applied comprehensive easing preservation fix to all duration stretching functions
+- **Universal Pattern**: Updated temporal ease restoration to match timeline mode pattern across all operations
+- **Stagger Operations**: Enhanced stagger functions with proper temporal and spatial easing preservation
+- **Mixed Easing Support**: Now handles Ease In, Ease Out, and mixed easing types correctly (not just full bezier)
+- **Error Handling**: Added try-catch protection around all temporal ease collection and restoration
+- **Spatial Properties**: Position keyframes now preserve spatial curves and tangents perfectly
+- **Selection Maintenance**: Baseline keyframes maintain selection while preserving easing
+- **Associated with AirBoard-v4.14.0.zxp**
+
+## [4.12.5] - 2025-09-03 🔧 **DURATION FIXES**
 ### 🔧 Fixed - DURATION BUTTON IMPROVEMENTS
 - **Duration Display Calculation**: Fixed cross-property duration readout showing incorrect values after stretching
 - **Selection Preservation**: Duration buttons now maintain selections across all properties (no more deselection)
