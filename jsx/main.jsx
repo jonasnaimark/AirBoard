@@ -4940,6 +4940,20 @@ function nudgeFromPlayhead(direction, frames) {
             DEBUG_JSX.log("Cache refresh error: " + refreshError.toString());
         }
         
+        // FINAL FIX: Ensure NO layers are selected after global delay operation
+        // This deselects all layers in the active composition to ensure clean state
+        try {
+            for (var d = 1; d <= comp.numLayers; d++) {
+                try {
+                    comp.layer(d).selected = false;
+                } catch(e) {
+                    // Continue if layer can't be deselected
+                }
+            }
+        } catch(e) {
+            // Non-critical if final deselection fails
+        }
+        
         app.endUndoGroup();
         
         var message = "Moved " + movedKeyframes + " keyframes, " + movedLayers + " layers" + (movedLabels > 0 ? ", " + movedLabels + " labels" : "") + (errorCount > 0 ? " (" + errorCount + " errors)" : "");
