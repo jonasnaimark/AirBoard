@@ -4674,10 +4674,10 @@ function nudgeFromPlayhead(direction, frames) {
             }
             
             // Move keyframes on this layer
-            // Only move keyframes if the layer starts before playhead
-            // (If layer starts at/after playhead, it was moved entirely and keyframes move with it)
-            if (layer.startTime < playheadTime) {
-                DEBUG_JSX.log("Processing keyframes for layer: " + layer.name + " (starts at " + layer.startTime.toFixed(3) + "s, playhead at " + playheadTime.toFixed(3) + "s)");
+            // Only move keyframes if the layer's inPoint is before playhead
+            // (If layer's inPoint is at/after playhead, it was moved entirely and keyframes move with it)
+            if (layerTimelineInPoint < playheadTime) {
+                DEBUG_JSX.log("Processing keyframes for layer: " + layer.name + " (inPoint at " + layerTimelineInPoint.toFixed(3) + "s, playhead at " + playheadTime.toFixed(3) + "s)");
                 var keyframeResult = moveKeyframesAfterTime(layer, playheadTime, timeOffset, processedItems);
                 DEBUG_JSX.log("Layer " + layer.name + " result: " + keyframeResult.moved + " keyframes moved");
                 movedKeyframes += keyframeResult.moved;
@@ -4685,7 +4685,7 @@ function nudgeFromPlayhead(direction, frames) {
                     furthestTime = keyframeResult.furthestTime;
                 }
             } else {
-                DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer starts at/after playhead: " + layer.startTime.toFixed(3) + "s >= " + playheadTime.toFixed(3) + "s)");
+                DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer inPoint at/after playhead: " + layerTimelineInPoint.toFixed(3) + "s >= " + playheadTime.toFixed(3) + "s)");
             }
             
             // Process precomps (2 levels deep)
@@ -5078,10 +5078,14 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
                 layer.locked = false;
             }
             
+            // Calculate actual timeline positions of layer's in and out points (same logic as main comp)
+            var layerTimelineInPoint = layer.startTime + layer.inPoint;
+            var layerTimelineOutPoint = layer.startTime + layer.outPoint;
+            
             // Move layer timing if it's at or after playhead in precomp time
             var layerMoved = false;
-            if (layer.startTime >= precompPlayheadTime) {
-                // Move entire layer via startTime
+            if (layerTimelineInPoint >= precompPlayheadTime) {
+                // Both in and out points are at/after playhead - move entire layer
                 layer.startTime += timeOffset;
                 layerMoved = true;
                 
@@ -5090,29 +5094,29 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
                 if (layerEndTime > furthestTime) {
                     furthestTime = layerEndTime;
                 }
-            } else {
-                // Layer starts before playhead - check if we need to extend its outPoint
-                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
-                if (layerEndTime > precompPlayheadTime) {
-                    // Extend the layer's duration
-                    layer.outPoint += timeOffset;
-                    layerMoved = true;
-                    
-                    var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
-                    if (newLayerEndTime > furthestTime) {
-                        furthestTime = newLayerEndTime;
-                    }
+            } else if (layerTimelineOutPoint > precompPlayheadTime) {
+                // Layer starts before playhead but extends past it - extend outPoint only
+                layer.outPoint += timeOffset;
+                layerMoved = true;
+                
+                var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (newLayerEndTime > furthestTime) {
+                    furthestTime = newLayerEndTime;
                 }
             }
             if (layerMoved) {
                 movedLayers++;
             }
             
-            // Move keyframes on this layer  
-            var keyframeResult = moveKeyframesAfterTime(layer, precompPlayheadTime, timeOffset, null);
-            movedKeyframes += keyframeResult.moved;
-            if (keyframeResult.furthestTime > furthestTime) {
-                furthestTime = keyframeResult.furthestTime;
+            // Move keyframes on this layer
+            // Only move keyframes if the layer's inPoint is before playhead  
+            // (If layer's inPoint is at/after playhead, it was moved entirely and keyframes move with it)
+            if (layerTimelineInPoint < precompPlayheadTime) {
+                var keyframeResult = moveKeyframesAfterTime(layer, precompPlayheadTime, timeOffset, null);
+                movedKeyframes += keyframeResult.moved;
+                if (keyframeResult.furthestTime > furthestTime) {
+                    furthestTime = keyframeResult.furthestTime;
+                }
             }
             
             // Process nested precomps
