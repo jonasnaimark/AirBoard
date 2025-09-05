@@ -1,6 +1,4 @@
-# AirBoard - Professional Animation Tools for After Effects
-
-**Advanced keyframe nudging, device mockups, and animation tools for Adobe After Effects**
+# AirBoard - Animation Tools and Presets for After Effects
 
 [![GitHub release](https://img.shields.io/github/v/release/jonasnaimark/AirBoard?include_prereleases)](https://github.com/jonasnaimark/AirBoard/releases)
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
@@ -15,6 +13,8 @@
 **Gesture Library**: Pre-built tap, click, and interaction animations
 
 **Component Tools**: Squircles, shadows, materials, and UI elements
+
+**File Setup**: Auto-generate an AE and Finder folder structure
 
 ## 📥 Get the Plugin
 
