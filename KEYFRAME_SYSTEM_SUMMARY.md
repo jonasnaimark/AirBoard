@@ -652,7 +652,181 @@ var shouldUseBaselineMode = !shouldUseTimelineMode;
 
 ---
 
-*Last Updated: December 2024*  
-*Version: v4.9.3 - Timeline Position Nudging System Complete with Multi-Property Selection Fix*  
+## 🛠️ **RECENT COMPLEX TECHNICAL SOLUTIONS** - Hard-Won Victories
+
+*The following three solutions represent significant engineering challenges that required extensive debugging and iteration to solve properly. These patterns are essential for understanding how to work with After Effects' complex property systems.*
+
+### **Challenge 7: Trimmed vs Naturally Positioned Layers - THE FINAL SOLUTION**
+**Problem**: Global delay system needed to distinguish between layers that are naturally positioned (inPoint == startTime) vs layers that are trimmed/offset (inPoint != startTime) to correctly determine when visible content begins.
+
+**Context**: When processing layers for global delay, we need to know when visible content actually starts. For naturally positioned layers, content starts at `startTime`. For trimmed layers, content starts at `startTime + inPoint`. Getting this wrong causes inPoints to move when they shouldn't, or fail to move when they should.
+
+**THE COMPLETE SOLUTION** (September 2024)
+```javascript
+// CRITICAL: Distinguish between trimmed and naturally positioned layers
+if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+    // Layer is naturally positioned (not trimmed) - visible content starts at startTime
+    layerTimelineInPoint = layer.startTime;
+} else {
+    // Layer is trimmed - visible content starts at startTime + inPoint  
+    layerTimelineInPoint = layer.startTime + layer.inPoint;
+}
+
+// Now use layerTimelineInPoint for accurate movement decisions
+if (layerTimelineInPoint >= playheadTime) {
+    // Move entire layer - visible content starts after playhead
+    moveEntireLayer();
+} else {
+    // Layer spans playhead - check if we need to move inPoint
+    if (layerTimelineInPoint < playheadTime && layer.outPoint > playheadTime) {
+        // Layer spans playhead - extend outPoint, possibly move inPoint
+        if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+            // Natural layer - check if content after playhead needs inPoint movement
+            if (layer.startTime < playheadTime) {
+                // Content starts before playhead - move inPoint to playhead
+                layer.inPoint = playheadTime - layer.startTime + timeOffset;
+            }
+        } else {
+            // Trimmed layer - use existing trimmed inPoint logic
+            // Move inPoint if visible content starts after playhead
+        }
+        
+        // Always extend outPoint
+        layer.outPoint += timeOffset;
+    }
+}
+```
+
+**Why This Was Critical:**
+1. **Natural vs Trimmed Detection**: `Math.abs(layer.inPoint - layer.startTime) < 0.001` is the key test
+2. **Accurate Content Start**: Natural layers start content at `startTime`, trimmed layers at `startTime + inPoint`
+3. **Prevents False Movement**: Stops inPoints from moving when content actually starts before playhead
+4. **Enables Correct Movement**: Allows inPoints to move when content genuinely starts after playhead
+
+**Edge Cases Handled:**
+- Natural layers with inPoint == startTime (most common)
+- Trimmed layers with inPoint != startTime (user manually trimmed)
+- Layers that span playhead vs layers entirely after playhead
+- Content that starts before vs after playhead position
+
+### **Challenge 8: Split Dimension Keyframe Handling - NO DELETION SOLUTION**
+**Problem**: When Position dimensions are separated (X Position/Y Position), the original "Position" property becomes hidden but still exists. Processing it causes keyframe deletion because After Effects can't handle operations on hidden properties.
+
+**Context**: After Effects allows separating Position into X Position and Y Position for independent animation. When separated, `position.dimensionsSeparated = true`, and the original Position property becomes inaccessible but still shows up in property traversal.
+
+**THE COMPLETE SOLUTION** (Discovered during global delay development)
+```javascript
+// CRITICAL: Skip Position property when dimensions are separated
+if (prop.name === "Position") {
+    try {
+        // Get parent Transform group to check dimension separation
+        var parentGroup = propGroup.property(i).parentProperty;
+        if (parentGroup && parentGroup.name === "Transform") {
+            // Check if dimensions are separated
+            if (parentGroup.property("Position").dimensionsSeparated) {
+                // Skip this hidden Position property - prevents keyframe deletion
+                continue; 
+            }
+        }
+    } catch(e) {
+        // If we can't check, skip Position to be safe
+        continue;
+    }
+}
+
+// Process X Position and Y Position normally - they work fine
+// The hidden Position property is completely skipped
+```
+
+**Why This Solution Works:**
+1. **Hidden Property Detection**: Checks `dimensionsSeparated` on parent Position property
+2. **Complete Avoidance**: Skips hidden Position entirely, preventing deletion attempts  
+3. **Safe Processing**: X Position and Y Position work normally and are processed separately
+4. **Error Prevention**: Try-catch ensures script continues if separation check fails
+
+**Critical Implementation Details:**
+- **Must check parent**: `parentGroup.property("Position").dimensionsSeparated`
+- **Skip completely**: Use `continue` to avoid any operations on hidden property
+- **Process dimensions separately**: X Position and Y Position are independent properties
+- **Error safety**: Graceful fallback if separation detection fails
+
+**Before/After Results:**
+- **Before**: Processing Position with separated dimensions → keyframes deleted
+- **After**: Skipping Position, processing X/Y Position → keyframes preserved perfectly
+
+### **Challenge 9: Effect Parameter Processing - EFFECT NAME-BASED SOLUTION**  
+**Problem**: Multiple effects of the same type (e.g., "Tint" and "Tint 2") were generating identical keyIDs, causing the duplicate detection system to incorrectly skip processing effect parameters during global delay operations.
+
+**Context**: After Effects allows multiple instances of the same effect on a layer. When processing keyframes, we need unique identifiers to prevent processing the same keyframe twice. Using effect indices or matchNames fails because multiple Tint effects have identical matchNames.
+
+**THE COMPLETE SOLUTION** (September 2024)
+```javascript
+// Create unique key ID for tracking - CRITICAL: Use effect NAME not index
+var uniquePropertyId = prop.matchName || prop.name;
+if (parentEffect) {
+    // Use effect name directly to distinguish between different effect instances
+    // This is more reliable than trying to find effect indices
+    uniquePropertyId = parentEffect.matchName + "_" + parentEffect.name + "_" + uniquePropertyId;
+}
+var keyId = layer.index + "_" + uniquePropertyId + "_" + j + "_" + keyTime.toFixed(3);
+
+// Expected KeyID examples:
+// "Tint" effect:   "ADBE Tint_Tint_ADBE Tint-0003"  
+// "Tint 2" effect: "ADBE Tint_Tint 2_ADBE Tint-0003"
+// "Brightness & Contrast": "ADBE Brightness & Contrast_Brightness & Contrast_ADBE Brightness & Contrast-0001"
+
+// Special debugging for Tint effects to diagnose duplicate issues
+if (parentEffect && parentEffect.name.indexOf("Tint") !== -1) {
+    DEBUG_JSX.log("    " + parentEffect.name + " KeyID: " + keyId);
+}
+```
+
+**Parent Effect Detection Pattern:**
+```javascript
+// Walk up property hierarchy to find parent effect
+var parentEffect = null;
+try {
+    var tempProp = prop.parentProperty;
+    while (tempProp && tempProp.propertyType !== PropertyType.LAYER) {
+        if (tempProp.propertyType === PropertyType.INDEXED_GROUP && 
+            tempProp.name && tempProp.matchName && 
+            tempProp.matchName.indexOf("ADBE") === 0) {
+            // Found effect group
+            parentEffect = tempProp;
+            break;
+        }
+        tempProp = tempProp.parentProperty;
+    }
+} catch(parentError) {
+    // Can't determine parent effect, continue anyway
+}
+```
+
+**Why Effect Names Work:**
+1. **Guaranteed Uniqueness**: After Effects ensures effect names are unique within a layer
+2. **User-Visible Names**: "Tint", "Tint 2", "Brightness & Contrast" match UI exactly
+3. **Reliable Detection**: Effect names don't change during processing
+4. **Debug Clarity**: Easy to identify which effect is being processed in logs
+
+**Failed Approaches That Don't Work:**
+```javascript
+// ❌ WRONG: Effect indices (unreliable)
+uniquePropertyId = parentEffect.propertyIndex + "_" + uniquePropertyId;
+
+// ❌ WRONG: MatchName only (identical for same effect type)  
+uniquePropertyId = parentEffect.matchName + "_" + uniquePropertyId;
+
+// ✅ RIGHT: Effect name direct usage
+uniquePropertyId = parentEffect.matchName + "_" + parentEffect.name + "_" + uniquePropertyId;
+```
+
+**Results:**
+- **Before**: "Tint" and "Tint 2" generated identical keyIDs → "Tint 2" skipped as duplicate
+- **After**: Each effect generates unique keyIDs → All effects process correctly
+
+---
+
+*Last Updated: September 2025*  
+*Version: v4.16.17 - Global Delay System Complete with Layer Movement Logic*  
 *Status: All keyframe systems fully implemented and production-ready*  
-*Critical Fix: Complete solution for multi-property keyframe selection preservation documented*
+*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, and effect name-based processing documented*
