@@ -10,7 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.15.0] - 2025-09-03 🎯 **LATEST BUILD - ENHANCED ERROR MESSAGING**
+## [4.16.0] - 2025-09-05 🎯 **GLOBAL DELAY NUDGING - COMPLETE FIX**
+### 🎯 Fixed - COMPREHENSIVE GLOBAL DELAY SYSTEM
+- **Fixed Cascading Double Movement**: Resolved issue where nested precomps (two levels deep) were moving layers and keyframes 2x further than intended
+- **Fixed Label Double Movement**: Layer labels in nested precomps no longer get moved twice when layers are moved entirely
+- **Enhanced Timeline-Based Logic**: Updated main comp precomp processing to use consistent `layerTimelineInPoint < playheadTime` logic
+- **Precomp Cache Refresh Fix**: Automatic cache invalidation for precomp layers to eliminate "empty frames at end" visual bug
+- **Nested Precomp Prevention**: Added check to skip processing nested precomp contents when the precomp layer was moved entirely
+- **Label Processing Fix**: Updated `moveLabelsAfterTime` to skip labels on layers that were moved entirely (preventing double movement)
+- **Universal Double Movement Prevention**: Applied consistent prevention logic across all levels: main comp, precomp level 1, precomp level 2
+- **Associated with AirBoard-v4.16.0.zxp**
+
+### 🔧 Technical Implementation - ROBUST NESTED PROCESSING
+- **Main Comp Logic**: Uses `layerTimelineInPoint < playheadTime` for precomp processing decisions
+- **Nested Precomp Logic**: Added `layerTimelineInPoint < precompPlayheadTime` check before processing nested precomp contents
+- **Label Movement Logic**: Enhanced to use timeline-based layer movement detection and skip moved layers
+- **Cache Refresh System**: Automatic outPoint adjustment (shrink 1 frame, restore) to force AE cache invalidation
+- **Debug Enhancement**: Comprehensive logging shows exactly which precomps are processed vs skipped at each depth level
+
+## [4.15.0] - 2025-09-03 🎯 **ENHANCED ERROR MESSAGING**
 ### 🎯 Added - COMPREHENSIVE ERROR MESSAGING
 - **Duration Error Clarity**: Added "Select > 1 Keyframe" error message throughout all duration controls
 - **Smart Keyframe Detection**: Automatically detects insufficient keyframes for duration operations
