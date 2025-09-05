@@ -4729,7 +4729,15 @@ function nudgeFromPlayhead(direction, frames) {
                 DEBUG_JSX.log("Found precomp layer: " + layer.name + " → " + layer.source.name);
                 
                 // Use same timeline-based logic as main comp for consistency  
-                var layerTimelineInPoint = layer.startTime + layer.inPoint;
+                // For visible content position: distinguish between trimmed and naturally positioned layers
+                var layerTimelineInPoint;
+                if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                    // Layer is naturally positioned (not trimmed) - visible content starts at startTime
+                    layerTimelineInPoint = layer.startTime;
+                } else {
+                    // Layer is trimmed - visible content starts at startTime + inPoint
+                    layerTimelineInPoint = layer.startTime + layer.inPoint;
+                }
                 var layerTimelineOutPoint = layer.startTime + layer.outPoint;
                 
                 if (layerStartTime < playheadTime) {
@@ -5224,7 +5232,17 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
             }
             
             // Calculate actual timeline positions of layer's in and out points (same logic as main comp)
-            var layerTimelineInPoint = layer.startTime + layer.inPoint;
+            // For visible content position: distinguish between trimmed and naturally positioned layers
+            // If inPoint equals startTime, layer is naturally positioned (not trimmed)
+            // If inPoint differs from startTime, layer is trimmed
+            var layerTimelineInPoint;
+            if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                // Layer is naturally positioned (not trimmed) - visible content starts at startTime
+                layerTimelineInPoint = layer.startTime;
+            } else {
+                // Layer is trimmed - visible content starts at startTime + inPoint
+                layerTimelineInPoint = layer.startTime + layer.inPoint;
+            }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
             
             // Move layer timing if it's at or after playhead in precomp time
