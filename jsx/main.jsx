@@ -5649,15 +5649,7 @@ function nudgeDelayTimelineMode(direction, frames) {
                 if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
                 if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
                 
-                // Skip Time Remap properties (they can't be manipulated the same way)
-                try {
-                    if (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping") {
-                        DEBUG_JSX.log("Skipping Time Remap property");
-                        continue;
-                    }
-                } catch(e) {
-                    // Continue if we can't check the name
-                }
+                // Note: Time Remap will now be handled with special logic below
                 
                 // CRITICAL: Manually check EVERY keyframe for selection
                 var selKeys = [];
@@ -5678,6 +5670,44 @@ function nudgeDelayTimelineMode(direction, frames) {
                     });
                     DEBUG_JSX.log("Cached " + prop.name + " with " + selKeys.length + " selected keyframes");
                 }
+            }
+            
+            // Also explicitly check for Time Remap (in case it's not in selectedProperties)
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    var timeRemapSelKeys = [];
+                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                        if (layer.timeRemap.keySelected(k)) {
+                            timeRemapSelKeys.push(k);
+                        }
+                    }
+                    
+                    if (timeRemapSelKeys.length > 0) {
+                        hasSelectedKeyframes = true;
+                        
+                        // Check if we already cached it
+                        var alreadyCached = false;
+                        for (var c = 0; c < cachedSelections.length; c++) {
+                            if (cachedSelections[c].property === layer.timeRemap) {
+                                alreadyCached = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!alreadyCached) {
+                            cachedSelections.push({
+                                layer: layer,
+                                layerName: layer.name,
+                                property: layer.timeRemap,
+                                propertyName: "Time Remap",
+                                selectedIndices: timeRemapSelKeys.slice()
+                            });
+                            DEBUG_JSX.log("Cached Time Remap with " + timeRemapSelKeys.length + " selected keyframes");
+                        }
+                    }
+                }
+            } catch(e) {
+                // Time Remap might not be available on this layer
             }
         }
         
@@ -5886,16 +5916,86 @@ function nudgeDelayTimelineMode(direction, frames) {
                 }
             }
             
-            // Remove old keyframes (in reverse order to avoid index issues)
-            for (var k = keyframesToMove.length - 1; k >= 0; k--) {
-                prop.removeKey(keyframesToMove[k].index);
+            // Special handling for Time Remap - add new keys BEFORE removing old ones
+            var newIndices = [];
+            var isTimeRemap = false;
+            try {
+                isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+            } catch(e) {
+                // Continue with normal handling if we can't check
             }
             
-            // Add new keyframes at new times with all properties preserved
-            var newIndices = [];
-            for (var k = 0; k < keyframesToMove.length; k++) {
-                var data = keyframesToMove[k];
-                var newIdx = prop.addKey(data.newTime);
+            if (isTimeRemap) {
+                DEBUG_JSX.log("Special Time Remap handling - add before delete");
+                
+                // FIRST: Add all new keyframes at new times
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var data = keyframesToMove[k];
+                    var newIdx = prop.addKey(data.newTime);
+                    
+                    // Store the new index for later value setting
+                    data.newIndex = newIdx;
+                    newIndices.push(newIdx);
+                }
+                
+                // SECOND: Set values and properties on new keyframes
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var data = keyframesToMove[k];
+                    
+                    // Set all properties on the new keyframe
+                    prop.setValueAtKey(data.newIndex, data.value);
+                    prop.setInterpolationTypeAtKey(data.newIndex, data.inInterp, data.outInterp);
+                    
+                    if (data.inEase !== undefined && data.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(data.newIndex, data.inEase, data.outEase);
+                        } catch(e) {
+                            // Some Time Remap keyframes might not support temporal ease
+                        }
+                    }
+                    
+                    prop.setTemporalContinuousAtKey(data.newIndex, data.temporalContinuous);
+                    prop.setTemporalAutoBezierAtKey(data.newIndex, data.temporalAutoBezier);
+                }
+                
+                // THIRD: Now remove the old keyframes (in reverse order)
+                // We need to recalculate indices since we added new keys
+                var indicesToRemove = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var oldTime = keyframesToMove[k].oldTime;
+                    // Find the keyframe at the old time
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - oldTime) < 0.001) {
+                            indicesToRemove.push(j);
+                            break;
+                        }
+                    }
+                }
+                
+                // Remove in reverse order to maintain indices
+                indicesToRemove.sort(function(a, b) { return b - a; });
+                for (var k = 0; k < indicesToRemove.length; k++) {
+                    try {
+                        prop.removeKey(indicesToRemove[k]);
+                    } catch(e) {
+                        DEBUG_JSX.log("Failed to remove old Time Remap key at index " + indicesToRemove[k]);
+                    }
+                }
+                
+                movedCount += keyframesToMove.length;
+                DEBUG_JSX.log("Moved " + keyframesToMove.length + " Time Remap keyframes");
+                
+            } else {
+                // Normal handling for non-Time Remap properties
+                // Remove old keyframes (in reverse order to avoid index issues)
+                for (var k = keyframesToMove.length - 1; k >= 0; k--) {
+                    prop.removeKey(keyframesToMove[k].index);
+                }
+                
+                // Add new keyframes at new times with all properties preserved
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var data = keyframesToMove[k];
+                    var newIdx = prop.addKey(data.newTime);
                 
                 // Restore all keyframe properties
                 prop.setValueAtKey(newIdx, data.value);
@@ -5924,9 +6024,10 @@ function nudgeDelayTimelineMode(direction, frames) {
                     }
                 }
                 
-                newIndices.push(newIdx);
-                movedCount++;
-                DEBUG_JSX.log("Moved keyframe from " + data.oldTime + "s to " + data.newTime + "s");
+                    newIndices.push(newIdx);
+                    movedCount++;
+                    DEBUG_JSX.log("Moved keyframe from " + data.oldTime + "s to " + data.newTime + "s");
+                }
             }
             
             // Store selections for restoration
@@ -5968,8 +6069,19 @@ function nudgeDelayTimelineMode(direction, frames) {
         
         // STEP 3 & 4: RESTORE SELECTION WITH FRESH REFERENCES (only if we had selected keyframes originally)
         if (hasSelectedKeyframes) {
-            // Helper function to find property by name
+            // Helper function to find property by name (including Time Remap)
             function findPropertyByName(layer, targetName) {
+                // Check for Time Remap first (it's at the layer level)
+                if (targetName === "Time Remap" || targetName === "ADBE Time Remapping") {
+                    try {
+                        if (layer.timeRemapEnabled && layer.timeRemap) {
+                            return layer.timeRemap;
+                        }
+                    } catch(e) {
+                        // Time Remap not available on this layer
+                    }
+                }
+                
                 function searchGroup(group) {
                     for (var i = 1; i <= group.numProperties; i++) {
                         var prop = group.property(i);
