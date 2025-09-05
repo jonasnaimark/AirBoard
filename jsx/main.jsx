@@ -4637,33 +4637,35 @@ function nudgeFromPlayhead(direction, frames) {
             var layerMoved = false;
             var moveDetails = [];
             
-            // For layers, we need to move the startTime if the layer starts at or after playhead
-            // This moves the entire layer in time
-            if (layer.startTime >= playheadTime) {
+            // Calculate actual timeline positions of layer's in and out points
+            var layerTimelineInPoint = layer.startTime + layer.inPoint;
+            var layerTimelineOutPoint = layer.startTime + layer.outPoint;
+            
+            DEBUG_JSX.log("    Layer timing: inPoint=" + layerTimelineInPoint.toFixed(3) + "s, outPoint=" + layerTimelineOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
+            
+            if (layerTimelineInPoint >= playheadTime) {
+                // Both in and out points are at/after playhead - move entire layer
                 layer.startTime += timeOffset;
                 layerMoved = true;
+                DEBUG_JSX.log("    Moved entire layer (both in/out after playhead)");
                 
                 // Track furthest time based on the layer's new end time
                 var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
                 if (layerEndTime > furthestTime) {
                     furthestTime = layerEndTime;
                 }
-            } else {
-                // Layer starts before playhead - check if we need to adjust its in/out points
-                // Only adjust if part of the layer extends past the playhead
+            } else if (layerTimelineOutPoint > playheadTime) {
+                // Layer starts before playhead but extends past it - extend outPoint only
+                layer.outPoint += timeOffset;
+                layerMoved = true;
+                DEBUG_JSX.log("    Extended layer outPoint (crosses playhead)");
                 
-                // Check if layer's content extends past playhead (need to trim/extend)
-                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
-                if (layerEndTime > playheadTime) {
-                    // Layer extends past playhead - we need to extend its duration
-                    layer.outPoint += timeOffset;
-                    layerMoved = true;
-                    
-                    var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
-                    if (newLayerEndTime > furthestTime) {
-                        furthestTime = newLayerEndTime;
-                    }
+                var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (newLayerEndTime > furthestTime) {
+                    furthestTime = newLayerEndTime;
                 }
+            } else {
+                DEBUG_JSX.log("    Layer ends before playhead - no movement needed");
             }
             
             if (layerMoved) {
