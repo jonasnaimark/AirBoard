@@ -7526,8 +7526,18 @@ function createDeviceComposition(deviceType, multiplier) {
         
         debugInfo.push("Calculated dimensions: " + dimensions.width + "x" + dimensions.height + " (rounded from " + (baseDimensions.width * multiplier) + "x" + (baseDimensions.height * multiplier) + ")");
         
-        // Create composition name
-        var compName = deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + " @" + multiplier + "x";
+        // Create composition name with proper iPhone capitalization
+        var compName;
+        if (deviceType === "iphone") {
+            compName = "iPhone @" + multiplier + "x";
+        } else if (deviceType === "iphone15") {
+            compName = "iPhone15 @" + multiplier + "x";
+        } else if (deviceType === "iphone-simple") {
+            compName = "iPhone-simple @" + multiplier + "x";
+        } else {
+            // For other device types (desktop, web-chrome, etc.), use standard capitalization
+            compName = deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + " @" + multiplier + "x";
+        }
         debugInfo.push("Creating composition: " + compName);
         
         try {
@@ -8392,10 +8402,16 @@ function addComponentFromPanel(componentType, multiplier) {
             $.writeln("Scale application failed: " + scaleError.toString());
         }
         
-        // Set layer start time to current playhead position
+        // Set layer start time - iPhone UI goes to start frame, others go to playhead
         try {
             var playheadTime = comp.time;
-            componentLayer.startTime = playheadTime;
+            if (componentType === "iphone-ui") {
+                // iPhone UI component always starts at frame 0
+                componentLayer.startTime = 0;
+            } else {
+                // All other components start at playhead position
+                componentLayer.startTime = playheadTime;
+            }
         } catch(timeError) {
             $.writeln("Playhead positioning failed: " + timeError.toString());
         }

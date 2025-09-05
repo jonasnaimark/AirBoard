@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.1] - 2025-09-05 🎨 **UI IMPROVEMENTS**
+### 🎨 Fixed - UI REFINEMENTS
+- **Tooltip Font Weight**: Reduced tooltip font-weight from 600 to 400 for lighter, more readable text
+- **iPhone Composition Names**: Fixed capitalization from "Iphone @2x" to "iPhone @2x" for all iPhone device types (iPhone, iPhone15, iPhone-simple)
+- **iPhone UI Component Positioning**: iPhone UI component now always starts at frame 0 instead of playhead position, while all other components maintain playhead positioning
+- **Consistent Branding**: Proper "iPhone" capitalization across all generated compositions
+- **Associated with AirBoard-v4.16.1.zxp**
+
+### 🔧 Technical Implementation - TARGETED IMPROVEMENTS
+- **Tooltip Styling**: Updated JavaScript tooltip font-weight property in client/js/main.js
+- **Composition Naming Logic**: Enhanced device composition naming with specific iPhone capitalization handling
+- **Component Positioning Logic**: Added conditional startTime setting for iPhone UI vs other components
+- **Backwards Compatibility**: All changes maintain existing functionality for non-iPhone elements
+
 ## [4.16.0] - 2025-09-05 🎯 **GLOBAL DELAY NUDGING - COMPLETE FIX**
 ### 🎯 Fixed - COMPREHENSIVE GLOBAL DELAY SYSTEM
 - **Fixed Cascading Double Movement**: Resolved issue where nested precomps (two levels deep) were moving layers and keyframes 2x further than intended

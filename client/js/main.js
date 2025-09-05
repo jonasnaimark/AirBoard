@@ -1173,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     padding: 4px 8px;
                     border-radius: 4px;
                     font-size: 10px;
-                    font-weight: 600;
+                    font-weight: 400;
                     white-space: nowrap;
                     border: 1px solid rgba(255, 255, 255, 0.12);
                     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
