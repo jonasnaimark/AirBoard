@@ -4678,15 +4678,14 @@ function nudgeFromPlayhead(direction, frames) {
     try {
         DEBUG_JSX.clear(); // Clear previous debug messages
         GLOBAL_OPERATION_ID++; // Increment operation ID for this run
-        DEBUG_JSX.log("=== Global delay #" + GLOBAL_OPERATION_ID + " ===");
-        DEBUG_JSX.log("Request: Move " + frames + " frames " + (direction > 0 ? "forward" : "backward"));
+        DEBUG_JSX.log("GD#" + GLOBAL_OPERATION_ID + ": " + (direction > 0 ? "+" : "-") + frames + "f");
         
         var comp = app.project.activeItem;
         if (comp && comp instanceof CompItem) {
             // Check if playhead position changed
             var currentPlayheadPosition = comp.time;
             if (Math.abs(currentPlayheadPosition - LAST_PLAYHEAD_POSITION) > 0.001) {
-                DEBUG_JSX.log("Playhead moved - resetting global delay cumulative");
+                DEBUG_JSX.log("PH_MOVE→RST");
                 GLOBAL_DELAY_CUMULATIVE = 0;
                 LAST_PLAYHEAD_POSITION = currentPlayheadPosition;
             }
@@ -4712,18 +4711,15 @@ function nudgeFromPlayhead(direction, frames) {
         var frameRate = comp.frameRate;
         if (!frameRate || frameRate <= 0) {
             frameRate = 30; // Default fallback
-            DEBUG_JSX.log("WARNING: Invalid frame rate, using default 30fps");
+            DEBUG_JSX.log("WARN: fps=30");
         }
         
-        DEBUG_JSX.log("Comp: " + comp.name + " @ " + frameRate + "fps");
-        DEBUG_JSX.log("Input frames: " + frames + ", direction: " + direction);
+        DEBUG_JSX.log(comp.name + "@" + frameRate + "fps");
         
         var timeOffset = (frames * direction) / frameRate; // Time offset in seconds
         var playheadTime = comp.time; // Current playhead position
         
-        DEBUG_JSX.log("Calculated time offset: " + timeOffset.toFixed(3) + "s = " + (timeOffset * 1000).toFixed(0) + "ms");
-        DEBUG_JSX.log("This should move keyframes by exactly " + frames + " frames at " + frameRate + "fps");
-        DEBUG_JSX.log("Playhead at: " + playheadTime.toFixed(3) + "s");
+        DEBUG_JSX.log("Δ=" + (timeOffset * 1000).toFixed(0) + "ms, PH=" + playheadTime.toFixed(3) + "s");
         
         var movedKeyframes = 0;
         var movedLayers = 0;
@@ -4734,11 +4730,11 @@ function nudgeFromPlayhead(direction, frames) {
         var originalDuration = comp.duration; // Store original duration for extension/shrinking logic
         
         // Process all layers in main comp
-        DEBUG_JSX.log("Processing " + comp.numLayers + " layers in composition");
+        DEBUG_JSX.log("Layers: " + comp.numLayers);
         for (var i = 1; i <= comp.numLayers; i++) {
             try {
                 var layer = comp.layer(i);
-                DEBUG_JSX.log("Layer " + i + ": " + layer.name + " (starts at " + layer.startTime.toFixed(3) + "s)");
+                DEBUG_JSX.log("L" + i + ": " + layer.name.substring(0, 15) + "@" + layer.startTime.toFixed(2) + "s");
             
             // Handle locked layers
             var wasLocked = layer.locked;
@@ -4767,19 +4763,13 @@ function nudgeFromPlayhead(direction, frames) {
             }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
             
-            DEBUG_JSX.log("    Layer timing: startTime=" + layerStartTime.toFixed(3) + "s, endTime=" + layerEndTime.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
-            DEBUG_JSX.log("    Layer points: inPoint=" + layer.inPoint.toFixed(3) + "s, outPoint=" + layer.outPoint.toFixed(3) + "s");
-            DEBUG_JSX.log("    Layer visible: timeline inPoint=" + layerTimelineInPoint.toFixed(3) + "s, timeline outPoint=" + layerTimelineOutPoint.toFixed(3) + "s");
-            
             // Check if the LAYER ITSELF (not just visible content) starts after playhead
-            DEBUG_JSX.log("    Checking: layer startTime " + layerStartTime.toFixed(3) + " >= playhead " + playheadTime.toFixed(3) + " = " + (layerStartTime >= playheadTime));
-            DEBUG_JSX.log("    Checking: layer endTime " + layerEndTime.toFixed(3) + " > playhead " + playheadTime.toFixed(3) + " = " + (layerEndTime > playheadTime));
             
             if (layerStartTime >= playheadTime) {
                 // Layer starts at or after playhead - move entire layer
                 layer.startTime += timeOffset;
                 layerMoved = true;
-                DEBUG_JSX.log("    → MOVED ENTIRE LAYER (layer starts at/after playhead)");
+                DEBUG_JSX.log("  →MOVE");
                 
                 // Track furthest time based on the layer's new end time
                 var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
@@ -4797,12 +4787,12 @@ function nudgeFromPlayhead(direction, frames) {
                     // Visible content starts at/after playhead - move inPoint (delay visible start)
                     layer.inPoint += timeOffset;
                     layerMoved = true;
-                    DEBUG_JSX.log("    → MOVED INPOINT (visible content starts after playhead)");
+                    DEBUG_JSX.log("  →IN+");
                 } else {
                     // Visible content includes playhead - extend outPoint only
                     layer.outPoint += timeOffset;
                     layerMoved = true;
-                    DEBUG_JSX.log("    → EXTENDED OUTPOINT (visible content spans playhead)");
+                    DEBUG_JSX.log("  →OUT+");
                 }
                 
                 var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
@@ -4811,7 +4801,7 @@ function nudgeFromPlayhead(direction, frames) {
                 }
                 
             } else {
-                DEBUG_JSX.log("    → NO MOVEMENT (layer ends before playhead)");
+                DEBUG_JSX.log("  →SKIP");
             }
             
             if (layerMoved) {
@@ -4822,22 +4812,22 @@ function nudgeFromPlayhead(direction, frames) {
             // Only move keyframes if the layer itself starts before playhead
             // (If layer starts at/after playhead, it was moved entirely and keyframes move with it)
             if (layerStartTime < playheadTime) {
-                DEBUG_JSX.log("Layer: " + layer.name + " (offset " + (layerTimelineInPoint - playheadTime).toFixed(2) + "s)");
+                DEBUG_JSX.log("  Keys@" + layer.name.substring(0, 10));
                 var keyframeResult = moveKeyframesAfterTime(layer, playheadTime, timeOffset, processedItems);
-                DEBUG_JSX.log("  → " + keyframeResult.moved + " keys moved");
+                DEBUG_JSX.log("    " + keyframeResult.moved + "k");
                 movedKeyframes += keyframeResult.moved;
                 if (keyframeResult.furthestTime > furthestTime) {
                     furthestTime = keyframeResult.furthestTime;
                 }
             } else {
-                DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer moved entirely - startTime " + layerStartTime.toFixed(3) + "s >= playhead " + playheadTime.toFixed(3) + "s)");
+                DEBUG_JSX.log("  Skip keys (moved)");
             }
             
             // Process precomps (5 levels deep)
             // Only process precomp contents if the precomp layer starts before playhead
             // (If precomp layer starts at/after playhead, it was moved entirely and contents move with it)
             if (layer.source && layer.source instanceof CompItem) {
-                DEBUG_JSX.log("Found precomp layer: " + layer.name + " → " + layer.source.name);
+                DEBUG_JSX.log("  PC: " + layer.source.name.substring(0, 15));
                 
                 // Use same timeline-based logic as main comp for consistency  
                 // For visible content position: distinguish between trimmed and naturally positioned layers
@@ -4853,11 +4843,11 @@ function nudgeFromPlayhead(direction, frames) {
                 
                 if (layerStartTime < playheadTime) {
                     // Precomp layer spans playhead - process its contents
-                    DEBUG_JSX.log("  Precomp timing: in=" + layerTimelineInPoint.toFixed(3) + "s, out=" + layerTimelineOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
+                DEBUG_JSX.log("    PC@" + layerTimelineInPoint.toFixed(2) + "-" + layerTimelineOutPoint.toFixed(2) + "s");
                     
                     // Only process if the precomp is active at or after the playhead
                     if (layerTimelineOutPoint > playheadTime) {
-                        DEBUG_JSX.log("  → Precomp: " + layer.source.name);
+                        DEBUG_JSX.log("    →Process PC");
                         var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
                         movedKeyframes += precompResult.movedKeyframes;
                         movedLayers += precompResult.movedLayers;
@@ -4865,12 +4855,12 @@ function nudgeFromPlayhead(direction, frames) {
                         if (precompResult.furthestTime > furthestTime) {
                             furthestTime = precompResult.furthestTime;
                         }
-                        DEBUG_JSX.log("  Precomp " + layer.source.name + " result: " + precompResult.movedKeyframes + "k " + precompResult.movedLayers + "L " + (precompResult.movedLabels || 0) + "m");
+                        DEBUG_JSX.log("    PC: " + precompResult.movedKeyframes + "k/" + precompResult.movedLayers + "L");
                     } else {
-                        DEBUG_JSX.log("  Skipping precomp contents (ends before playhead)");
+                        DEBUG_JSX.log("    Skip PC (ends<PH)");
                     }
                 } else {
-                    DEBUG_JSX.log("  Skipping precomp contents (layer moved entirely - startTime " + layerStartTime.toFixed(3) + "s >= playhead " + playheadTime.toFixed(3) + "s)");
+                    DEBUG_JSX.log("    Skip PC (moved)");
                 }
             }
             
@@ -4888,9 +4878,7 @@ function nudgeFromPlayhead(direction, frames) {
         
         // Summary for debug output
         var totalItems = movedKeyframes + movedLayers + movedLabels;
-        DEBUG_JSX.log("=== SUMMARY ===");
-        DEBUG_JSX.log("Moved: " + movedKeyframes + " keys, " + movedLayers + " layers, " + movedLabels + " labels");
-        DEBUG_JSX.log("Total movement: " + (timeOffset * 1000).toFixed(0) + "ms (" + (timeOffset * frameRate).toFixed(1) + " frames)");
+        DEBUG_JSX.log("RESULT: " + movedKeyframes + "k/" + movedLayers + "L/" + movedLabels + "m @" + (timeOffset * 1000).toFixed(0) + "ms");
         
         // Adjust composition duration bidirectionally
         if (timeOffset > 0) {
@@ -4899,30 +4887,21 @@ function nudgeFromPlayhead(direction, frames) {
                 var extensionNeeded = timeOffset;
                 var newDuration = originalDuration + extensionNeeded;
                 comp.duration = newDuration;
-                DEBUG_JSX.log("Extended comp duration from " + originalDuration.toFixed(3) + "s to " + newDuration.toFixed(3) + "s");
+                DEBUG_JSX.log("Dur: " + originalDuration.toFixed(2) + "s→" + newDuration.toFixed(2) + "s");
             }
         } else if (timeOffset < 0) {
             // Shrinking backward: reduce duration by the amount we moved back
             var shrinkAmount = Math.abs(timeOffset);
             var newDuration = Math.max(0.1, originalDuration - shrinkAmount); // Don't go below 0.1s
             comp.duration = newDuration;
-            DEBUG_JSX.log("Shrunk comp duration from " + originalDuration.toFixed(3) + "s to " + newDuration.toFixed(3) + "s");
+            DEBUG_JSX.log("Dur: " + originalDuration.toFixed(2) + "s→" + newDuration.toFixed(2) + "s");
         }
         
         // CACHE REFRESH FIX: Force AE to refresh precomp layers when their source durations were extended
         // This fixes the "empty frames at end" visual bug by forcing cache invalidation
         try {
-            DEBUG_JSX.log("Applying precomp cache refresh fix...");
+            DEBUG_JSX.log("Cache refresh...");
             var refreshedPrecomps = 0;
-            
-            // OPTIMIZATION: Deselect all layers first to prevent any selection during refresh
-            for (var d = 1; d <= comp.numLayers; d++) {
-                try {
-                    comp.layer(d).selected = false;
-                } catch(e) {
-                    // Continue if layer can't be deselected
-                }
-            }
             
             // Go through all layers in the main comp to find precomp layers
             for (var i = 1; i <= comp.numLayers; i++) {
@@ -4931,12 +4910,6 @@ function nudgeFromPlayhead(direction, frames) {
                     
                     // Check if this is a precomp layer
                     if (layer.source && layer.source instanceof CompItem) {
-                        // OPTIMIZATION: Deselect BEFORE modifying to prevent visible selection
-                        var wasSelected = layer.selected;
-                        if (wasSelected) {
-                            layer.selected = false;
-                        }
-                        
                         // Force cache refresh by briefly adjusting outPoint
                         var frameRate = comp.frameRate || 30;
                         var oneFrame = 1 / frameRate;
@@ -4946,13 +4919,12 @@ function nudgeFromPlayhead(direction, frames) {
                         layer.outPoint = originalOutPoint - oneFrame;
                         layer.outPoint = originalOutPoint;
                         
-                        // Ensure layer stays deselected (in case AE still tries to select it)
-                        if (layer.selected) {
-                            layer.selected = false;
-                        }
+                        // IMPORTANT: Deselect the layer after refresh to prevent unwanted selection
+                        layer.selected = false;
                         
                         refreshedPrecomps++;
-                        DEBUG_JSX.log("  Refreshed precomp layer: " + layer.name + " → " + layer.source.name);
+                        // More concise debug message
+                        DEBUG_JSX.log("  Refresh: " + layer.name);
                     }
                 } catch(layerError) {
                     // Continue with next layer if this one fails
@@ -4961,9 +4933,7 @@ function nudgeFromPlayhead(direction, frames) {
             }
             
             if (refreshedPrecomps > 0) {
-                DEBUG_JSX.log("Cache refresh completed for " + refreshedPrecomps + " precomp layers");
-            } else {
-                DEBUG_JSX.log("No precomp layers found to refresh");
+                DEBUG_JSX.log("Refreshed " + refreshedPrecomps + " PCs");
             }
         } catch(refreshError) {
             // Don't fail the entire operation if cache refresh fails
