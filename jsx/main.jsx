@@ -5638,16 +5638,26 @@ function nudgeDelayTimelineMode(direction, frames) {
         var hasSelectedKeyframes = false;
         
         // First check if there are any selected keyframes
+        DEBUG_JSX.log("Checking " + selectedLayers.length + " selected layers for keyframes");
         for (var i = 0; i < selectedLayers.length; i++) {
             var layer = selectedLayers[i];
             var selectedProps = layer.selectedProperties;
+            DEBUG_JSX.log("Layer " + layer.name + " has " + selectedProps.length + " selected properties");
             
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
                 
                 // Skip invalid properties
-                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
-                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) {
+                    DEBUG_JSX.log("  Skipping invalid property");
+                    continue;
+                }
+                if (!prop.canVaryOverTime || prop.numKeys === 0) {
+                    DEBUG_JSX.log("  Skipping property " + (prop.name || "unnamed") + " (no keys or can't vary)");
+                    continue;
+                }
+                
+                DEBUG_JSX.log("  Checking property: " + prop.name);
                 
                 // Note: Time Remap will now be handled with special logic below
                 
@@ -5668,19 +5678,23 @@ function nudgeDelayTimelineMode(direction, frames) {
                         propertyName: prop.name,
                         selectedIndices: selKeys.slice() // Make a copy!
                     });
-                    DEBUG_JSX.log("Cached " + prop.name + " with " + selKeys.length + " selected keyframes");
+                    DEBUG_JSX.log("  Cached " + prop.name + " with " + selKeys.length + " selected keyframes");
                 }
             }
             
             // Also explicitly check for Time Remap (in case it's not in selectedProperties)
+            DEBUG_JSX.log("Checking for Time Remap on layer " + layer.name);
             try {
                 if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    DEBUG_JSX.log("  Time Remap enabled with " + layer.timeRemap.numKeys + " keys");
                     var timeRemapSelKeys = [];
                     for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
                         if (layer.timeRemap.keySelected(k)) {
                             timeRemapSelKeys.push(k);
                         }
                     }
+                    
+                    DEBUG_JSX.log("  Found " + timeRemapSelKeys.length + " selected Time Remap keys");
                     
                     if (timeRemapSelKeys.length > 0) {
                         hasSelectedKeyframes = true;
@@ -5703,11 +5717,15 @@ function nudgeDelayTimelineMode(direction, frames) {
                                 selectedIndices: timeRemapSelKeys.slice()
                             });
                             DEBUG_JSX.log("Cached Time Remap with " + timeRemapSelKeys.length + " selected keyframes");
+                            
+                            // IMPORTANT: Even a single Time Remap keyframe should be treated as a keyframe operation
+                            // not a layer operation, so we mark hasSelectedKeyframes = true
+                            hasSelectedKeyframes = true;
                         }
                     }
                 }
             } catch(e) {
-                // Time Remap might not be available on this layer
+                DEBUG_JSX.log("Time Remap check error: " + e.toString());
             }
         }
         
