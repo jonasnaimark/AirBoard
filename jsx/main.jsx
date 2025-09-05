@@ -4845,7 +4845,49 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     continue;
                 }
                 
+                // Skip Hue/Saturation effects - they can't be moved reliably
+                if (prop && (prop.name === "Hue/Saturation" || prop.matchName === "ADBE HUE SATURATION")) {
+                    DEBUG_JSX.log("  SKIPPING Hue/Saturation effect (not supported for global delay)");
+                    continue;
+                }
+                
+                // Enhanced property validation with better error handling for effects
                 if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    
+                    // Additional validation for effect properties
+                    try {
+                        // Test if we can access the property's keyframes
+                        var testTime = prop.keyTime(1);
+                        var testValue = prop.keyValue(1);
+                        
+                        // Check if this is an effect property that might not work well with global delay
+                        var parentEffect = null;
+                        try {
+                            // Walk up the property hierarchy to find the parent effect
+                            var tempProp = prop;
+                            while (tempProp && tempProp.parentProperty) {
+                                tempProp = tempProp.parentProperty;
+                                if (tempProp && (tempProp.name === "Effects" || tempProp.matchName === "ADBE Effect Parade")) {
+                                    break;
+                                }
+                                if (tempProp.matchName && tempProp.matchName.indexOf("ADBE") === 0 && tempProp.matchName !== "ADBE Effect Parade") {
+                                    parentEffect = tempProp;
+                                    break;
+                                }
+                            }
+                        } catch(parentError) {
+                            // Can't determine parent effect, continue anyway
+                        }
+                        
+                        // Add debugging info for effect properties
+                        if (parentEffect) {
+                            DEBUG_JSX.log("  Processing effect keyframes: " + parentEffect.name + " -> " + prop.name + " (" + prop.numKeys + " keys)");
+                        }
+                        
+                    } catch(accessError) {
+                        DEBUG_JSX.log("  SKIPPING property (access error): " + prop.name + " - " + accessError.toString());
+                        continue;
+                    }
                     
                     // Skip Position property when dimensions are separated (it becomes hidden)
                     // When dimensions are separated, use X Position and Y Position instead
@@ -5030,10 +5072,19 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     }
                 }
                 
-                // Recurse into property groups
+                // Recurse into property groups with enhanced error handling for effects
                 if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
                            prop.propertyType === PropertyType.NAMED_GROUP)) {
-                    processPropertyGroup(prop);
+                    try {
+                        // Add debug info for effect groups
+                        if (prop.matchName && prop.matchName.indexOf("ADBE") === 0 && prop.matchName !== "ADBE Effect Parade") {
+                            DEBUG_JSX.log("  Recursing into effect: " + prop.name + " (" + prop.matchName + ")");
+                        }
+                        processPropertyGroup(prop);
+                    } catch(recursionError) {
+                        DEBUG_JSX.log("  Error recursing into property group " + prop.name + ": " + recursionError.toString());
+                        // Continue processing other properties
+                    }
                 }
             }
         }
