@@ -10,6 +10,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.7] - 2025-09-05 🔧 **EFFECT NAME-BASED KEY IDS**
+### 🔧 Fixed - TINT 2 EFFECT PROCESSING
+- **Effect Name-Based KeyIDs**: Changed duplicate detection to use actual effect names (e.g., "Tint" vs "Tint 2") instead of effect indices
+- **Reliable Effect Distinction**: KeyID generation now uses `parentEffect.name` directly for guaranteed uniqueness between effect instances
+- **Enhanced Debug Output**: Added special debugging for Tint effects to show exact keyID generation for troubleshooting
+- **Robust Effect Processing**: Eliminates false duplicate detection when multiple effects of same type have identical properties
+
+### 🔧 Technical Implementation - EFFECT NAME IDENTIFICATION
+- **KeyID Pattern**: Changed from effect index approach to `parentEffect.matchName + "_" + parentEffect.name + "_" + uniquePropertyId`
+- **Expected KeyIDs**: "Tint" generates `ADBE Tint_Tint_ADBE Tint-0003`, "Tint 2" generates `ADBE Tint_Tint 2_ADBE Tint-0003`
+- **Direct Name Usage**: Uses effect's display name which After Effects guarantees to be unique within layer
+- **Debug Enhancement**: Special logging for Tint effects shows exact keyID for each effect instance
+- **Associated with AirBoard-v4.16.7.zxp**
+
+## [4.16.3] - 2025-09-05 🔧 **DUPLICATE KEY & DEBUG FIXES**
+### 🔧 Fixed - DUPLICATE KEY DETECTION & CONCISE DEBUG
+- **Fixed Effect Keyframe Processing**: Resolved issue where Tint 2 and Brightness & Contrast effect keyframes were incorrectly skipped as "duplicate keys"
+- **Enhanced Unique Key IDs**: Updated duplicate detection to use full property path including parent effect matchName to avoid conflicts between effects
+- **Concise Debug Messages**: Simplified verbose debug output by removing excessive emoji usage and making messages more focused
+- **Improved Debug Clarity**: Shortened repetitive processing messages (e.g., "🎬 Processing cached property..." → "Process: PropertyName (5 keys)")
+- **Cleaner Log Output**: Reduced debug noise while maintaining essential information for troubleshooting
+
+### 🔧 Technical Implementation - ROBUST EFFECT IDENTIFICATION
+- **Unique Property Identification**: Changed keyId generation from `propertyIndex` to `parentEffect.matchName + "_" + prop.matchName` pattern
+- **Effect Conflict Prevention**: Prevents different effects with same property indices from being flagged as duplicates
+- **Debug Message Optimization**: Replaced verbose emoji-heavy messages with concise, scannable format
+- **Maintained Debug Functionality**: All essential debugging information preserved in more readable format
+- **Associated with AirBoard-v4.16.3.zxp**
+
+## [4.16.2] - 2025-09-05 🔧 **EFFECT PROCESSING ROBUSTNESS**
+### 🔧 Fixed - ENHANCED GLOBAL DELAY EFFECT HANDLING
+- **Hue/Saturation Exclusion**: Added proper exclusion logic for Hue/Saturation effects which can't be moved reliably by global delay
+- **Enhanced Error Handling**: Added comprehensive validation and error handling for effect properties during global delay operations
+- **Improved Effect Debugging**: Added detailed logging for effect property processing and recursion to help troubleshoot issues
+- **Better Effect Recursion**: Enhanced recursive processing of effect groups with error recovery for complex nested effects
+- **Property Access Validation**: Added keyframe accessibility testing before attempting to process effect properties
+
+### 🔧 Technical Implementation - ROBUST EFFECT PROCESSING
+- **Smart Effect Exclusion**: Skip problematic effects (Hue/Saturation) by name and matchName detection
+- **Keyframe Access Testing**: Test keyframe accessibility with try/catch before processing effect properties
+- **Parent Effect Detection**: Walk property hierarchy to identify and log parent effect names for debugging
+- **Recursive Error Recovery**: Graceful error handling when recursing into complex effect property groups
+- **Enhanced Debug Output**: Detailed logging shows which effects are processed vs skipped with reasons
+- **Associated with AirBoard-v4.16.2.zxp**
+
 ## [4.16.1] - 2025-09-05 🎨 **UI IMPROVEMENTS**
 ### 🎨 Fixed - UI REFINEMENTS
 - **Tooltip Font Weight**: Reduced tooltip font-weight from 600 to 400 for lighter, more readable text

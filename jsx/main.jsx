@@ -5,7 +5,7 @@ var extensionRoot = "";
 var DEBUG_JSX = {
     messages: [],
     log: function(message, data) {
-        var logMsg = "🎬 AirBoard: " + message + (data ? " | " + data : "");
+        var logMsg = "AirBoard: " + message + (data ? " | " + data : "");
         $.writeln(logMsg);
         this.messages.push(logMsg);
     },
@@ -1666,7 +1666,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
             var layer = selectedLayers[i];
             var selectedProps = layer.selectedProperties;
             
-            DEBUG_JSX.log("🎬 CACHING: Layer " + layer.name + " has " + selectedProps.length + " selected properties");
+            DEBUG_JSX.log("Cache: " + layer.name + " (" + selectedProps.length + " props)");
             
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
@@ -1691,7 +1691,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         propertyName: prop.name,
                         selectedIndices: selKeys.slice() // Make a copy
                     });
-                    DEBUG_JSX.log("🎬 CACHED: " + prop.name + " with " + selKeys.length + " selected keyframes: " + selKeys.join(", "));
+                    DEBUG_JSX.log("  " + prop.name + ": " + selKeys.length + " keys");
                 }
             }
         }
@@ -1704,7 +1704,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
             var prop = cached.property;
             var selKeys = cached.selectedIndices;
             
-            DEBUG_JSX.log("🎬 Processing cached property " + cached.propertyName + " with " + selKeys.length + " selected keyframes");
+            DEBUG_JSX.log("Process: " + cached.propertyName + " (" + selKeys.length + " keys)");
             processedAny = true;
             
             // Check if this is time remapping for special handling
@@ -2081,11 +2081,11 @@ function stretchKeyframesBackward() {
 function stretchKeyframesWithFrames(direction, frames) {
     try {
         DEBUG_JSX.clear();
-        DEBUG_JSX.log("🎬🎬🎬 FRAME-BASED FUNCTION IS BEING CALLED! Direction: " + direction + ", Frames: " + frames + " 🎬🎬🎬");
+        DEBUG_JSX.log("STRETCH: " + direction + " direction, " + frames + " frames");
         
         // CRITICAL FIX: This function should ONLY be used for duration stretching, never for delay nudging
         // If this is being called from delay nudging, redirect to proper delay handling
-        DEBUG_JSX.log("🎬 WARNING: stretchKeyframesWithFrames should only be used for duration operations, not delay operations");
+        DEBUG_JSX.log("WARNING: Function is for duration operations only");
         
         // SAFEGUARD: Detect if this is being called incorrectly from delay operations
         // Check the call stack to see if this is coming from delay functions
@@ -2109,11 +2109,8 @@ function stretchKeyframesWithFrames(direction, frames) {
         }
         
         // Check if we're in cross-property mode first (same as original)
-        DEBUG_JSX.log("🎬 About to call checkCrossPropertyMode()");
         var crossPropertyResult = checkCrossPropertyMode();
-        DEBUG_JSX.log("🎬 checkCrossPropertyMode() returned successfully");
-        
-        DEBUG_JSX.log("🎬 Cross-property mode detection result: " + crossPropertyResult.isCrossProperty);
+        DEBUG_JSX.log("Mode: " + (crossPropertyResult.isCrossProperty ? "cross-property" : "single-property"));
         
         // Add debug for what checkCrossPropertyMode actually found
         var comp = app.project.activeItem;
@@ -2198,7 +2195,7 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             var layer = selectedLayers[i];
             var selectedProps = layer.selectedProperties;
             
-            DEBUG_JSX.log("🎬 CACHING: Layer " + layer.name + " has " + selectedProps.length + " selected properties");
+            DEBUG_JSX.log("Cache: " + layer.name + " (" + selectedProps.length + " props)");
             
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
@@ -2224,7 +2221,7 @@ function stretchKeyframesForCrossProperty(direction, frames) {
                         propertyName: prop.name,
                         selectedIndices: selKeys.slice() // Make a copy!
                     });
-                    DEBUG_JSX.log("🎬 CACHED: " + prop.name + " with " + selKeys.length + " selected keyframes: " + selKeys.join(", "));
+                    DEBUG_JSX.log("  " + prop.name + ": " + selKeys.length + " keys");
                 }
             }
         }
@@ -2247,7 +2244,7 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             var prop = cached.property;
             var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
             
-            DEBUG_JSX.log("🎬 Processing cached property " + cached.propertyName + " with " + selKeys.length + " selected keyframes");
+            DEBUG_JSX.log("Process: " + cached.propertyName + " (" + selKeys.length + " keys)");
             
             // Use the duration stretching logic with cached selections
             var result = stretchPropertyDurationWithCache(prop, selKeys, direction * framesToSeconds, cached);
@@ -4492,9 +4489,8 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset) {
             try {
                 var layer = comp.layer(i);
                 
-                // Determine if this layer was moved entirely using same timeline-based logic
-                var layerTimelineInPoint = layer.startTime + layer.inPoint;
-                var layerWasMovedEntirely = (layerTimelineInPoint >= cutoffTime);
+                // Determine if this layer was moved entirely using same logic as main function
+                var layerWasMovedEntirely = (layer.startTime >= cutoffTime);
                 
                 // Try to access the Marker property group
                 var markerProp = null;
@@ -4644,55 +4640,86 @@ function nudgeFromPlayhead(direction, frames) {
             var layerMoved = false;
             var moveDetails = [];
             
-            // Calculate actual timeline positions of layer's in and out points
-            var layerTimelineInPoint = layer.startTime + layer.inPoint;
+            // Calculate layer timeline positions
+            var layerStartTime = layer.startTime;
+            var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+            // For visible content position: distinguish between trimmed and naturally positioned layers
+            // If inPoint equals startTime, layer is naturally positioned (not trimmed)
+            // If inPoint differs from startTime, layer is trimmed
+            var layerTimelineInPoint;
+            if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                // Layer is naturally positioned (not trimmed) - visible content starts at startTime
+                layerTimelineInPoint = layer.startTime;
+            } else {
+                // Layer is trimmed - visible content starts at startTime + inPoint
+                layerTimelineInPoint = layer.startTime + layer.inPoint;
+            }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
             
-            DEBUG_JSX.log("    Layer timing: inPoint=" + layerTimelineInPoint.toFixed(3) + "s, outPoint=" + layerTimelineOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
+            DEBUG_JSX.log("    Layer timing: startTime=" + layerStartTime.toFixed(3) + "s, endTime=" + layerEndTime.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
+            DEBUG_JSX.log("    Layer points: inPoint=" + layer.inPoint.toFixed(3) + "s, outPoint=" + layer.outPoint.toFixed(3) + "s");
+            DEBUG_JSX.log("    Layer visible: timeline inPoint=" + layerTimelineInPoint.toFixed(3) + "s, timeline outPoint=" + layerTimelineOutPoint.toFixed(3) + "s");
             
-            if (layerTimelineInPoint >= playheadTime) {
-                // Both in and out points are at/after playhead - move entire layer
+            // Check if the LAYER ITSELF (not just visible content) starts after playhead
+            DEBUG_JSX.log("    Checking: layer startTime " + layerStartTime.toFixed(3) + " >= playhead " + playheadTime.toFixed(3) + " = " + (layerStartTime >= playheadTime));
+            DEBUG_JSX.log("    Checking: layer endTime " + layerEndTime.toFixed(3) + " > playhead " + playheadTime.toFixed(3) + " = " + (layerEndTime > playheadTime));
+            
+            if (layerStartTime >= playheadTime) {
+                // Layer starts at or after playhead - move entire layer
                 layer.startTime += timeOffset;
                 layerMoved = true;
-                DEBUG_JSX.log("    Moved entire layer (both in/out after playhead)");
+                DEBUG_JSX.log("    → MOVED ENTIRE LAYER (layer starts at/after playhead)");
                 
                 // Track furthest time based on the layer's new end time
-                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
-                if (layerEndTime > furthestTime) {
-                    furthestTime = layerEndTime;
+                var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (newLayerEndTime > furthestTime) {
+                    furthestTime = newLayerEndTime;
                 }
-            } else if (layerTimelineOutPoint > playheadTime) {
-                // Layer starts before playhead but extends past it - extend outPoint only
-                layer.outPoint += timeOffset;
-                layerMoved = true;
-                DEBUG_JSX.log("    Extended layer outPoint (crosses playhead)");
+                
+                // Track that this layer was moved entirely
+                movedLayerIndices.push(i);
+                
+            } else if (layerEndTime > playheadTime) {
+                // Layer starts before playhead but extends past it
+                // Check if visible content starts after playhead
+                if (layerTimelineInPoint >= playheadTime) {
+                    // Visible content starts at/after playhead - move inPoint (delay visible start)
+                    layer.inPoint += timeOffset;
+                    layerMoved = true;
+                    DEBUG_JSX.log("    → MOVED INPOINT (visible content starts after playhead)");
+                } else {
+                    // Visible content includes playhead - extend outPoint only
+                    layer.outPoint += timeOffset;
+                    layerMoved = true;
+                    DEBUG_JSX.log("    → EXTENDED OUTPOINT (visible content spans playhead)");
+                }
                 
                 var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
                 if (newLayerEndTime > furthestTime) {
                     furthestTime = newLayerEndTime;
                 }
+                
             } else {
-                DEBUG_JSX.log("    Layer ends before playhead - no movement needed");
+                DEBUG_JSX.log("    → NO MOVEMENT (layer ends before playhead)");
             }
             
             if (layerMoved) {
                 movedLayers++;
-                movedLayerIndices.push(i); // Track this layer was moved entirely
             }
             
             // Move keyframes on this layer
-            // Only move keyframes if the layer's inPoint is before playhead
-            // (If layer's inPoint is at/after playhead, it was moved entirely and keyframes move with it)
-            if (layerTimelineInPoint < playheadTime) {
-                DEBUG_JSX.log("Processing keyframes for layer: " + layer.name + " (inPoint at " + layerTimelineInPoint.toFixed(3) + "s, playhead at " + playheadTime.toFixed(3) + "s)");
+            // Only move keyframes if the layer itself starts before playhead
+            // (If layer starts at/after playhead, it was moved entirely and keyframes move with it)
+            if (layerStartTime < playheadTime) {
+                DEBUG_JSX.log("Layer: " + layer.name + " (offset " + (layerTimelineInPoint - playheadTime).toFixed(2) + "s)");
                 var keyframeResult = moveKeyframesAfterTime(layer, playheadTime, timeOffset, processedItems);
-                DEBUG_JSX.log("Layer " + layer.name + " result: " + keyframeResult.moved + " keyframes moved");
+                DEBUG_JSX.log("  → " + keyframeResult.moved + " keys moved");
                 movedKeyframes += keyframeResult.moved;
                 if (keyframeResult.furthestTime > furthestTime) {
                     furthestTime = keyframeResult.furthestTime;
                 }
             } else {
-                DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer inPoint at/after playhead: " + layerTimelineInPoint.toFixed(3) + "s >= " + playheadTime.toFixed(3) + "s)");
+                DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer moved entirely - startTime " + layerStartTime.toFixed(3) + "s >= playhead " + playheadTime.toFixed(3) + "s)");
             }
             
             // Process precomps (2 levels deep)
@@ -4705,13 +4732,13 @@ function nudgeFromPlayhead(direction, frames) {
                 var layerTimelineInPoint = layer.startTime + layer.inPoint;
                 var layerTimelineOutPoint = layer.startTime + layer.outPoint;
                 
-                if (layerTimelineInPoint < playheadTime) {
+                if (layerStartTime < playheadTime) {
                     // Precomp layer spans playhead - process its contents
                     DEBUG_JSX.log("  Precomp timing: in=" + layerTimelineInPoint.toFixed(3) + "s, out=" + layerTimelineOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
                     
                     // Only process if the precomp is active at or after the playhead
                     if (layerTimelineOutPoint > playheadTime) {
-                        DEBUG_JSX.log("  Processing precomp contents (layer spans playhead)...");
+                        DEBUG_JSX.log("  → Precomp: " + layer.source.name);
                         var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
                         movedKeyframes += precompResult.movedKeyframes;
                         movedLayers += precompResult.movedLayers;
@@ -4724,7 +4751,7 @@ function nudgeFromPlayhead(direction, frames) {
                         DEBUG_JSX.log("  Skipping precomp contents (ends before playhead)");
                     }
                 } else {
-                    DEBUG_JSX.log("  Skipping precomp contents (layer inPoint at/after playhead: " + layerTimelineInPoint.toFixed(3) + "s >= " + playheadTime.toFixed(3) + "s - layer moved entirely)");
+                    DEBUG_JSX.log("  Skipping precomp contents (layer moved entirely - startTime " + layerStartTime.toFixed(3) + "s >= playhead " + playheadTime.toFixed(3) + "s)");
                 }
             }
             
@@ -4826,7 +4853,7 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
     var furthestTime = 0;
     var errorCount = 0; // Track errors for concise reporting
     
-    DEBUG_JSX.log("  → moveKeyframesAfterTime for layer: " + layer.name + ", cutoff: " + cutoffTime.toFixed(3) + "s, offset: " + timeOffset.toFixed(3) + "s");
+    // DEBUG_JSX.log("  → moveKeyframesAfterTime for layer: " + layer.name + ", cutoff: " + cutoffTime.toFixed(3) + "s, offset: " + timeOffset.toFixed(3) + "s");
     
     // Initialize tracking if not provided
     if (!processedKeys) {
@@ -4879,9 +4906,12 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                             // Can't determine parent effect, continue anyway
                         }
                         
-                        // Add debugging info for effect properties
-                        if (parentEffect) {
-                            DEBUG_JSX.log("  Processing effect keyframes: " + parentEffect.name + " -> " + prop.name + " (" + prop.numKeys + " keys)");
+                        // Add debugging info for effect properties (concise) - only show key effects with keyframes
+                        if (parentEffect && prop.numKeys > 0 && 
+                            (parentEffect.name.indexOf("Tint") !== -1 || 
+                             parentEffect.name.indexOf("Brightness") !== -1 || 
+                             parentEffect.name.indexOf("Blur") !== -1)) {
+                            DEBUG_JSX.log("  Effect: " + parentEffect.name + " → " + prop.name + " (" + prop.numKeys + " keys)");
                         }
                         
                     } catch(accessError) {
@@ -4922,12 +4952,23 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     for (var j = 1; j <= prop.numKeys; j++) {
                         var keyTime = prop.keyTime(j);
                         if (keyTime >= cutoffTime) {
-                            // Create unique key ID for tracking
-                            var keyId = layer.index + "_" + prop.propertyIndex + "_" + j + "_" + keyTime.toFixed(3);
+                            // Create unique key ID for tracking (include effect index to avoid identical effect conflicts)
+                            var uniquePropertyId = prop.matchName || prop.name;
+                            if (parentEffect) {
+                                // Use effect name directly to distinguish between different effect instances
+                                // This is more reliable than trying to find effect indices
+                                uniquePropertyId = parentEffect.matchName + "_" + parentEffect.name + "_" + uniquePropertyId;
+                            }
+                            var keyId = layer.index + "_" + uniquePropertyId + "_" + j + "_" + keyTime.toFixed(3);
+                            
+                            // Special debugging for Tint effects to diagnose duplicate issue
+                            if (parentEffect && parentEffect.name.indexOf("Tint") !== -1) {
+                                DEBUG_JSX.log("    " + parentEffect.name + " KeyID: " + keyId);
+                            }
                             
                             // Check if this key was already processed
                             if (processedKeys[keyId]) {
-                                DEBUG_JSX.log("  SKIPPING duplicate key: " + prop.name + "[" + j + "] already moved");
+                                DEBUG_JSX.log("  Skip: " + prop.name + "[" + j + "] (duplicate)");
                                 continue;
                             }
                             
@@ -4955,6 +4996,11 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     if (keyframesToMove.length === 0) {
                         continue; // No keyframes to move
                     }
+                    
+                    // Special debugging for Tint effects (commented out to reduce verbosity)
+                    // if (parentEffect && parentEffect.name.indexOf("Tint") !== -1) {
+                    //     DEBUG_JSX.log("    Moving " + keyframesToMove.length + " keyframes for " + parentEffect.name + " → " + prop.name);
+                    // }
                     
                     // Collect all keyframe data first
                     var keyframeData = [];
@@ -5078,7 +5124,7 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     try {
                         // Add debug info for effect groups
                         if (prop.matchName && prop.matchName.indexOf("ADBE") === 0 && prop.matchName !== "ADBE Effect Parade") {
-                            DEBUG_JSX.log("  Recursing into effect: " + prop.name + " (" + prop.matchName + ")");
+                            // DEBUG_JSX.log("  Recursing into effect: " + prop.name + " (" + prop.matchName + ")");
                         }
                         processPropertyGroup(prop);
                     } catch(recursionError) {
@@ -5225,7 +5271,7 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
                 // Use same timeline-based logic to determine if we should process the nested precomp's contents
                 if (layerTimelineInPoint < precompPlayheadTime) {
                     // Nested precomp layer spans the playhead - process its contents
-                    DEBUG_JSX.log("    Processing nested precomp: " + layer.source.name + " (depth " + (depth + 1) + ")");
+                    DEBUG_JSX.log("    Nested[" + (depth + 1) + "]: " + layer.source.name);
                     var nestedPlayheadTime = precompPlayheadTime;
                     var nestedResult = processPrecompContents(layer.source, layer, nestedPlayheadTime, timeOffset, frameRate, depth + 1);
                     movedKeyframes += nestedResult.movedKeyframes;
