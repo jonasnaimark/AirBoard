@@ -4931,6 +4931,9 @@ function nudgeFromPlayhead(direction, frames) {
                         layer.outPoint = originalOutPoint - oneFrame;
                         layer.outPoint = originalOutPoint;
                         
+                        // IMPORTANT: Deselect the layer after refresh to prevent unwanted selection
+                        layer.selected = false;
+                        
                         refreshedPrecomps++;
                         DEBUG_JSX.log("  Refreshed precomp layer: " + layer.name + " → " + layer.source.name);
                     }
