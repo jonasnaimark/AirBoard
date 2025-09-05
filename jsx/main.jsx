@@ -4722,7 +4722,7 @@ function nudgeFromPlayhead(direction, frames) {
                 DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer moved entirely - startTime " + layerStartTime.toFixed(3) + "s >= playhead " + playheadTime.toFixed(3) + "s)");
             }
             
-            // Process precomps (2 levels deep)
+            // Process precomps (5 levels deep)
             // Only process precomp contents if the precomp layer starts before playhead
             // (If precomp layer starts at/after playhead, it was moved entirely and contents move with it)
             if (layer.source && layer.source instanceof CompItem) {
@@ -5201,14 +5201,14 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
     };
 }
 
-// Helper function to process precomp contents recursively (up to 2 levels deep)
+// Helper function to process precomp contents recursively (up to 5 levels deep)
 function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOffset, frameRate, depth) {
     var movedKeyframes = 0;
     var movedLayers = 0;
     var movedLabels = 0;
     var furthestTime = 0;
     
-    if (depth > 2) {
+    if (depth > 5) {
         DEBUG_JSX.log("Max depth reached, skipping deeper precomps");
         return { movedKeyframes: 0, movedLayers: 0, movedLabels: 0, furthestTime: 0 };
     }
