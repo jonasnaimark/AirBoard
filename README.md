@@ -1,6 +1,5 @@
 # AirBoard - Animation Tools and Presets for After Effects
 
-[![GitHub release](https://img.shields.io/github/v/release/jonasnaimark/AirBoard?include_prereleases)](https://github.com/jonasnaimark/AirBoard/releases)
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
 [![Version](https://img.shields.io/badge/version-4.16.2-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.16.2)
 
