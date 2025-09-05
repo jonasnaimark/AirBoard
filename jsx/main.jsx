@@ -4617,6 +4617,7 @@ function nudgeFromPlayhead(direction, frames) {
         var lockedLayers = [];
         var errorCount = 0; // Track errors for concise reporting
         var movedLayerIndices = []; // Track which layers were moved entirely
+        var originalDuration = comp.duration; // Store original duration for extension/shrinking logic
         
         // Process all layers in main comp
         DEBUG_JSX.log("Processing " + comp.numLayers + " layers in composition");
@@ -4729,13 +4730,21 @@ function nudgeFromPlayhead(direction, frames) {
         DEBUG_JSX.log("Moved: " + movedKeyframes + " keys, " + movedLayers + " layers, " + movedLabels + " labels");
         DEBUG_JSX.log("Total movement: " + (timeOffset * 1000).toFixed(0) + "ms (" + (timeOffset * frameRate).toFixed(1) + " frames)");
         
-        // Extend composition duration if needed
-        // Only extend by the amount we moved things, not to the furthest point
-        if (timeOffset > 0 && furthestTime > comp.duration) {
-            // Calculate how much we need to extend
-            var extensionNeeded = timeOffset;
-            var newDuration = comp.duration + extensionNeeded;
+        // Adjust composition duration bidirectionally
+        if (timeOffset > 0) {
+            // Extending forward: only extend if elements were pushed beyond original duration
+            if (furthestTime > originalDuration) {
+                var extensionNeeded = timeOffset;
+                var newDuration = originalDuration + extensionNeeded;
+                comp.duration = newDuration;
+                DEBUG_JSX.log("Extended comp duration from " + originalDuration.toFixed(3) + "s to " + newDuration.toFixed(3) + "s");
+            }
+        } else if (timeOffset < 0) {
+            // Shrinking backward: reduce duration by the amount we moved back
+            var shrinkAmount = Math.abs(timeOffset);
+            var newDuration = Math.max(0.1, originalDuration - shrinkAmount); // Don't go below 0.1s
             comp.duration = newDuration;
+            DEBUG_JSX.log("Shrunk comp duration from " + originalDuration.toFixed(3) + "s to " + newDuration.toFixed(3) + "s");
         }
         
         app.endUndoGroup();
@@ -5121,12 +5130,19 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
         var labelsResult = moveLabelsAfterTime(precomp, precompPlayheadTime, timeOffset);
         movedLabels += labelsResult;
         
-        // Extend precomp duration if needed
-        // Only extend by the amount we moved things, not to the furthest point
-        if (timeOffset > 0 && furthestTime > precomp.duration) {
-            // Calculate how much we need to extend
-            var extensionNeeded = timeOffset;
-            var newDuration = precomp.duration + extensionNeeded;
+        // Adjust precomp duration bidirectionally  
+        var originalPrecompDuration = precomp.duration;
+        if (timeOffset > 0) {
+            // Extending forward: only extend if elements were pushed beyond original duration
+            if (furthestTime > originalPrecompDuration) {
+                var extensionNeeded = timeOffset;
+                var newDuration = originalPrecompDuration + extensionNeeded;
+                precomp.duration = newDuration;
+            }
+        } else if (timeOffset < 0) {
+            // Shrinking backward: reduce duration by the amount we moved back
+            var shrinkAmount = Math.abs(timeOffset);
+            var newDuration = Math.max(0.1, originalPrecompDuration - shrinkAmount); // Don't go below 0.1s
             precomp.duration = newDuration;
         }
         
