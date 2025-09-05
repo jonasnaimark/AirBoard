@@ -751,6 +751,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 var parts = result.split('|');
                 var status = parts[0];
                 
+                // Extract debug messages if present (starting from index 4)
+                var debugMessages = [];
+                if (parts.length > 4) {
+                    debugMessages = parts.slice(4);
+                }
+                
+                // Display debug messages in panel if available
+                if (debugMessages.length > 0) {
+                    var debugLog = document.getElementById('debug-log');
+                    if (debugLog) {
+                        debugLog.innerHTML += '<div style="margin: 4px 0; color: #4aff9e; font-weight: bold;">🎬 Global Delay Debug:</div>';
+                        for (var j = 0; j < debugMessages.length; j++) {
+                            debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                        }
+                        debugLog.scrollTop = debugLog.scrollHeight;
+                    }
+                }
+                
                 if (status === 'success') {
                     var delayMs = parseInt(parts[1]);
                     var delayFrames = parseInt(parts[2]);
@@ -771,6 +789,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     var delayText = document.getElementById('delayText');
                     delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
                     delayText.style.opacity = '1';
+                    console.error('Delay error:', parts[1] || 'Unknown error');
                 }
             } else {
                 // Unexpected result format

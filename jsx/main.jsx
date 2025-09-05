@@ -3134,8 +3134,10 @@ function nudgeDelay(direction) {
         
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
+            // GLOBAL DELAY: When nothing is selected, nudge everything after playhead
             app.endUndoGroup();
-            return "error|No layers selected";
+            DEBUG_JSX.log("No layers selected - triggering global delay from playhead");
+            return nudgeFromPlayhead(direction, 3); // Use 3 frames as default
         }
         
         var propertyTimes = [];
@@ -4481,6 +4483,670 @@ function nudgeDelay(direction) {
     }
 }
 
+// Helper function to move layer markers after specific time
+function moveLabelsAfterTime(comp, cutoffTime, timeOffset) {
+    var movedCount = 0;
+    try {
+        // Process all layers in the composition
+        for (var i = 1; i <= comp.numLayers; i++) {
+            try {
+                var layer = comp.layer(i);
+                
+                // Determine if this layer was moved entirely
+                var layerWasMovedEntirely = (layer.startTime >= cutoffTime);
+                
+                // Try to access the Marker property group
+                var markerProp = null;
+                try {
+                    markerProp = layer.property("ADBE Marker");
+                } catch(e) {
+                    // Some layers might not have markers
+                    continue;
+                }
+                
+                if (markerProp && markerProp.numKeys > 0) {
+                    // Collect markers that need to be moved
+                    var markersToMove = [];
+                    
+                    for (var j = 1; j <= markerProp.numKeys; j++) {
+                        var markerTime = markerProp.keyTime(j);
+                        
+                        if (markerTime >= cutoffTime) {
+                            // Store marker info for later processing
+                            var markerData = {
+                                oldIndex: j,
+                                oldTime: markerTime,
+                                newTime: markerTime + timeOffset
+                            };
+                            
+                            // Try to get marker value (comment, duration, etc.)
+                            try {
+                                markerData.value = markerProp.keyValue(j);
+                            } catch(e) {
+                                // Some markers might not have values
+                                markerData.value = new MarkerValue("");
+                            }
+                            
+                            markersToMove.push(markerData);
+                        }
+                    }
+                    
+                    // Process markers in reverse order to avoid index issues
+                    for (var k = markersToMove.length - 1; k >= 0; k--) {
+                        try {
+                            var marker = markersToMove[k];
+                            
+                            // Remove old marker
+                            markerProp.removeKey(marker.oldIndex);
+                            
+                            // Add new marker at new time
+                            var newIndex = markerProp.addKey(marker.newTime);
+                            
+                            // Try to set the marker value
+                            try {
+                                markerProp.setValueAtKey(newIndex, marker.value);
+                            } catch(e) {
+                                // If setting value fails, continue
+                            }
+                            
+                            // Deselect the marker immediately
+                            try {
+                                markerProp.setSelectedAtKey(newIndex, false);
+                            } catch(e) {
+                                // Continue if deselection fails
+                            }
+                            
+                            movedCount++;
+                        } catch(e) {
+                            // Continue if individual marker fails
+                        }
+                    }
+                }
+            } catch(layerError) {
+                // Continue processing other layers
+            }
+        }
+        
+        return movedCount;
+    } catch(e) {
+        return 0;
+    }
+}
+
+// Global operation ID to prevent duplicate processing
+var GLOBAL_OPERATION_ID = 0;
+
+// GLOBAL DELAY FUNCTIONS - Move everything after playhead when nothing is selected
+function nudgeFromPlayhead(direction, frames) {
+    try {
+        DEBUG_JSX.clear(); // Clear previous debug messages
+        GLOBAL_OPERATION_ID++; // Increment operation ID for this run
+        DEBUG_JSX.log("=== Global delay #" + GLOBAL_OPERATION_ID + " ===");
+        DEBUG_JSX.log("Request: Move " + frames + " frames " + (direction > 0 ? "forward" : "backward"));
+        
+        // Track processed items to prevent double-processing
+        var processedItems = {};
+        
+        app.beginUndoGroup("Global Delay From Playhead");
+        
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|No composition selected";
+        }
+        
+        var frameRate = comp.frameRate;
+        if (!frameRate || frameRate <= 0) {
+            frameRate = 30; // Default fallback
+            DEBUG_JSX.log("WARNING: Invalid frame rate, using default 30fps");
+        }
+        
+        DEBUG_JSX.log("Comp: " + comp.name + " @ " + frameRate + "fps");
+        DEBUG_JSX.log("Input frames: " + frames + ", direction: " + direction);
+        
+        var timeOffset = (frames * direction) / frameRate; // Time offset in seconds
+        var playheadTime = comp.time; // Current playhead position
+        
+        DEBUG_JSX.log("Calculated time offset: " + timeOffset.toFixed(3) + "s = " + (timeOffset * 1000).toFixed(0) + "ms");
+        DEBUG_JSX.log("This should move keyframes by exactly " + frames + " frames at " + frameRate + "fps");
+        DEBUG_JSX.log("Playhead at: " + playheadTime.toFixed(3) + "s");
+        
+        var movedKeyframes = 0;
+        var movedLayers = 0;
+        var furthestTime = 0;
+        var lockedLayers = [];
+        var errorCount = 0; // Track errors for concise reporting
+        var movedLayerIndices = []; // Track which layers were moved entirely
+        
+        // Process all layers in main comp
+        DEBUG_JSX.log("Processing " + comp.numLayers + " layers in composition");
+        for (var i = 1; i <= comp.numLayers; i++) {
+            try {
+                var layer = comp.layer(i);
+                DEBUG_JSX.log("Layer " + i + ": " + layer.name + " (starts at " + layer.startTime.toFixed(3) + "s)");
+            
+            // Handle locked layers
+            var wasLocked = layer.locked;
+            if (wasLocked) {
+                layer.locked = false;
+                lockedLayers.push(layer);
+            }
+            
+            // Move layer in/out points if they're at or after playhead
+            var layerMoved = false;
+            var moveDetails = [];
+            
+            // For layers, we need to move the startTime if the layer starts at or after playhead
+            // This moves the entire layer in time
+            if (layer.startTime >= playheadTime) {
+                layer.startTime += timeOffset;
+                layerMoved = true;
+                
+                // Track furthest time based on the layer's new end time
+                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (layerEndTime > furthestTime) {
+                    furthestTime = layerEndTime;
+                }
+            } else {
+                // Layer starts before playhead - check if we need to adjust its in/out points
+                // Only adjust if part of the layer extends past the playhead
+                
+                // Check if layer's content extends past playhead (need to trim/extend)
+                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (layerEndTime > playheadTime) {
+                    // Layer extends past playhead - we need to extend its duration
+                    layer.outPoint += timeOffset;
+                    layerMoved = true;
+                    
+                    var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                    if (newLayerEndTime > furthestTime) {
+                        furthestTime = newLayerEndTime;
+                    }
+                }
+            }
+            
+            if (layerMoved) {
+                movedLayers++;
+                movedLayerIndices.push(i); // Track this layer was moved entirely
+            }
+            
+            // Move keyframes on this layer
+            // Only move keyframes if the layer starts before playhead
+            // (If layer starts at/after playhead, it was moved entirely and keyframes move with it)
+            if (layer.startTime < playheadTime) {
+                DEBUG_JSX.log("Processing keyframes for layer: " + layer.name + " (starts at " + layer.startTime.toFixed(3) + "s, playhead at " + playheadTime.toFixed(3) + "s)");
+                var keyframeResult = moveKeyframesAfterTime(layer, playheadTime, timeOffset, processedItems);
+                DEBUG_JSX.log("Layer " + layer.name + " result: " + keyframeResult.moved + " keyframes moved");
+                movedKeyframes += keyframeResult.moved;
+                if (keyframeResult.furthestTime > furthestTime) {
+                    furthestTime = keyframeResult.furthestTime;
+                }
+            } else {
+                DEBUG_JSX.log("Skipping keyframes for layer: " + layer.name + " (layer starts at/after playhead: " + layer.startTime.toFixed(3) + "s >= " + playheadTime.toFixed(3) + "s)");
+            }
+            
+            // Process precomps (2 levels deep)
+            // Only process if the precomp layer itself intersects with the playhead
+            if (layer.source && layer.source instanceof CompItem) {
+                DEBUG_JSX.log("Found precomp layer: " + layer.name + " → " + layer.source.name);
+                // Check if this precomp layer is active at the playhead time
+                var layerInPoint = layer.startTime + layer.inPoint;
+                var layerOutPoint = layer.startTime + layer.outPoint;
+                
+                DEBUG_JSX.log("  Precomp timing: in=" + layerInPoint.toFixed(3) + "s, out=" + layerOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
+                
+                // Only process if the precomp is active at or after the playhead
+                if (layerOutPoint > playheadTime) {
+                    DEBUG_JSX.log("  Processing precomp contents...");
+                    var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
+                    movedKeyframes += precompResult.movedKeyframes;
+                    movedLayers += precompResult.movedLayers;
+                    movedLabels += precompResult.movedLabels || 0;
+                    if (precompResult.furthestTime > furthestTime) {
+                        furthestTime = precompResult.furthestTime;
+                    }
+                    DEBUG_JSX.log("  Precomp " + layer.source.name + " result: " + precompResult.movedKeyframes + "k " + precompResult.movedLayers + "L " + (precompResult.movedLabels || 0) + "m");
+                } else {
+                    DEBUG_JSX.log("  Skipping precomp (ends before playhead)");
+                }
+            }
+            
+            // Re-lock layer if it was locked
+            if (wasLocked) {
+                layer.locked = true;
+            }
+            } catch(layerError) {
+                errorCount++;
+            }
+        }
+        
+        // Move composition labels after processing all layers
+        var movedLabels = moveLabelsAfterTime(comp, playheadTime, timeOffset);
+        
+        // Summary for debug output
+        var totalItems = movedKeyframes + movedLayers + movedLabels;
+        DEBUG_JSX.log("=== SUMMARY ===");
+        DEBUG_JSX.log("Moved: " + movedKeyframes + " keys, " + movedLayers + " layers, " + movedLabels + " labels");
+        DEBUG_JSX.log("Total movement: " + (timeOffset * 1000).toFixed(0) + "ms (" + (timeOffset * frameRate).toFixed(1) + " frames)");
+        
+        // Extend composition duration if needed
+        // Only extend by the amount we moved things, not to the furthest point
+        if (timeOffset > 0 && furthestTime > comp.duration) {
+            // Calculate how much we need to extend
+            var extensionNeeded = timeOffset;
+            var newDuration = comp.duration + extensionNeeded;
+            comp.duration = newDuration;
+        }
+        
+        app.endUndoGroup();
+        
+        var message = "Moved " + movedKeyframes + " keyframes, " + movedLayers + " layers" + (movedLabels > 0 ? ", " + movedLabels + " labels" : "") + (errorCount > 0 ? " (" + errorCount + " errors)" : "");
+        
+        // Get all debug messages to return
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|" + Math.round(timeOffset * 1000) + "|" + Math.round(timeOffset * frameRate) + "|" + message + "|" + debugMessages.join("|");
+        
+    } catch(e) {
+        app.endUndoGroup();
+        DEBUG_JSX.error("Global delay failed", e);
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|Global delay failed: " + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+// Helper function to move keyframes after specific time on a single layer
+function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
+    var movedCount = 0;
+    var furthestTime = 0;
+    var errorCount = 0; // Track errors for concise reporting
+    
+    DEBUG_JSX.log("  → moveKeyframesAfterTime for layer: " + layer.name + ", cutoff: " + cutoffTime.toFixed(3) + "s, offset: " + timeOffset.toFixed(3) + "s");
+    
+    // Initialize tracking if not provided
+    if (!processedKeys) {
+        processedKeys = {};
+    }
+    
+    
+    try {
+        // Process all properties recursively
+        function processPropertyGroup(propGroup) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var prop = propGroup.property(i);
+                
+                // Skip time remap keyframes
+                if (prop && prop.name === "Time Remap") {
+                    continue;
+                }
+                
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    
+                    // Skip Position property when dimensions are separated (it becomes hidden)
+                    // When dimensions are separated, use X Position and Y Position instead
+                    if (prop.name === "Position") {
+                        // Check if this is the transform Position property with separated dimensions
+                        try {
+                            // Try to get parent group to check if it's Transform
+                            var parentGroup = propGroup.property(i).parentProperty;
+                            if (parentGroup && parentGroup.name === "Transform") {
+                                // Check if dimensions are separated
+                                if (parentGroup.property("Position").dimensionsSeparated) {
+                                    // Skip this hidden Position property
+                                    continue;
+                                }
+                            }
+                        } catch(e) {
+                            // If we can't check, try to access keyframe value to detect if hidden
+                            try {
+                                var testValue = prop.keyValue(1);
+                            } catch(accessError) {
+                                if (accessError.toString().indexOf("hidden") !== -1 || 
+                                    accessError.toString().indexOf("Hidden") !== -1) {
+                                    // Property is hidden, skip it
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Move keyframes that are at or after cutoff time
+                    var keyframesToMove = [];
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        var keyTime = prop.keyTime(j);
+                        if (keyTime >= cutoffTime) {
+                            // Create unique key ID for tracking
+                            var keyId = layer.index + "_" + prop.propertyIndex + "_" + j + "_" + keyTime.toFixed(3);
+                            
+                            // Check if this key was already processed
+                            if (processedKeys[keyId]) {
+                                DEBUG_JSX.log("  SKIPPING duplicate key: " + prop.name + "[" + j + "] already moved");
+                                continue;
+                            }
+                            
+                            var newTime = keyTime + timeOffset;
+                            keyframesToMove.push({
+                                index: j,
+                                time: keyTime,
+                                newTime: newTime,
+                                keyId: keyId
+                            });
+                            
+                            // Mark as processed
+                            processedKeys[keyId] = true;
+                            // Log the actual movement for first few keyframes only
+                            if (keyframesToMove.length <= 2) {
+                                var actualMovementMs = (newTime - keyTime) * 1000;
+                                var expectedMs = timeOffset * 1000;
+                                if (Math.abs(actualMovementMs - expectedMs) > 1) {
+                                    DEBUG_JSX.log("  WARNING: Key " + j + " moved " + actualMovementMs.toFixed(0) + "ms but expected " + expectedMs.toFixed(0) + "ms!");
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (keyframesToMove.length === 0) {
+                        continue; // No keyframes to move
+                    }
+                    
+                    // Collect all keyframe data first
+                    var keyframeData = [];
+                    for (var k = 0; k < keyframesToMove.length; k++) {
+                        var keyInfo = keyframesToMove[k];
+                        try {
+                            var data = {
+                                oldIndex: keyInfo.index,
+                                newTime: keyInfo.newTime,
+                                value: prop.keyValue(keyInfo.index),
+                                inInterp: prop.keyInInterpolationType(keyInfo.index),
+                                outInterp: prop.keyOutInterpolationType(keyInfo.index),
+                                temporalContinuous: prop.keyTemporalContinuous(keyInfo.index),
+                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyInfo.index)
+                            };
+                            
+                            // Only collect temporal ease if it's a bezier keyframe
+                            if (data.inInterp === KeyframeInterpolationType.BEZIER || 
+                                data.outInterp === KeyframeInterpolationType.BEZIER) {
+                                try {
+                                    data.inEase = prop.keyInTemporalEase(keyInfo.index);
+                                    data.outEase = prop.keyOutTemporalEase(keyInfo.index);
+                                } catch(e) {
+                                    // Temporal ease might not be available
+                                }
+                            }
+                            
+                            // Handle spatial properties if applicable
+                            if (prop.isSpatial) {
+                                try {
+                                    data.spatialContinuous = prop.keySpatialContinuous(keyInfo.index);
+                                    data.spatialAutoBezier = prop.keySpatialAutoBezier(keyInfo.index);
+                                    data.inTangent = prop.keyInSpatialTangent(keyInfo.index);
+                                    data.outTangent = prop.keyOutSpatialTangent(keyInfo.index);
+                                } catch(e) {
+                                    // Spatial properties might not be available
+                                }
+                            }
+                            
+                            keyframeData.push(data);
+                        } catch(e) {
+                            // Silently increment error count
+                            errorCount++;
+                        }
+                    }
+                    
+                    // Only proceed if we successfully read keyframe data
+                    if (keyframeData.length > 0) {
+                        // Remove old keyframes in reverse order to avoid index shifts
+                        var indices = [];
+                        for (var k = 0; k < keyframeData.length; k++) {
+                            indices.push(keyframeData[k].oldIndex);
+                        }
+                        indices.sort(function(a, b) { return b - a; }); // Sort in reverse order
+                        
+                        for (var k = 0; k < indices.length; k++) {
+                            try {
+                                prop.removeKey(indices[k]);
+                            } catch(e) {
+                                // Silently increment error count
+                                errorCount++;
+                            }
+                        }
+                        
+                        // Add new keyframes at new times
+                        for (var k = 0; k < keyframeData.length; k++) {
+                            try {
+                                var data = keyframeData[k];
+                                var newIndex = prop.addKey(data.newTime);
+                                
+                                // Restore all attributes
+                                prop.setValueAtKey(newIndex, data.value);
+                                prop.setInterpolationTypeAtKey(newIndex, data.inInterp, data.outInterp);
+                                
+                                // Restore temporal attributes
+                                prop.setTemporalContinuousAtKey(newIndex, data.temporalContinuous);
+                                prop.setTemporalAutoBezierAtKey(newIndex, data.temporalAutoBezier);
+                                
+                                // Restore temporal ease if it exists
+                                if (data.inEase !== undefined && data.outEase !== undefined) {
+                                    try {
+                                        prop.setTemporalEaseAtKey(newIndex, data.inEase, data.outEase);
+                                    } catch(e) {
+                                        // Some properties might not support temporal ease
+                                    }
+                                }
+                                
+                                // Restore spatial attributes if applicable
+                                if (data.spatialContinuous !== undefined) {
+                                    try {
+                                        prop.setSpatialContinuousAtKey(newIndex, data.spatialContinuous);
+                                        prop.setSpatialAutoBezierAtKey(newIndex, data.spatialAutoBezier);
+                                        prop.setSpatialTangentsAtKey(newIndex, data.inTangent, data.outTangent);
+                                    } catch(e) {
+                                        // Spatial properties might not be available
+                                    }
+                                }
+                                
+                                // IMMEDIATELY deselect the keyframe to prevent selection flicker
+                                try {
+                                    prop.setSelectedAtKey(newIndex, false);
+                                } catch(e) {
+                                    // Continue even if deselection fails
+                                }
+                                
+                                movedCount++;
+                                if (data.newTime > furthestTime) {
+                                    furthestTime = data.newTime;
+                                }
+                            } catch(e) {
+                                // Silently increment error count
+                                errorCount++;
+                            }
+                        }
+                    }
+                }
+                
+                // Recurse into property groups
+                if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                           prop.propertyType === PropertyType.NAMED_GROUP)) {
+                    processPropertyGroup(prop);
+                }
+            }
+        }
+        
+        // Process ALL property groups on the layer
+        // 1. Transform properties
+        if (layer.transform) {
+            processPropertyGroup(layer.transform);
+        }
+        
+        // 2. Effects
+        if (layer.effect && layer.effect.numProperties > 0) {
+            processPropertyGroup(layer.effect);
+        }
+        
+        // 2.5. Shape layer Contents (CRITICAL for shape layers!)
+        try {
+            if (layer.content && layer.content.numProperties > 0) {
+                processPropertyGroup(layer.content);
+            }
+        } catch(e) {
+            // Not a shape layer or contents not accessible
+        }
+        
+        // 3. Masks
+        if (layer.mask && layer.mask.numProperties > 0) {
+            processPropertyGroup(layer.mask);
+        }
+        
+        // 4. Layer Styles
+        if (layer.layerStyle && layer.layerStyle.numProperties > 0) {
+            processPropertyGroup(layer.layerStyle);
+        }
+        
+        // 5. Text properties
+        if (layer.text && layer.text.numProperties > 0) {
+            processPropertyGroup(layer.text);
+        }
+        
+        // 6. Material Options for 3D layers
+        if (layer.materialOption && layer.materialOption.numProperties > 0) {
+            processPropertyGroup(layer.materialOption);
+        }
+        
+        // 7. Audio properties
+        if (layer.audio && layer.audio.numProperties > 0) {
+            processPropertyGroup(layer.audio);
+        }
+        
+    } catch(e) {
+        // Only log if it's a significant error
+        if (e.toString().indexOf("hidden") === -1) {
+            DEBUG_JSX.log("Error: " + layer.name + " - " + e.toString());
+        }
+    }
+    
+    return {
+        moved: movedCount,
+        furthestTime: furthestTime
+    };
+}
+
+// Helper function to process precomp contents recursively (up to 2 levels deep)
+function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOffset, frameRate, depth) {
+    var movedKeyframes = 0;
+    var movedLayers = 0;
+    var movedLabels = 0;
+    var furthestTime = 0;
+    
+    if (depth > 2) {
+        DEBUG_JSX.log("Max depth reached, skipping deeper precomps");
+        return { movedKeyframes: 0, movedLayers: 0, movedLabels: 0, furthestTime: 0 };
+    }
+    
+    try {
+        // Convert main comp playhead time to precomp's internal time
+        var precompPlayheadTime = mainPlayheadTime - precompLayer.startTime;
+        if (precompPlayheadTime < 0) precompPlayheadTime = 0;
+        if (precompPlayheadTime > precomp.duration) precompPlayheadTime = precomp.duration;
+        
+        // Only log if we're actually going to move something
+        var logPrecomp = false;
+        
+        for (var i = 1; i <= precomp.numLayers; i++) {
+            var layer = precomp.layer(i);
+            
+            // Handle locked layers
+            var wasLocked = layer.locked;
+            if (wasLocked) {
+                layer.locked = false;
+            }
+            
+            // Move layer timing if it's at or after playhead in precomp time
+            var layerMoved = false;
+            if (layer.startTime >= precompPlayheadTime) {
+                // Move entire layer via startTime
+                layer.startTime += timeOffset;
+                layerMoved = true;
+                
+                // Track furthest time
+                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (layerEndTime > furthestTime) {
+                    furthestTime = layerEndTime;
+                }
+            } else {
+                // Layer starts before playhead - check if we need to extend its outPoint
+                var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                if (layerEndTime > precompPlayheadTime) {
+                    // Extend the layer's duration
+                    layer.outPoint += timeOffset;
+                    layerMoved = true;
+                    
+                    var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
+                    if (newLayerEndTime > furthestTime) {
+                        furthestTime = newLayerEndTime;
+                    }
+                }
+            }
+            if (layerMoved) {
+                movedLayers++;
+            }
+            
+            // Move keyframes on this layer  
+            var keyframeResult = moveKeyframesAfterTime(layer, precompPlayheadTime, timeOffset, null);
+            movedKeyframes += keyframeResult.moved;
+            if (keyframeResult.furthestTime > furthestTime) {
+                furthestTime = keyframeResult.furthestTime;
+            }
+            
+            // Process nested precomps
+            if (layer.source && layer.source instanceof CompItem) {
+                // For nested precomps, we need to calculate the playhead time relative to the nested precomp
+                // The nested precomp's playhead = current precomp's playhead + nested layer's startTime
+                var nestedPlayheadTime = precompPlayheadTime;
+                var nestedResult = processPrecompContents(layer.source, layer, nestedPlayheadTime, timeOffset, frameRate, depth + 1);
+                movedKeyframes += nestedResult.movedKeyframes;
+                movedLayers += nestedResult.movedLayers;
+                movedLabels += nestedResult.movedLabels || 0;
+                if (nestedResult.furthestTime > furthestTime) {
+                    furthestTime = nestedResult.furthestTime;
+                }
+            }
+            
+            // Re-lock layer if it was locked
+            if (wasLocked) {
+                layer.locked = true;
+            }
+        }
+        
+        // Move precomp labels (markers)
+        var labelsResult = moveLabelsAfterTime(precomp, precompPlayheadTime, timeOffset);
+        movedLabels += labelsResult;
+        
+        // Extend precomp duration if needed
+        // Only extend by the amount we moved things, not to the furthest point
+        if (timeOffset > 0 && furthestTime > precomp.duration) {
+            // Calculate how much we need to extend
+            var extensionNeeded = timeOffset;
+            var newDuration = precomp.duration + extensionNeeded;
+            precomp.duration = newDuration;
+        }
+        
+        // Log summary if anything was moved
+        if (movedKeyframes > 0 || movedLayers > 0 || movedLabels > 0) {
+            DEBUG_JSX.log("    L" + depth + " " + precomp.name + ": " + movedKeyframes + "k " + movedLayers + "L " + movedLabels + "m");
+        }
+        
+    } catch(e) {
+        DEBUG_JSX.log("    Error in " + precomp.name + ": " + e.toString());
+    }
+    
+    return {
+        movedKeyframes: movedKeyframes,
+        movedLayers: movedLayers,
+        movedLabels: movedLabels,
+        furthestTime: furthestTime
+    };
+}
+
 // Dynamic frame-based delay nudging functions
 function nudgeDelayWithFrames(direction, frames) {
     try {
@@ -4492,6 +5158,13 @@ function nudgeDelayWithFrames(direction, frames) {
         var comp = app.project.activeItem;
         if (!(comp && comp instanceof CompItem)) {
             return "error|No composition selected";
+        }
+        
+        // Check if nothing is selected - trigger global delay
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            DEBUG_JSX.log("No layers selected - triggering global delay with " + frames + " frames, direction " + direction);
+            return nudgeFromPlayhead(direction, frames);
         }
         
         var frameRate = comp.frameRate || 30;
