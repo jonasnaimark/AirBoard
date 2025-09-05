@@ -4915,6 +4915,15 @@ function nudgeFromPlayhead(direction, frames) {
             DEBUG_JSX.log("Applying precomp cache refresh fix...");
             var refreshedPrecomps = 0;
             
+            // OPTIMIZATION: Deselect all layers first to prevent any selection during refresh
+            for (var d = 1; d <= comp.numLayers; d++) {
+                try {
+                    comp.layer(d).selected = false;
+                } catch(e) {
+                    // Continue if layer can't be deselected
+                }
+            }
+            
             // Go through all layers in the main comp to find precomp layers
             for (var i = 1; i <= comp.numLayers; i++) {
                 try {
@@ -4922,6 +4931,12 @@ function nudgeFromPlayhead(direction, frames) {
                     
                     // Check if this is a precomp layer
                     if (layer.source && layer.source instanceof CompItem) {
+                        // OPTIMIZATION: Deselect BEFORE modifying to prevent visible selection
+                        var wasSelected = layer.selected;
+                        if (wasSelected) {
+                            layer.selected = false;
+                        }
+                        
                         // Force cache refresh by briefly adjusting outPoint
                         var frameRate = comp.frameRate || 30;
                         var oneFrame = 1 / frameRate;
@@ -4931,8 +4946,10 @@ function nudgeFromPlayhead(direction, frames) {
                         layer.outPoint = originalOutPoint - oneFrame;
                         layer.outPoint = originalOutPoint;
                         
-                        // IMPORTANT: Deselect the layer after refresh to prevent unwanted selection
-                        layer.selected = false;
+                        // Ensure layer stays deselected (in case AE still tries to select it)
+                        if (layer.selected) {
+                            layer.selected = false;
+                        }
                         
                         refreshedPrecomps++;
                         DEBUG_JSX.log("  Refreshed precomp layer: " + layer.name + " → " + layer.source.name);
