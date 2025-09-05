@@ -139,8 +139,38 @@ function readKeyframesSmart() {
         // Reset baseline cache when reading keyframes fresh
         BASELINE_CACHE.reset();
         
-        // Reset timeline mode cumulative offset when reading fresh
-        TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+        // Simple cumulative delay tracking for single layers
+        if (typeof SINGLE_LAYER_CUMULATIVE === 'undefined') {
+            $.writeln("Initializing SINGLE_LAYER_CUMULATIVE");
+            SINGLE_LAYER_CUMULATIVE = 0;
+        }
+        // Reset cumulative on fresh read
+        SINGLE_LAYER_CUMULATIVE = 0;
+        
+        // Reset timeline mode cumulative tracking
+        if (typeof TIMELINE_MODE_CUMULATIVE === 'undefined') {
+            TIMELINE_MODE_CUMULATIVE = 0;
+        }
+        TIMELINE_MODE_CUMULATIVE = 0;
+        
+        // Reset multi-layer cumulative tracking
+        if (typeof MULTI_LAYER_CUMULATIVE === 'undefined') {
+            MULTI_LAYER_CUMULATIVE = 0;
+        }
+        MULTI_LAYER_CUMULATIVE = 0;
+        
+        // Reset global delay cumulative tracking
+        if (typeof GLOBAL_DELAY_CUMULATIVE === 'undefined') {
+            GLOBAL_DELAY_CUMULATIVE = 0;
+        }
+        GLOBAL_DELAY_CUMULATIVE = 0;
+        
+        // Update last known selection and playhead
+        LAST_SELECTION_HASH = getSelectionHash();
+        var comp = app.project.activeItem;
+        if (comp && comp instanceof CompItem) {
+            LAST_PLAYHEAD_POSITION = comp.time;
+        }
         
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
@@ -892,9 +922,15 @@ function readLayerDelays(selectedLayers, comp) {
             var singleDurationMs = roundMs(singleLayerDuration);
             var singleDurationFrames = Math.round(singleLayerDuration * frameRate);
             
-            // Single layer mode - return with actual layer duration
-            var result = "success|" + delayMs + "|" + delayFrames + "|" + singleDurationMs + "|" + singleDurationFrames + "|1|0|0|0|0|1|Stagger|Layer " + layerTimes[0].name + " at " + delayMs + "ms, duration " + singleDurationMs + "ms";
-            DEBUG_JSX.log("Single layer result: " + result);
+            // Single layer mode - show 0ms on first read (cumulative tracking)
+            var displayDelayMs = 0;  // Always show 0 on fresh read
+            var displayDelayFrames = 0;
+            
+            // Store actual layer time for later nudging
+            SINGLE_LAYER_ACTUAL_TIME = layerTimes[0].time;
+            
+            var result = "success|" + displayDelayMs + "|" + displayDelayFrames + "|" + singleDurationMs + "|" + singleDurationFrames + "|1|0|0|0|0|1|Stagger|Layer " + layerTimes[0].name + " at " + displayDelayMs + "ms (actual: " + delayMs + "ms), duration " + singleDurationMs + "ms";
+            DEBUG_JSX.log("Single layer result with cumulative 0: " + result);
             return result;
         }
         
@@ -982,8 +1018,21 @@ function readLayerDelays(selectedLayers, comp) {
             DEBUG_JSX.log("Layer stagger calculation failed: " + e.toString());
         }
         
-        // Return in same format as keyframe reading but with stagger: success|delayMs|delayFrames|durationMs|durationFrames|crossProperty|xDist|yDist|hasX|hasY|isCrossProperty|stagger|debug
-        var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + totalDurationMs + "|" + totalDurationFrames + "|1|0|0|0|0|1|" + staggerText + "|Found " + layerTimes.length + " layers, total duration " + totalDurationMs + "ms (from " + Math.round(earliestInPoint * 1000) + "ms to " + Math.round(latestOutPoint * 1000) + "ms) | " + debugStrings.join(" | ");
+        // Use cumulative tracking for multiple layers at 0ms delay
+        if (resultDelayMs === 0) {
+            // Initialize if needed
+            if (typeof MULTI_LAYER_CUMULATIVE === 'undefined') {
+                MULTI_LAYER_CUMULATIVE = 0;
+            }
+            // For reading, show cumulative value
+            var displayDelayMs = MULTI_LAYER_CUMULATIVE;
+            var displayDelayFrames = Math.round((displayDelayMs / 1000) * frameRate);
+            
+            var result = "success|" + displayDelayMs + "|" + displayDelayFrames + "|" + totalDurationMs + "|" + totalDurationFrames + "|1|0|0|0|0|1|" + staggerText + "|Found " + layerTimes.length + " layers, total duration " + totalDurationMs + "ms (from " + Math.round(earliestInPoint * 1000) + "ms to " + Math.round(latestOutPoint * 1000) + "ms) | " + debugStrings.join(" | ");
+        } else {
+            // Non-zero delay - show actual delay
+            var result = "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + totalDurationMs + "|" + totalDurationFrames + "|1|0|0|0|0|1|" + staggerText + "|Found " + layerTimes.length + " layers, total duration " + totalDurationMs + "ms (from " + Math.round(earliestInPoint * 1000) + "ms to " + Math.round(latestOutPoint * 1000) + "ms) | " + debugStrings.join(" | ");
+        }
         
         DEBUG_JSX.log("Layer delays result: " + result);
         return result;
@@ -996,6 +1045,11 @@ function readLayerDelays(selectedLayers, comp) {
 // Read Keyframes - Calculate duration between selected keyframes
 function readKeyframesDuration() {
     DEBUG_JSX.log("=== ORIGINAL FUNCTION TEST ===");
+    
+    // Reset timeline mode tracking when reading keyframes
+    TIMELINE_MODE_CUMULATIVE = 0;
+    IS_IN_FORCED_TIMELINE_MODE = false;
+    
     try {
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
@@ -2840,7 +2894,6 @@ var BASELINE_CACHE = {
         this.originalEarliestTime = null;
         this.originalBaselineProperty = null;
         this.isInitialized = false;
-        DEBUG_JSX.log("BASELINE_CACHE reset");
     },
     
     initialize: function(earliestTime, baselineProperty) {
@@ -2848,7 +2901,7 @@ var BASELINE_CACHE = {
             this.originalEarliestTime = earliestTime;
             this.originalBaselineProperty = baselineProperty;
             this.isInitialized = true;
-            DEBUG_JSX.log("BASELINE_CACHE initialized: " + baselineProperty + " at " + earliestTime + "s");
+            DEBUG_JSX.log("BC_INIT:" + Math.round(earliestTime * 1000) + "ms");
         }
         return {
             earliestTime: this.originalEarliestTime,
@@ -3113,7 +3166,13 @@ function nudgeDelayBackward() {
 
 function nudgeDelay(direction) {
     try {
-        DEBUG_JSX.log("nudgeDelay called with direction: " + direction);
+        DEBUG_JSX.log("D" + (direction > 0 ? "+" : "-"));
+        
+        // Initialize cumulative tracking if undefined
+        if (typeof TIMELINE_MODE_CUMULATIVE === 'undefined') {
+            TIMELINE_MODE_CUMULATIVE = 0;
+        }
+        
         app.beginUndoGroup("Nudge Delay");
         
         var comp = app.project.activeItem;
@@ -3121,6 +3180,65 @@ function nudgeDelay(direction) {
             app.endUndoGroup();
             return "error|No composition selected";
         }
+        
+        // Build selection identifiers
+        var currentSelectionStructure = "";
+        var selectedLayers = comp.selectedLayers;
+        
+        // Count total selected keyframes
+        var totalKeyframeCount = 0;
+        var selectionSignature = "";
+        
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            currentSelectionStructure += "L" + layer.index + ":";
+            selectionSignature += "L" + layer.index + ":";
+            
+            var selectedProps = layer.selectedProperties;
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop && prop.canVaryOverTime && prop.selectedKeys && prop.selectedKeys.length > 0) {
+                    // Structure ID (layer + property name)
+                    currentSelectionStructure += prop.name + ",";
+                    
+                    // Count keyframes and track property
+                    var selectedKeys = prop.selectedKeys;
+                    totalKeyframeCount += selectedKeys.length;
+                    selectionSignature += prop.name + "(" + selectedKeys.length + "),";
+                }
+            }
+        }
+        
+        // Simple heuristic: if the keyframe count or selection signature changes, 
+        // it's likely a new selection (not perfect but better than tracking indices)
+        var selectionChanged = false;
+        
+        if (typeof LAST_SELECTION_SIGNATURE === 'undefined') {
+            LAST_SELECTION_SIGNATURE = selectionSignature;
+            LAST_KEYFRAME_COUNT = totalKeyframeCount;
+        } else {
+            // Check if selection meaningfully changed
+            if (selectionSignature !== LAST_SELECTION_SIGNATURE || 
+                totalKeyframeCount !== LAST_KEYFRAME_COUNT) {
+                selectionChanged = true;
+                DEBUG_JSX.log("SEL_RESET:SIG");
+            }
+        }
+        
+        // Reset if selection changed
+        if (selectionChanged) {
+            TIMELINE_MODE_CUMULATIVE = 0;
+            IS_IN_FORCED_TIMELINE_MODE = false;
+            BASELINE_CACHE.reset();
+            LAST_SELECTION_SIGNATURE = selectionSignature;
+            LAST_KEYFRAME_COUNT = totalKeyframeCount;
+        }
+        
+        // Update tracking variables
+        LAST_SELECTION_STRUCTURE = currentSelectionStructure;
+        
+        // Debug current state
+        DEBUG_JSX.log("FTL_STATE:" + IS_IN_FORCED_TIMELINE_MODE);
         
         // Early safety check for frame rate
         var frameRate = comp.frameRate;
@@ -3133,7 +3251,7 @@ function nudgeDelay(direction) {
         if (selectedLayers.length === 0) {
             // GLOBAL DELAY: When nothing is selected, nudge everything after playhead
             app.endUndoGroup();
-            DEBUG_JSX.log("No layers selected - triggering global delay from playhead");
+            DEBUG_JSX.log("GLOBAL");
             return nudgeFromPlayhead(direction, 3); // Use 3 frames as default
         }
         
@@ -3166,12 +3284,12 @@ function nudgeDelay(direction) {
                     
                     if (isTimeRemap) {
                         // Deselect all time remap keyframes and skip processing
-                        DEBUG_JSX.log("Deselecting " + selKeys.length + " Time Remap keyframes on " + layer.name);
+                        DEBUG_JSX.log("TR_SKIP");
                         for (var k = 0; k < selKeys.length; k++) {
                             try {
                                 prop.setSelectedAtKey(selKeys[k], false);
                             } catch(deselectError) {
-                                DEBUG_JSX.log("Failed to deselect Time Remap keyframe: " + deselectError.toString());
+                                // Silently skip
                             }
                         }
                         continue; // Skip this property entirely
@@ -3202,8 +3320,7 @@ function nudgeDelay(direction) {
                                 propertyMap[propName].selectedKeys.push(keyIndex);
                             }
                         } catch(keyError) {
-                            // Skip invalid keyframes but continue processing
-                            DEBUG_JSX.log("Skipping invalid keyframe at index " + keyIndex + " for property " + prop.name + ": " + keyError.toString());
+                            // Skip invalid keyframes silently
                         }
                     }
                 }
@@ -3218,11 +3335,11 @@ function nudgeDelay(direction) {
             propertyNames.push(propName);
         }
         
-        DEBUG_JSX.log("Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
+        DEBUG_JSX.log("P:" + propertyNames.length);
         
         if (propertyNames.length === 0) {
             // No keyframes selected - try layer startTime nudging
-            DEBUG_JSX.log("No keyframes found, attempting layer startTime nudging");
+            DEBUG_JSX.log("LAYER_MODE");
             return nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp);
         }
         
@@ -3234,7 +3351,6 @@ function nudgeDelay(direction) {
         
         // DEBUG: Return debug info to see what's being processed
         var debugInfo = [];
-        debugInfo.push("Found " + propertyNames.length + " properties: " + propertyNames.join(", "));
         
         var propertyDelays = [];
         var scanEarliestTime = Number.MAX_VALUE;
@@ -3253,9 +3369,11 @@ function nudgeDelay(direction) {
             }
         }
         
-        // IMPORTANT: Reset baseline cache each time to ensure fresh detection of current state
-        // This ensures we always detect baseline vs delayed properties correctly
-        BASELINE_CACHE.reset();
+        // Only reset baseline cache if we're not in forced timeline mode
+        // This preserves the original baseline for cumulative tracking
+        if (!IS_IN_FORCED_TIMELINE_MODE) {
+            BASELINE_CACHE.reset();
+        }
         var baselineData = BASELINE_CACHE.initialize(scanEarliestTime, scanBaselineProperty);
         var originalEarliestTime = baselineData.earliestTime;
         var originalBaselineProperty = baselineData.baselineProperty;
@@ -3264,13 +3382,10 @@ function nudgeDelay(direction) {
         for (var propName in propertyMap) {
             var propData = propertyMap[propName];
             var keyframes = propData.keyframes;
-            debugInfo.push("Property '" + propName + "' has " + keyframes.length + " keyframes");
             
             // Sort by time to get first keyframe
             keyframes.sort(function(a, b) { return a.time - b.time; });
             var firstTime = keyframes[0].time;
-            
-            debugInfo.push("First time for " + propName + ": " + firstTime + "s");
             
             // Track if this is a baseline property (ANY property at the earliest time)
             var isOriginalBaseline = (Math.abs(firstTime - originalEarliestTime) < 0.001); // Use small tolerance for time comparison
@@ -3283,21 +3398,6 @@ function nudgeDelay(direction) {
                 timeOffset: 0,
                 isOriginalBaseline: isOriginalBaseline
             });
-            
-            if (isOriginalBaseline) {
-                debugInfo.push(propName + " is baseline property at " + firstTime + "s (never moves)");
-            }
-        }
-        
-        debugInfo.push("LOCKED Original Earliest time: " + originalEarliestTime + "s");
-        debugInfo.push("LOCKED Original Baseline property: " + originalBaselineProperty);
-        debugInfo.push("Cache initialized: " + BASELINE_CACHE.isInitialized);
-        debugInfo.push("Current scan found: " + scanBaselineProperty + " at " + scanEarliestTime + "s");
-        
-        // Debug each property's baseline status
-        for (var i = 0; i < propertyDelays.length; i++) {
-            var propDelay = propertyDelays[i];
-            debugInfo.push("Property " + propDelay.property + ": currentDelay=" + propDelay.currentDelay + "s, isOriginalBaseline=" + propDelay.isOriginalBaseline);
         }
         
         // Calculate delays relative to LOCKED ORIGINAL earliest time (baseline = 0ms)
@@ -3311,24 +3411,26 @@ function nudgeDelay(direction) {
                 }
                 
                 propertyDelays[i].relativeDelay = delayMs;
-                debugInfo.push(propertyDelays[i].property + " delay: " + delayMs + "ms");
             }
         } catch(calcError) {
             app.endUndoGroup();
-            return "error|Delay calculation error: " + calcError.toString() + " | " + debugInfo.join(" | ");
+            return "error|Delay calculation error: " + calcError.toString();
         }
         
         // Check if all delays are the same (unified) or different (multiple)
         var firstDelay = propertyDelays[0].relativeDelay;
         var allSameDelay = true;
-        DEBUG_JSX.log("First delay: " + firstDelay + "ms");
+        DEBUG_JSX.log("FD:" + firstDelay + "ms");
         
+        // Special handling for single keyframe
+        var isSingleKeyframe = false;
         if (propertyNames.length === 1) {
-            // Single property mode: check if ALL selected keyframes within the property have the same time
             var singlePropData = propertyDelays[0];
             var keyframes = singlePropData.keyframes;
+            isSingleKeyframe = (keyframes.length === 1);
             
             if (keyframes.length > 1) {
+                // Single property mode: check if ALL selected keyframes within the property have the same time
                 var firstKeyTime = keyframes[0].time;
                 for (var k = 1; k < keyframes.length; k++) {
                     if (Math.abs(keyframes[k].time - firstKeyTime) > 0.001) { // 1ms tolerance in seconds
@@ -3336,12 +3438,12 @@ function nudgeDelay(direction) {
                         break;
                     }
                 }
-                DEBUG_JSX.log("Single property: checking " + keyframes.length + " keyframes, all same time: " + allSameDelay);
+                DEBUG_JSX.log("SP:" + keyframes.length + "k,same:" + allSameDelay);
             }
         } else {
             // Multi-property mode: check if all properties have the same delay
             for (var i = 1; i < propertyDelays.length; i++) {
-                DEBUG_JSX.log("Comparing delay " + i + ": " + propertyDelays[i].relativeDelay + "ms vs " + firstDelay + "ms");
+                DEBUG_JSX.log("P" + i + ":" + propertyDelays[i].relativeDelay + "ms");
                 if (Math.abs(propertyDelays[i].relativeDelay - firstDelay) > 1) { // 1ms tolerance
                     allSameDelay = false;
                     break;
@@ -3349,7 +3451,7 @@ function nudgeDelay(direction) {
             }
         }
         
-        DEBUG_JSX.log("All same delay: " + allSameDelay);
+        DEBUG_JSX.log("ASD:" + allSameDelay);
         
         var targetDelayMs;
         
@@ -3360,51 +3462,63 @@ function nudgeDelay(direction) {
             var firstKeyframeTime = null;
             var totalPropertiesCount = 0;
             
-            debugInfo.push("=== TIMELINE MODE DETECTION (First keyframes only) ===");
             for (var propName in propertyMap) {
                 var keyframes = propertyMap[propName].keyframes;
-                debugInfo.push("Property " + propName + " has " + keyframes.length + " keyframes");
                 
                 if (keyframes.length > 0) {
                     totalPropertiesCount++;
                     // Only check the FIRST keyframe of each property
                     var firstKeyTime = keyframes[0].time;
-                    debugInfo.push("  First keyframe at " + (firstKeyTime * 1000) + "ms");
                     
                     if (firstKeyframeTime === null) {
                         firstKeyframeTime = firstKeyTime;
-                        debugInfo.push("  Reference time set to: " + (firstKeyframeTime * 1000) + "ms");
                     } else if (Math.abs(firstKeyTime - firstKeyframeTime) > 0.001) { // 1ms tolerance in seconds
-                        debugInfo.push("  Time difference detected: " + (firstKeyTime * 1000) + "ms vs " + (firstKeyframeTime * 1000) + "ms = " + Math.abs(firstKeyTime - firstKeyframeTime) + "s");
                         allFirstKeyframesAtSameTime = false;
                         break;
                     }
                 }
             }
             
-            debugInfo.push("Timeline detection result: allFirstKeyframesAtSameTime=" + allFirstKeyframesAtSameTime + ", totalProperties=" + totalPropertiesCount + ", firstTime=" + (firstKeyframeTime ? (firstKeyframeTime * 1000) + "ms" : "null"));
+            DEBUG_JSX.log("TL:" + allFirstKeyframesAtSameTime + ",P:" + totalPropertiesCount);
             
             // Force timeline mode when properties are at baseline (0ms delay) - works for single OR multiple properties
-            debugInfo.push("FORCED CHECK: properties=" + propertyDelays.length + ", allSameDelay=" + allSameDelay + ", firstDelay=" + propertyDelays[0].relativeDelay + "ms");
             // For single properties, force timeline mode regardless of allSameDelay if at baseline
             // For multiple properties, require allSameDelay
-            var shouldForceTimeline = (propertyDelays.length === 1 && Math.abs(propertyDelays[0].relativeDelay) < 1) ||
+            // ALSO force timeline for single keyframe to use cumulative tracking
+            // BUT if we have multiple properties with different delays, use baseline mode instead
+            
+            // Check if we should exit forced timeline mode due to different delays
+            if (propertyDelays.length >= 2 && !allSameDelay) {
+                // Multiple properties with different delays - use baseline mode
+                IS_IN_FORCED_TIMELINE_MODE = false;
+                DEBUG_JSX.log("EXIT_FTL:DIFF_DELAYS");
+            }
+            
+            var shouldForceTimeline = IS_IN_FORCED_TIMELINE_MODE ||
+                                    isSingleKeyframe || 
+                                    (propertyDelays.length === 1 && Math.abs(propertyDelays[0].relativeDelay) < 1) ||
                                     (propertyDelays.length >= 2 && allSameDelay && Math.abs(propertyDelays[0].relativeDelay) < 1);
             if (shouldForceTimeline) {
-                debugInfo.push("FORCED TIMELINE: Properties at 0ms delay, forcing timeline mode for " + propertyDelays.length + " properties");
+                IS_IN_FORCED_TIMELINE_MODE = true;
+                DEBUG_JSX.log("FORCE_TL");
                 try {
-                    // For timeline nudging, use the increment directly instead of calculateDelaySnap
-                    // because calculateDelaySnap clamps to 0 but timeline positions can move backward
-                    var nudgeMs;
-                    if (direction > 0) {
-                        nudgeMs = calculateDelaySnap(0, direction);  // Use normal snapping for forward
-                    } else {
-                        // For backward movement, calculate the increment without clamping to 0
-                        var forwardNudge = calculateDelaySnap(0, 1);
-                        nudgeMs = -forwardNudge;  // Negative of the forward increment
+                    // Initialize cumulative tracking for timeline mode
+                    if (typeof TIMELINE_MODE_CUMULATIVE === 'undefined') {
+                        TIMELINE_MODE_CUMULATIVE = 0;
                     }
-                    var timelineNudgeSeconds = nudgeMs / 1000.0;
-                    var newTimelineTime = Math.max(0, originalEarliestTime + timelineNudgeSeconds);
+                    
+                    // Don't reset cumulative on selection change - it's causing issues
+                    
+                    // Track cumulative offset
+                    TIMELINE_MODE_CUMULATIVE += (direction > 0 ? 50 : -50);
+                    DEBUG_JSX.log("CUM:" + TIMELINE_MODE_CUMULATIVE + "ms");
+                    
+                    // For display and movement: the cumulative value represents total offset from start
+                    // But we need to calculate the actual movement from the current position
+                    var nudgeMs = (direction > 0 ? 50 : -50);
+                    var nudgeSeconds = nudgeMs / 1000.0;
+                    var newTimelineTime = Math.max(0, scanEarliestTime + nudgeSeconds);
+                    DEBUG_JSX.log("MOVE:" + Math.round(scanEarliestTime * 1000) + "→" + Math.round(newTimelineTime * 1000) + "ms");
                     
                     // Move all keyframes using the same approach as baseline mode
                     var timelinePropertyData = [];
@@ -3414,7 +3528,7 @@ function nudgeDelay(direction) {
                         var keyframesToMove = [];
                         
                         // Calculate the timeline offset to apply to all keyframes
-                        var timelineOffset = newTimelineTime - originalEarliestTime;
+                        var timelineOffset = newTimelineTime - scanEarliestTime;
                         
                         // Collect keyframe data - maintain relative spacing
                         for (var k = 0; k < propData.keyframes.length; k++) {
@@ -3768,15 +3882,19 @@ function nudgeDelay(direction) {
                     var allDebugMessages = DEBUG_JSX.getMessages();
                     var finalDebugInfo = debugInfo.concat(allDebugMessages);
                     
-                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE-FORCED|" + finalDebugInfo.join(" | ");
+                    // Return cumulative value for display when at 0ms delay
+                    var displayDelayMs = Math.round(TIMELINE_MODE_CUMULATIVE);
+                    var displayDelayFrames = Math.round((displayDelayMs / 1000) * frameRate);
+                    
+                    return "success|" + displayDelayMs + "|" + displayDelayFrames + "|TIMELINE-FORCED";
                 } catch(forcedError) {
-                    debugInfo.push("FORCED TIMELINE ERROR: " + forcedError.toString());
+                    DEBUG_JSX.log("FTL_ERR:" + forcedError.toString());
                 }
             }
             
             if (allFirstKeyframesAtSameTime && firstKeyframeTime !== null) {
                 try {
-                    debugInfo.push("TIMELINE MODE: Moving all keyframes from " + (firstKeyframeTime * 1000) + "ms");
+                    DEBUG_JSX.log("TL_MODE:" + Math.round(firstKeyframeTime * 1000) + "ms");
                     
                     // Timeline position nudging: handle negative nudges properly for backward movement
                     var nudgeMs;
@@ -3975,13 +4093,13 @@ function nudgeDelay(direction) {
                         debugInfo.push("Marker sync error: " + markerSyncError.toString());
                     }
                     
-                    var newTimelinePositionMs = newTimelineTime * 1000;
+                    var newTimelinePositionMs = Math.round(newTimelineTime * 1000);
                     var newTimelinePositionFrames = Math.round(newTimelineTime * frameRate);
                     
                     app.endUndoGroup();
-                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE|" + debugInfo.join(" | ");
+                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE";
                 } catch(timelineError) {
-                    debugInfo.push("TIMELINE ERROR: " + timelineError.toString());
+                    DEBUG_JSX.log("TL_ERR:" + timelineError.toString());
                     // Fall through to baseline mode
                 }
             }
@@ -3989,12 +4107,11 @@ function nudgeDelay(direction) {
             // EXISTING LOGIC: Normal delay adjustment (restore original baseline behavior)
             if (allSameDelay) {
                 // All delays are the same - apply 50ms snapping to the unified delay
-                debugInfo.push("Unified delay: " + firstDelay + "ms");
                 targetDelayMs = calculateDelaySnap(firstDelay, direction);
-                debugInfo.push("Target after snapping: " + targetDelayMs + "ms");
+                DEBUG_JSX.log("UNI:" + firstDelay + "→" + targetDelayMs + "ms");
             } else {
                 // Multiple different delays - nudge each property individually
-                debugInfo.push("Multiple delays - nudging each property individually");
+                DEBUG_JSX.log("MULTI");
                 
                 // Calculate target delay for each property individually
                 for (var i = 0; i < propertyDelays.length; i++) {
@@ -4004,17 +4121,11 @@ function nudgeDelay(direction) {
                     if (propDelay.isOriginalBaseline) {
                         // Original baseline property - never moves
                         propDelay.targetDelay = 0;
-                        debugInfo.push(propDelay.property + ": original baseline, never moves");
+                        DEBUG_JSX.log("BASELINE:" + propDelay.property);
                     } else {
                         // Apply individual 50ms snapping to this property (even if currently at 0ms)
                         var targetDelay = calculateDelaySnap(currentDelay, direction);
                         propDelay.targetDelay = targetDelay;
-                        debugInfo.push(propDelay.property + ": " + currentDelay + "ms → " + targetDelay + "ms (snap result)");
-                        
-                        // Extra debug for 0ms case
-                        if (Math.abs(currentDelay) < 1) {
-                            debugInfo.push("DEBUG: Property at 0ms, direction=" + direction + ", snap result=" + targetDelay);
-                        }
                     }
                 }
                 
@@ -4023,7 +4134,7 @@ function nudgeDelay(direction) {
             }
         } catch(snapError) {
             app.endUndoGroup();
-            return "error|Snapping error: " + snapError.toString() + " | " + debugInfo.join(" | ");
+            return "error|Snapping error: " + snapError.toString();
         }
         
         // Apply time offsets to move properties to their target delays
@@ -4039,12 +4150,6 @@ function nudgeDelay(direction) {
                     var targetDelaySeconds = propData.targetDelay / 1000;
                     var targetTime = originalEarliestTime + targetDelaySeconds; // Use LOCKED baseline time
                     timeOffset = targetTime - currentTime;
-                    debugInfo.push("Property " + propData.property + " individual: target=" + propData.targetDelay + "ms, offset=" + timeOffset + "s");
-                    
-                    // Extra debug for problematic case
-                    if (Math.abs(propData.relativeDelay) < 1 && Math.abs(propData.targetDelay - 50) < 1) {
-                        debugInfo.push("DEBUG: 0ms→50ms case: current=" + currentTime + "s, target=" + targetTime + "s, offset=" + timeOffset + "s");
-                    }
                 } else {
                     // Unified delay mode - all properties move to same target
                     var targetDelaySeconds = targetDelayMs / 1000;
@@ -4059,17 +4164,14 @@ function nudgeDelay(direction) {
                     // Handle original baseline property - recreate keyframes at same positions to maintain selection
                     if (propData.isOriginalBaseline) {
                         timeOffset = 0; // No time offset for original baseline property
-                        debugInfo.push("Original baseline property " + propData.property + " - no offset");
                     } else {
                         timeOffset = targetTime - currentTime;
-                        debugInfo.push("Property " + propData.property + " unified offset: " + timeOffset + "s");
                     }
                 }
                 
                 // Baseline keyframes: process them with timeOffset = 0 to preserve easing while maintaining selection
                 if (propData.isOriginalBaseline && useIndividualDelays) {
                     timeOffset = 0; // No movement, but still recreate for easing preservation
-                    debugInfo.push("BASELINE property " + propData.property + " - recreating at same position for easing preservation");
                 }
                 
                 // Move all selected keyframes of this property by the time offset using remove/recreate approach
@@ -4189,7 +4291,6 @@ function nudgeDelay(direction) {
                         var firstKeyframeTime = propData.keyframes[0].time; // Original time before movement
                         var firstKeyframeFrameNumber = Math.round(firstKeyframeTime * frameRate) + 1; // Convert to 1-based frame number
                         
-                        DEBUG_JSX.log("Property " + propData.property + " first keyframe originally at " + firstKeyframeTime + "s (frame " + firstKeyframeFrameNumber + ")");
                         
                         // Check all composition markers for ones at this exact frame
                         for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
@@ -4200,8 +4301,6 @@ function nudgeDelay(direction) {
                             if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
                                 var markerValue = comp.markerProperty.keyValue(m);
                                 var markerComment = markerValue.comment || ""; // Get marker comment/label
-                                
-                                DEBUG_JSX.log("Found comp marker at frame " + markerFrameNumber + " (time " + markerTime + "s) with comment: '" + markerComment + "'");
                                 
                                 // Calculate new marker time based on the same offset as the keyframe
                                 var currentTime = propData.currentDelay;
@@ -4225,8 +4324,6 @@ function nudgeDelay(direction) {
                                 
                                 // Ensure marker doesn't go to negative time
                                 newMarkerTime = Math.max(0, newMarkerTime);
-                                
-                                DEBUG_JSX.log("Comp marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
                                 
                                 // Store marker info for movement (avoid duplicate moves)
                                 var alreadyQueued = false;
@@ -4359,28 +4456,23 @@ function nudgeDelay(direction) {
                                 var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
                                 markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
                                 
-                                DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms (synced with " + markerInfo.property + ")");
-                                debugInfo.push("Synced layer marker '" + markerInfo.comment + "' with " + markerInfo.property);
                             }
                             
                         } catch(markerMoveError) {
-                            DEBUG_JSX.log("Failed to move marker " + markerInfo.comment + ": " + markerMoveError.toString());
-                            debugInfo.push("Failed to sync marker: " + markerMoveError.toString());
+                            DEBUG_JSX.log("MK_ERR:" + markerMoveError.toString());
                         }
                     }
                 } else {
-                    DEBUG_JSX.log("No markers found at first keyframe times");
                 }
                 
             } catch(markerSyncError) {
                 // Don't fail the entire operation if marker syncing fails
-                DEBUG_JSX.log("Marker sync error: " + markerSyncError.toString());
-                debugInfo.push("Marker sync error: " + markerSyncError.toString());
+                DEBUG_JSX.log("MK_SYNC_ERR:" + markerSyncError.toString());
             }
             
         } catch(moveError) {
             app.endUndoGroup();
-            return "error|Keyframe moving error: " + moveError.toString() + " | " + debugInfo.join(" | ");
+            return "error|Keyframe moving error: " + moveError.toString();
         }
         
         // Final pass: Select all the new keyframes after all adjustments are complete
@@ -4462,12 +4554,14 @@ function nudgeDelay(direction) {
             returnDelayMs = targetDelayMs;
         }
         
+        // Round to avoid floating point precision issues (49.9999999 -> 50)
+        returnDelayMs = Math.round(returnDelayMs);
         returnFrames = Math.round(returnDelayMs * frameRate / 1000);
         
         var result = "success|" + returnDelayMs + "|" + returnFrames + "|" + isCrossPropertyMode;
-        DEBUG_JSX.log("Returning result: " + result);
+        DEBUG_JSX.log("RES:" + returnDelayMs + "ms/" + returnFrames + "f");
         
-        return result + "|BASELINE|" + debugInfo.join(" | ");
+        return result + "|BASELINE";
         
     } catch(e) {
         app.endUndoGroup();
@@ -4586,6 +4680,23 @@ function nudgeFromPlayhead(direction, frames) {
         GLOBAL_OPERATION_ID++; // Increment operation ID for this run
         DEBUG_JSX.log("=== Global delay #" + GLOBAL_OPERATION_ID + " ===");
         DEBUG_JSX.log("Request: Move " + frames + " frames " + (direction > 0 ? "forward" : "backward"));
+        
+        var comp = app.project.activeItem;
+        if (comp && comp instanceof CompItem) {
+            // Check if playhead position changed
+            var currentPlayheadPosition = comp.time;
+            if (Math.abs(currentPlayheadPosition - LAST_PLAYHEAD_POSITION) > 0.001) {
+                DEBUG_JSX.log("Playhead moved - resetting global delay cumulative");
+                GLOBAL_DELAY_CUMULATIVE = 0;
+                LAST_PLAYHEAD_POSITION = currentPlayheadPosition;
+            }
+        }
+        
+        // Initialize global delay cumulative tracking
+        if (typeof GLOBAL_DELAY_CUMULATIVE === 'undefined') {
+            GLOBAL_DELAY_CUMULATIVE = 0;
+        }
+        GLOBAL_DELAY_CUMULATIVE += (direction > 0 ? 50 : -50);
         
         // Track processed items to prevent double-processing
         var processedItems = {};
@@ -4845,7 +4956,12 @@ function nudgeFromPlayhead(direction, frames) {
         
         // Get all debug messages to return
         var debugMessages = DEBUG_JSX.getMessages();
-        return "success|" + Math.round(timeOffset * 1000) + "|" + Math.round(timeOffset * frameRate) + "|" + message + "|" + debugMessages.join("|");
+        
+        // Use cumulative value for display
+        var displayMs = GLOBAL_DELAY_CUMULATIVE;
+        var displayFrames = Math.round((displayMs / 1000) * frameRate);
+        
+        return "success|" + displayMs + "|" + displayFrames + "|" + message + "|" + debugMessages.join("|");
         
     } catch(e) {
         app.endUndoGroup();
@@ -5383,7 +5499,111 @@ function nudgeDelayWithFrames(direction, frames) {
 // Timeline mode - moves ALL selected keyframes by the same amount (no baseline logic)
 // Uses the complete 4-step selection preservation pattern from KEYFRAME_SYSTEM_SUMMARY.md
 // Global variable to track cumulative timeline mode offset
+var TIMELINE_MODE_CUMULATIVE = 0;
 var TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+var IS_IN_FORCED_TIMELINE_MODE = false;
+
+// Track selection and playhead for auto-reset
+var LAST_SELECTION_HASH = "";
+var LAST_SELECTION_STRUCTURE = "";
+var LAST_SELECTION_ID = "";
+var INITIAL_SELECTION_TIME = "";
+var LAST_KEYFRAME_SELECTION = "";
+var LAST_SELECTION_SIGNATURE = "";
+var LAST_KEYFRAME_COUNT = 0;
+var LAST_PLAYHEAD_POSITION = -1;
+
+// Helper function to generate a hash of current selection
+// Get selection structure without keyframe times (for detecting actual selection changes)
+function getSelectionStructure() {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "no_comp";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "no_selection";
+        }
+        
+        // Build a string representing the selection structure (not including times)
+        var structure = "";
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            structure += layer.index + "_";
+            
+            // Add property and keyframe indices (but not times)
+            var selectedProps = layer.selectedProperties;
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    structure += prop.name + ":";
+                    var selectedCount = 0;
+                    for (var k = 1; k <= prop.numKeys; k++) {
+                        if (prop.keySelected(k)) {
+                            structure += k + ",";
+                            selectedCount++;
+                        }
+                    }
+                    structure += "(" + selectedCount + ");";
+                }
+            }
+        }
+        
+        return structure;
+    } catch(e) {
+        return "error";
+    }
+}
+
+
+function getSelectionHash() {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "no_comp";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "no_selection";
+        }
+        
+        // Build a string representing the current selection
+        var hash = "";
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            hash += layer.index + "_" + layer.name + ";";
+            
+            // Add detailed selected keyframe info including which specific keyframes
+            var selectedProps = layer.selectedProperties;
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    // Include property name and which specific keyframes are selected
+                    var keyInfo = prop.name + ":";
+                    var selectedIndices = [];
+                    for (var k = 1; k <= prop.numKeys; k++) {
+                        if (prop.keySelected(k)) {
+                            selectedIndices.push(k);
+                            // Also include keyframe time to detect if selecting different keyframe
+                            var keyTime = prop.keyTime(k);
+                            keyInfo += k + "@" + keyTime.toFixed(3) + ",";
+                        }
+                    }
+                    if (selectedIndices.length > 0) {
+                        hash += keyInfo + ";";
+                    }
+                }
+            }
+        }
+        
+        return hash;
+    } catch(e) {
+        return "error";
+    }
+}
 
 function nudgeDelayTimelineMode(direction, frames) {
     try {
@@ -5884,6 +6104,47 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
     try {
         DEBUG_JSX.log("nudgeLayerStartTimes: processing " + selectedLayers.length + " layers");
         
+        // Initialize cumulative tracking if needed
+        if (typeof SINGLE_LAYER_CUMULATIVE === 'undefined') {
+            SINGLE_LAYER_CUMULATIVE = 0;
+        }
+        
+        // Single layer cumulative mode
+        if (selectedLayers.length === 1) {
+            var layer = selectedLayers[0];
+            
+            // Check if selection changed and reset if needed
+            var currentSelectionHash = getSelectionHash();
+            if (currentSelectionHash !== LAST_SELECTION_HASH) {
+                DEBUG_JSX.log("Selection changed - resetting single layer cumulative");
+                SINGLE_LAYER_CUMULATIVE = 0;
+                LAST_SELECTION_HASH = currentSelectionHash;
+            }
+            
+            // Track cumulative nudges
+            SINGLE_LAYER_CUMULATIVE += (direction > 0 ? 50 : -50);
+            
+            // Actually move the layer by 50ms increments
+            var nudgeSeconds = (direction > 0 ? 0.05 : -0.05);
+            var newStartTime = Math.max(0, layer.startTime + nudgeSeconds);
+            newStartTime = Math.min(newStartTime, comp.duration);
+            layer.startTime = newStartTime;
+            
+            app.endUndoGroup();
+            
+            // Return cumulative value for display
+            var displayDelayMs = SINGLE_LAYER_CUMULATIVE;
+            var displayDelayFrames = Math.round((displayDelayMs / 1000) * frameRate);
+            
+            // Calculate layer duration
+            var layerDuration = layer.outPoint - layer.inPoint;
+            var durationMs = roundMs(layerDuration);
+            var durationFrames = Math.round(layerDuration * frameRate);
+            
+            return "success|" + displayDelayMs + "|" + displayDelayFrames + "|" + durationMs + "|" + durationFrames + "|1|0|0|0|0|1|Stagger|Single layer cumulative: " + displayDelayMs + "ms";
+        }
+        
+        // Multiple layers - original logic
         // Collect layer startTimes (same approach as keyframe delay detection)
         var layerDelays = [];
         var debugInfo = [];
@@ -5944,6 +6205,20 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
         var movedCount = 0;
         if (allSameDelay && Math.abs(firstDelay) < 1) {
             // Timeline mode - all layers at baseline, move together with proper backward handling
+            // Check if selection changed and reset if needed
+            var currentSelectionHash = getSelectionHash();
+            if (currentSelectionHash !== LAST_SELECTION_HASH) {
+                DEBUG_JSX.log("Selection changed - resetting multi-layer cumulative");
+                MULTI_LAYER_CUMULATIVE = 0;
+                LAST_SELECTION_HASH = currentSelectionHash;
+            }
+            
+            // Track cumulative for multiple layers at 0ms
+            if (typeof MULTI_LAYER_CUMULATIVE === 'undefined') {
+                MULTI_LAYER_CUMULATIVE = 0;
+            }
+            MULTI_LAYER_CUMULATIVE += (direction > 0 ? 50 : -50);
+            
             var nudgeMs;
             if (direction > 0) {
                 nudgeMs = calculateDelaySnap(0, direction);  // Use normal snapping for forward
