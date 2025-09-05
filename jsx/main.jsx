@@ -4687,28 +4687,35 @@ function nudgeFromPlayhead(direction, frames) {
             }
             
             // Process precomps (2 levels deep)
-            // Only process if the precomp layer itself intersects with the playhead
+            // Only process precomp contents if the precomp layer starts before playhead
+            // (If precomp layer starts at/after playhead, it was moved entirely and contents move with it)
             if (layer.source && layer.source instanceof CompItem) {
                 DEBUG_JSX.log("Found precomp layer: " + layer.name + " → " + layer.source.name);
-                // Check if this precomp layer is active at the playhead time
-                var layerInPoint = layer.startTime + layer.inPoint;
-                var layerOutPoint = layer.startTime + layer.outPoint;
                 
-                DEBUG_JSX.log("  Precomp timing: in=" + layerInPoint.toFixed(3) + "s, out=" + layerOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
-                
-                // Only process if the precomp is active at or after the playhead
-                if (layerOutPoint > playheadTime) {
-                    DEBUG_JSX.log("  Processing precomp contents...");
-                    var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
-                    movedKeyframes += precompResult.movedKeyframes;
-                    movedLayers += precompResult.movedLayers;
-                    movedLabels += precompResult.movedLabels || 0;
-                    if (precompResult.furthestTime > furthestTime) {
-                        furthestTime = precompResult.furthestTime;
+                if (layer.startTime < playheadTime) {
+                    // Precomp layer starts before playhead - process its contents
+                    // Check if this precomp layer is active at the playhead time
+                    var layerInPoint = layer.startTime + layer.inPoint;
+                    var layerOutPoint = layer.startTime + layer.outPoint;
+                    
+                    DEBUG_JSX.log("  Precomp timing: in=" + layerInPoint.toFixed(3) + "s, out=" + layerOutPoint.toFixed(3) + "s, playhead=" + playheadTime.toFixed(3) + "s");
+                    
+                    // Only process if the precomp is active at or after the playhead
+                    if (layerOutPoint > playheadTime) {
+                        DEBUG_JSX.log("  Processing precomp contents (layer starts before playhead)...");
+                        var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
+                        movedKeyframes += precompResult.movedKeyframes;
+                        movedLayers += precompResult.movedLayers;
+                        movedLabels += precompResult.movedLabels || 0;
+                        if (precompResult.furthestTime > furthestTime) {
+                            furthestTime = precompResult.furthestTime;
+                        }
+                        DEBUG_JSX.log("  Precomp " + layer.source.name + " result: " + precompResult.movedKeyframes + "k " + precompResult.movedLayers + "L " + (precompResult.movedLabels || 0) + "m");
+                    } else {
+                        DEBUG_JSX.log("  Skipping precomp contents (ends before playhead)");
                     }
-                    DEBUG_JSX.log("  Precomp " + layer.source.name + " result: " + precompResult.movedKeyframes + "k " + precompResult.movedLayers + "L " + (precompResult.movedLabels || 0) + "m");
                 } else {
-                    DEBUG_JSX.log("  Skipping precomp (ends before playhead)");
+                    DEBUG_JSX.log("  Skipping precomp contents (layer starts at/after playhead: " + layer.startTime.toFixed(3) + "s >= " + playheadTime.toFixed(3) + "s)");
                 }
             }
             
