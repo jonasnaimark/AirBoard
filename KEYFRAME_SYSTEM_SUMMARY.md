@@ -875,9 +875,40 @@ uniquePropertyId = parentEffect.matchName + "_" + parentEffect.name + "_" + uniq
 - **Before**: "Tint" and "Tint 2" generated identical keyIDs → "Tint 2" skipped as duplicate
 - **After**: Each effect generates unique keyIDs → All effects process correctly
 
+### **Challenge 10: Precomp Processing Boundary Calculation for Natural Layers**
+**Problem**: Precomps were being incorrectly processed when their content had already ended before the playhead, causing unwanted duration extensions and layer modifications in nested compositions.
+
+**Context**: When determining whether to process a precomp's contents during global delay, the system needs to check if the playhead is within the precomp's active content area. The bug was using an incorrect calculation for natural layers.
+
+**THE COMPLETE SOLUTION** (December 2024)
+```javascript
+// WRONG: Using old calculation that fails for natural layers
+var precompActiveStart = layer.startTime + layer.inPoint;  // Wrong for natural layers!
+var precompActiveEnd = layer.startTime + layer.outPoint;
+
+// RIGHT: Use the same content boundaries already calculated for the layer
+// contentStartTime and contentEndTime already account for trimmed vs natural layers
+if (playheadTime >= contentStartTime && playheadTime < contentEndTime) {
+    // Process precomp only if playhead is within active content
+    processPrecompContents(...);
+}
+```
+
+**Real Example - "Gesture - Tap 2" (Natural Layer):**
+- **Layer Properties**: `inPoint == startTime == 0.583`, `outPoint = 1.700`
+- **Playhead Position**: 2.133 seconds
+- **Before Fix**: Active area calculated as `0.583 + 0.583 = 1.166` to `2.283`, incorrectly spanning the playhead
+- **After Fix**: Active area uses `contentStartTime = 0.583` to `contentEndTime = 1.700`, correctly ending before playhead
+
+**Why This Was Critical:**
+1. **Prevented Unwanted Processing**: Precomps with content ending before the playhead are no longer processed
+2. **Avoided Duration Extensions**: Nested compositions no longer get incorrectly extended
+3. **Consistent Boundary Logic**: Uses the same content boundary calculation for all layer operations
+4. **Fixed Circular Problem**: Solved the issue where fixing trimmed layers broke natural layer processing
+
 ---
 
-*Last Updated: September 2025*  
-*Version: v4.16.17 - Global Delay System Complete with Layer Movement Logic*  
+*Last Updated: December 2024*  
+*Version: v4.16.25 - Global Delay System Complete with All Layer Type Fixes*  
 *Status: All keyframe systems fully implemented and production-ready*  
-*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, and effect name-based processing documented*
+*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, and precomp boundary calculation documented*
