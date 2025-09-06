@@ -4860,15 +4860,12 @@ function nudgeFromPlayhead(direction, frames) {
             if (layer.source && layer.source instanceof CompItem) {
                 DEBUG_JSX.log("  PC: " + layer.source.name.substring(0, 15));
                 
-                // CRITICAL: Check if playhead is over the actual ACTIVE content of the precomp
-                // The active content is where the layer bar is visible in the timeline
-                var precompActiveStart = layer.startTime + layer.inPoint;
-                var precompActiveEnd = layer.startTime + layer.outPoint;
-                
-                DEBUG_JSX.log("    PC@" + precompActiveStart.toFixed(2) + "-" + precompActiveEnd.toFixed(2) + "s");
+                // CRITICAL: Use the same content boundaries we calculated above!
+                // contentStartTime and contentEndTime already account for trimmed vs natural layers
+                DEBUG_JSX.log("    PC@" + contentStartTime.toFixed(2) + "-" + contentEndTime.toFixed(2) + "s");
                 
                 // Only process if playhead is within the active content area
-                if (playheadTime >= precompActiveStart && playheadTime < precompActiveEnd) {
+                if (playheadTime >= contentStartTime && playheadTime < contentEndTime) {
                     DEBUG_JSX.log("    →Process PC (playhead in active area)");
                     var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
                     movedKeyframes += precompResult.movedKeyframes;
