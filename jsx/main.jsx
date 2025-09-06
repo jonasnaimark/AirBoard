@@ -4749,7 +4749,6 @@ function nudgeFromPlayhead(direction, frames) {
             
             // Calculate layer timeline positions
             var layerStartTime = layer.startTime;
-            var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
             // For visible content position: distinguish between trimmed and naturally positioned layers
             // If inPoint equals startTime, layer is naturally positioned (not trimmed)
             // If inPoint differs from startTime, layer is trimmed
@@ -4762,6 +4761,8 @@ function nudgeFromPlayhead(direction, frames) {
                 layerTimelineInPoint = layer.startTime + layer.inPoint;
             }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
+            // The actual end time of the layer's visible content
+            var layerEndTime = layerTimelineOutPoint;
             
             // Check if the LAYER ITSELF (not just visible content) starts after playhead
             
