@@ -1,20 +1,3 @@
-# AirBoard - Animation Tools and Presets for After Effects
-
-[![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
-[![Version](https://img.shields.io/badge/version-4.16.28-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.16.28)
-
-## 🚀 What It Does
-
-**Keyframe Nudger**: Precise control over keyframe timing, duration, and position with smart snapping and multi-property support
-
-**Device Templates**: Auto-generate iPhone and desktop compositions with proper scaling
-
-**Gesture Library**: Pre-built tap, click, and interaction animations
-
-**Component Tools**: Squircles, shadows, materials, and UI elements
-
-**File Setup**: Auto-generate an AE and Finder folder structure
-
 ## 📥 Get the Plugin
 
 **[⬇️ Download AirBoard v4.16.28](dist/AirBoard-v4.16.28.zxp)**
@@ -26,20 +9,24 @@
 
 > Requires After Effects 2020+ | macOS & Windows compatible
 
-## 🎯 Key Features
+# AirBoard - Animation Tools and Presets for After Effects
 
-### Keyframe Nudger
-- **Duration Control**: Smart snapping to frame intervals (3f = 50ms at 60fps)
-- **Position Nudging**: Precise X/Y movement with directional display
-- **Delay & Stagger**: Timeline positioning with automatic stagger detection
-- **Multi-Property**: Works across Position, Opacity, Scale simultaneously
-- **Perfect Selection**: Maintains keyframe selection through all operations
+[![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
+[![Version](https://img.shields.io/badge/version-4.16.28-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.16.28)
 
-### Templates & Presets
-- **Device Compositions**: iPhone/Desktop with 1x-6x scaling
-- **Gesture Animations**: Tap, Long Press, Double Tap, Mouse Click
-- **UI Components**: Counters, loaders, progress indicators
-- **Material Effects**: Squircles, elevation shadows, blur presets
+## 🚀 What It Does
+
+**Keyframe Nudger**: Precise control over keyframe timing, duration, staggers, and position with smart snapping and multi-property support
+
+**Device Templates**: Auto-generate iPhone and desktop compositions with proper scaling
+
+**Gesture Library**: Pre-built tap, click, and interaction animations
+
+**Effects**: Squircles, shadows, materials, shimmers, and UI elements
+
+**Components**: Loaders, counters, logos & more to come
+
+**File Setup**: Auto-generate an AE and Finder folder structure
 
 ---
 
