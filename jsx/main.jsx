@@ -4758,6 +4758,10 @@ function nudgeFromPlayhead(direction, frames) {
             try {
                 var layer = comp.layer(i);
                 DEBUG_JSX.log("L" + i + ": " + layer.name.substring(0, 15) + "@" + layer.startTime.toFixed(2) + "s");
+                // Add detailed debug for X of X layers to understand their timing
+                if (layer.name.indexOf("X of X") !== -1) {
+                    DEBUG_JSX.log("  DEBUG " + layer.name + ": start=" + layer.startTime.toFixed(3) + " in=" + layer.inPoint.toFixed(3) + " out=" + layer.outPoint.toFixed(3));
+                }
             
             // Handle locked layers
             var wasLocked = layer.locked;
@@ -4772,28 +4776,37 @@ function nudgeFromPlayhead(direction, frames) {
             
             // Calculate layer timeline positions
             var layerStartTime = layer.startTime;
-            // For visible content position: distinguish between trimmed and naturally positioned layers
-            // Apply the same fix as layer delay reading (Challenge 8 in KEYFRAME_SYSTEM_SUMMARY.md)
-            // Natural layers: visual position = startTime
-            // Trimmed layers: visual position = inPoint value directly
-            var layerTimelineInPoint;
+            
+            // CRITICAL FIX: For trimmed layers (like X of X), the visible content
+            // starts at the inPoint value in the timeline, not startTime + inPoint
+            // This is because trimmed layers show their content at the inPoint position
+            var contentStartTime, contentEndTime;
+            
             if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
-                // Layer is naturally positioned (not trimmed) - visible content starts at startTime
-                layerTimelineInPoint = layer.startTime;
+                // Natural layer (not trimmed) - content starts at startTime
+                contentStartTime = layer.startTime;
+                contentEndTime = layer.outPoint;
             } else {
-                // Layer is trimmed - the visual bar position is at the inPoint value
-                // This is the key fix: use inPoint directly, not startTime + inPoint
-                layerTimelineInPoint = layer.inPoint;
+                // Trimmed layer - the visual bar and content start at the inPoint value
+                // For X of X layers: inPoint=5.733 means content starts at 5.733s in timeline
+                contentStartTime = layer.inPoint;
+                contentEndTime = layer.outPoint;
             }
-            var layerTimelineOutPoint = layer.startTime + layer.outPoint;
-            // The actual end time of the layer's visible content
-            // CRITICAL: Use the layer's duration (outPoint - inPoint) not just outPoint
-            var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
             
-            // Check if the LAYER ITSELF (not just visible content) starts after playhead
+            // Debug for X of X layers
+            if (layer.name.indexOf("X of X") !== -1) {
+                DEBUG_JSX.log("  CALC: contentStart=" + contentStartTime.toFixed(3) + " contentEnd=" + contentEndTime.toFixed(3) + " vs PH=" + playheadTime.toFixed(3));
+                DEBUG_JSX.log("  RAW: start=" + layer.startTime.toFixed(3) + " in=" + layer.inPoint.toFixed(3) + " out=" + layer.outPoint.toFixed(3));
+            }
             
-            if (layerStartTime >= playheadTime) {
-                // Layer starts at or after playhead - move entire layer
+            // Debug for Gesture - Tap layers
+            if (layer.name.indexOf("Gesture - Tap") !== -1) {
+                DEBUG_JSX.log("  GESTURE: contentStart=" + contentStartTime.toFixed(3) + " contentEnd=" + contentEndTime.toFixed(3) + " vs PH=" + playheadTime.toFixed(3));
+                DEBUG_JSX.log("  RAW: start=" + layer.startTime.toFixed(3) + " in=" + layer.inPoint.toFixed(3) + " out=" + layer.outPoint.toFixed(3));
+            }
+            
+            if (contentStartTime >= playheadTime) {
+                // Content starts at or after playhead - move entire layer
                 layer.startTime += timeOffset;
                 layerMoved = true;
                 DEBUG_JSX.log("  →MOVE");
@@ -4807,20 +4820,11 @@ function nudgeFromPlayhead(direction, frames) {
                 // Track that this layer was moved entirely
                 movedLayerIndices.push(i);
                 
-            } else if (layerEndTime > playheadTime) {
-                // Layer starts before playhead but extends past it
-                // Check if visible content starts after playhead
-                if (layerTimelineInPoint >= playheadTime) {
-                    // Visible content starts at/after playhead - move inPoint (delay visible start)
-                    layer.inPoint += timeOffset;
-                    layerMoved = true;
-                    DEBUG_JSX.log("  →IN+");
-                } else {
-                    // Visible content includes playhead - extend outPoint only
-                    layer.outPoint += timeOffset;
-                    layerMoved = true;
-                    DEBUG_JSX.log("  →OUT+");
-                }
+            } else if (contentStartTime < playheadTime && contentEndTime > playheadTime) {
+                // Content actually spans the playhead - extend outPoint
+                layer.outPoint += timeOffset;
+                layerMoved = true;
+                DEBUG_JSX.log("  →OUT+");
                 
                 var newLayerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
                 if (newLayerEndTime > furthestTime) {
@@ -4828,6 +4832,7 @@ function nudgeFromPlayhead(direction, frames) {
                 }
                 
             } else {
+                // Content ends before playhead - skip
                 DEBUG_JSX.log("  →SKIP");
             }
             
@@ -4856,19 +4861,9 @@ function nudgeFromPlayhead(direction, frames) {
                 DEBUG_JSX.log("  PC: " + layer.source.name.substring(0, 15));
                 
                 // CRITICAL: Check if playhead is over the actual ACTIVE content of the precomp
-                // For trimmed layers, we need to check if playhead is within the visible bar area
-                var precompActiveStart, precompActiveEnd;
-                
-                if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
-                    // Natural layer - active content is from startTime to startTime + (outPoint - inPoint)
-                    precompActiveStart = layer.startTime;
-                    precompActiveEnd = layer.startTime + (layer.outPoint - layer.inPoint);
-                } else {
-                    // Trimmed layer - the visual bar position determines active area
-                    // The bar starts at layer.inPoint and ends at layer.inPoint + (outPoint - inPoint)
-                    precompActiveStart = layer.inPoint;
-                    precompActiveEnd = layer.inPoint + (layer.outPoint - layer.inPoint);
-                }
+                // The active content is where the layer bar is visible in the timeline
+                var precompActiveStart = layer.startTime + layer.inPoint;
+                var precompActiveEnd = layer.startTime + layer.outPoint;
                 
                 DEBUG_JSX.log("    PC@" + precompActiveStart.toFixed(2) + "-" + precompActiveEnd.toFixed(2) + "s");
                 
