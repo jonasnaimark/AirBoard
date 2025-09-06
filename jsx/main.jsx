@@ -5755,20 +5755,47 @@ function nudgeDelayTimelineMode(direction, frames) {
             DEBUG_JSX.log("No keyframes selected - will nudge layer start times");
             
             // Move layers by adjusting their start times
+            // CRITICAL: Account for trimmed vs natural layers when moving
             var movedLayers = 0;
             for (var i = 0; i < selectedLayers.length; i++) {
                 var layer = selectedLayers[i];
                 var oldStartTime = layer.startTime;
-                var newStartTime = oldStartTime + timeOffset;
                 
-                // Only move if the new start time is valid (not negative)
-                if (newStartTime >= 0) {
-                    layer.startTime = newStartTime;
-                    movedLayers++;
-                    DEBUG_JSX.log("Moved layer " + layer.name + " from " + oldStartTime + "s to " + newStartTime + "s");
+                // Determine visual position for the layer (same logic as nudgeLayerStartTimes)
+                var layerVisualPosition;
+                var isTrimmed = Math.abs(layer.inPoint - layer.startTime) > 0.001;
+                
+                if (isTrimmed) {
+                    // Trimmed layer - visual position is at inPoint
+                    layerVisualPosition = layer.inPoint;
+                    DEBUG_JSX.log("Layer " + layer.name + " is trimmed: visualPos=" + layerVisualPosition + ", startTime=" + oldStartTime);
                 } else {
-                    DEBUG_JSX.log("Skipped layer " + layer.name + " (would have negative start time)");
+                    // Natural layer - visual position is startTime
+                    layerVisualPosition = layer.startTime;
+                    DEBUG_JSX.log("Layer " + layer.name + " is natural: visualPos=" + layerVisualPosition);
                 }
+                
+                // Calculate new visual position
+                var newVisualPosition = layerVisualPosition + timeOffset;
+                
+                // Calculate the offset between visual position and startTime
+                var visualToStartOffset = oldStartTime - layerVisualPosition;
+                
+                // Calculate new startTime maintaining the offset
+                var newStartTime = newVisualPosition + visualToStartOffset;
+                
+                // Only clamp visual position to 0, allow negative startTime for trimmed layers
+                if (newVisualPosition < 0) {
+                    newVisualPosition = 0;
+                    newStartTime = visualToStartOffset; // Maintain trim offset
+                }
+                
+                // Clamp to composition bounds
+                newStartTime = Math.min(newStartTime, comp.duration);
+                
+                layer.startTime = newStartTime;
+                movedLayers++;
+                DEBUG_JSX.log("Moved layer " + layer.name + " from " + oldStartTime + "s to " + newStartTime + "s (visual: " + layerVisualPosition + " -> " + newVisualPosition + ")");
             }
             
             app.endUndoGroup();
@@ -6264,6 +6291,20 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
     try {
         DEBUG_JSX.log("nudgeLayerStartTimes: processing " + selectedLayers.length + " layers");
         
+        // Get frames from the custom increment if available, otherwise use default
+        var frames = 3; // Default
+        if (CUSTOM_INCREMENT_MS > 0) {
+            // Convert custom increment back to frames
+            frames = Math.round((CUSTOM_INCREMENT_MS / 1000) * frameRate);
+            DEBUG_JSX.log("Using custom increment: " + CUSTOM_INCREMENT_MS + "ms = " + frames + " frames");
+        }
+        
+        // Debug selected layers
+        for (var d = 0; d < selectedLayers.length; d++) {
+            var debugLayer = selectedLayers[d];
+            DEBUG_JSX.log("  Layer " + d + ": " + debugLayer.name + " start=" + debugLayer.startTime.toFixed(3) + " in=" + debugLayer.inPoint.toFixed(3) + " out=" + debugLayer.outPoint.toFixed(3));
+        }
+        
         // Initialize cumulative tracking if needed
         if (typeof SINGLE_LAYER_CUMULATIVE === 'undefined') {
             SINGLE_LAYER_CUMULATIVE = 0;
@@ -6309,21 +6350,31 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
         var layerDelays = [];
         var debugInfo = [];
         
-        // Find baseline (earliest startTime) - same logic as keyframe baseline detection
+        // Find baseline (earliest visual position) - account for trimmed vs natural layers
         var scanEarliestTime = Number.MAX_VALUE;
         var scanBaselineLayer = null;
         
         for (var i = 0; i < selectedLayers.length; i++) {
             var layer = selectedLayers[i];
-            var startTime = layer.startTime;
             
-            if (startTime < scanEarliestTime) {
-                scanEarliestTime = startTime;
+            // CRITICAL: Use same detection as layer delay reading
+            // For trimmed layers, the visual position is at inPoint, not startTime
+            var layerVisualPosition;
+            if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                // Natural layer - visual position is startTime
+                layerVisualPosition = layer.startTime;
+            } else {
+                // Trimmed layer - visual position is inPoint
+                layerVisualPosition = layer.inPoint;
+            }
+            
+            if (layerVisualPosition < scanEarliestTime) {
+                scanEarliestTime = layerVisualPosition;
                 scanBaselineLayer = layer.name;
             }
         }
         
-        DEBUG_JSX.log("Layer baseline detection: earliest=" + scanEarliestTime + "s, baseline=" + scanBaselineLayer);
+        DEBUG_JSX.log("Layer baseline detection: earliest=" + scanEarliestTime.toFixed(3) + "s, baseline=" + scanBaselineLayer);
         
         // Use same baseline cache approach as keyframes
         BASELINE_CACHE.reset();
@@ -6333,28 +6384,44 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
         // Build layer delays with baseline tracking
         for (var i = 0; i < selectedLayers.length; i++) {
             var layer = selectedLayers[i];
-            var startTime = layer.startTime;
             
-            // Track if this is a baseline layer
-            var isOriginalBaseline = (Math.abs(startTime - originalEarliestTime) < 0.001);
+            // CRITICAL: Use visual position for baseline comparison
+            var layerVisualPosition;
+            if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                // Natural layer - visual position is startTime
+                layerVisualPosition = layer.startTime;
+            } else {
+                // Trimmed layer - visual position is inPoint
+                layerVisualPosition = layer.inPoint;
+            }
+            
+            // Track if this is a baseline layer (compare visual position to baseline)
+            var isOriginalBaseline = (Math.abs(layerVisualPosition - originalEarliestTime) < 0.001);
             
             layerDelays.push({
                 layer: layer,
-                currentDelay: startTime,
+                currentDelay: layer.startTime,  // Keep using startTime for actual movement
+                visualPosition: layerVisualPosition,  // Store visual position for reference
                 isOriginalBaseline: isOriginalBaseline
             });
             
-            debugInfo.push("Layer " + layer.name + ": startTime=" + startTime + "s, isBaseline=" + isOriginalBaseline);
+            debugInfo.push("Layer " + layer.name + ": visualPos=" + layerVisualPosition.toFixed(3) + "s, startTime=" + layer.startTime.toFixed(3) + "s, isBaseline=" + isOriginalBaseline);
         }
         
         // Apply same snapping logic as keyframes
+        // CRITICAL: Use visual position to check if layers have same delay
         var allSameDelay = true;
-        var firstDelay = (layerDelays[0].currentDelay - originalEarliestTime) * 1000; // Convert to ms
+        var firstDelay = (layerDelays[0].visualPosition - originalEarliestTime) * 1000; // Convert to ms
+        
+        DEBUG_JSX.log("Checking delays - baseline at " + originalEarliestTime.toFixed(3) + "s:");
+        DEBUG_JSX.log("  Layer 0 (" + layerDelays[0].layer.name + "): visualPos=" + layerDelays[0].visualPosition.toFixed(3) + ", delay=" + firstDelay.toFixed(1) + "ms");
         
         for (var i = 1; i < layerDelays.length; i++) {
-            var delayMs = (layerDelays[i].currentDelay - originalEarliestTime) * 1000;
+            var delayMs = (layerDelays[i].visualPosition - originalEarliestTime) * 1000;
+            DEBUG_JSX.log("  Layer " + i + " (" + layerDelays[i].layer.name + "): visualPos=" + layerDelays[i].visualPosition.toFixed(3) + ", delay=" + delayMs.toFixed(1) + "ms");
             if (Math.abs(delayMs - firstDelay) > 1) { // 1ms tolerance
                 allSameDelay = false;
+                DEBUG_JSX.log("    → Different delay detected (diff=" + Math.abs(delayMs - firstDelay).toFixed(1) + "ms)");
                 break;
             }
         }
@@ -6363,8 +6430,8 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
         
         // Move layers using same logic as keyframes
         var movedCount = 0;
-        if (allSameDelay && Math.abs(firstDelay) < 1) {
-            // Timeline mode - all layers at baseline, move together with proper backward handling
+        if (allSameDelay) {
+            // Timeline mode - all layers have same delay (whether at baseline or not), move together
             // Check if selection changed and reset if needed
             var currentSelectionHash = getSelectionHash();
             if (currentSelectionHash !== LAST_SELECTION_HASH) {
@@ -6373,32 +6440,39 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
                 LAST_SELECTION_HASH = currentSelectionHash;
             }
             
-            // Track cumulative for multiple layers at 0ms
+            // Calculate frame-based nudge amount
+            var frameRate = comp.frameRate || 30;
+            var timelineNudgeSeconds = (frames * direction) / frameRate;
+            var nudgeMs = timelineNudgeSeconds * 1000;
+            
+            // Track cumulative for timeline mode
             if (typeof MULTI_LAYER_CUMULATIVE === 'undefined') {
                 MULTI_LAYER_CUMULATIVE = 0;
             }
-            MULTI_LAYER_CUMULATIVE += (direction > 0 ? 50 : -50);
+            MULTI_LAYER_CUMULATIVE += nudgeMs;
             
-            var nudgeMs;
-            if (direction > 0) {
-                nudgeMs = calculateDelaySnap(0, direction);  // Use normal snapping for forward
-            } else {
-                // For backward movement, calculate the increment without clamping to 0
-                var forwardNudge = calculateDelaySnap(0, 1);
-                nudgeMs = -forwardNudge;  // Negative of the forward increment
-            }
-            var timelineNudgeSeconds = nudgeMs / 1000.0;
+            DEBUG_JSX.log("Timeline mode: nudging " + layerDelays.length + " layers by " + nudgeMs + "ms (" + (frames * direction) + " frames)");
             
             for (var i = 0; i < layerDelays.length; i++) {
                 var layerData = layerDelays[i];
-                var newStartTime = Math.max(0, layerData.currentDelay + timelineNudgeSeconds);
+                
+                // Move the visual position, then calculate startTime
+                var newVisualPosition = layerData.visualPosition + timelineNudgeSeconds;
+                var visualToStartOffset = layerData.currentDelay - layerData.visualPosition;
+                var newStartTime = newVisualPosition + visualToStartOffset;
+                
+                // Only clamp visual position to 0, allow negative startTime for trimmed layers
+                if (newVisualPosition < 0) {
+                    newVisualPosition = 0;
+                    newStartTime = visualToStartOffset;
+                }
                 
                 // Clamp to composition bounds
                 newStartTime = Math.min(newStartTime, comp.duration);
                 
                 layerData.layer.startTime = newStartTime;
                 movedCount++;
-                debugInfo.push("Timeline mode: Moved " + layerData.layer.name + " to " + newStartTime + "s");
+                debugInfo.push("Timeline mode: Moved " + layerData.layer.name + " from " + layerData.currentDelay.toFixed(3) + "s to " + newStartTime.toFixed(3) + "s (visual: " + newVisualPosition.toFixed(3) + "s)");
             }
         } else {
             // Multiple delays - snap each delayed layer individually (like keyframes)
@@ -6412,12 +6486,27 @@ function nudgeLayerStartTimes(selectedLayers, direction, frameRate, comp) {
                 }
                 
                 // Apply snapping to each non-baseline layer individually
-                var currentDelayMs = (layerData.currentDelay - originalEarliestTime) * 1000;
+                // CRITICAL: Use visual position for delay calculation, not startTime
+                var currentDelayMs = (layerData.visualPosition - originalEarliestTime) * 1000;
                 var targetDelayMs = calculateDelaySnap(currentDelayMs, direction);
-                var targetTime = originalEarliestTime + (targetDelayMs / 1000);
                 
-                // Clamp to bounds
-                targetTime = Math.max(0, Math.min(targetTime, comp.duration));
+                // Calculate where we want the visual position to be
+                var targetVisualPosition = originalEarliestTime + (targetDelayMs / 1000);
+                
+                // For trimmed layers, maintain the offset between visual position and startTime
+                var visualToStartOffset = layerData.currentDelay - layerData.visualPosition;
+                var targetTime = targetVisualPosition + visualToStartOffset;
+                
+                // Only clamp if it would make the layer completely disappear
+                // Allow negative startTime for trimmed layers as long as visual position is >= 0
+                if (targetVisualPosition >= 0) {
+                    // Visual position is valid, use calculated targetTime even if negative
+                    targetTime = Math.min(targetTime, comp.duration);
+                } else {
+                    // Visual position would be negative, clamp the visual position to 0
+                    targetVisualPosition = 0;
+                    targetTime = visualToStartOffset; // This maintains the trim offset
+                }
                 
                 layerData.layer.startTime = targetTime;
                 movedCount++;

@@ -719,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         delayIncrementBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
-            console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Timeline Mode]' : ' [Normal - Baseline Mode]'));
+            console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]'));
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -728,17 +728,17 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get delay frames from input field
             var delayFrames = parseFloat(delayInputField.value) || 3;
-            console.log('Applying +' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (timeline mode - all keyframes move)' : ' (baseline mode - baseline stays fixed)'));
+            console.log('Applying +' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
             
             delayIncrementBtn.disabled = true;
             
-            // Choose function based on shift key
+            // Choose function based on shift key (SWAPPED: normal = timeline, shift = baseline)
             var script = isShiftHeld 
-                ? 'nudgeDelayTimelineMode(1, ' + delayFrames + ')'  // Timeline mode: move all keyframes
-                : 'nudgeDelayWithFrames(1, ' + delayFrames + ')';   // Baseline mode: respect baseline
+                ? 'nudgeDelayWithFrames(1, ' + delayFrames + ')'   // SHIFT: Baseline mode - respect baseline
+                : 'nudgeDelayTimelineMode(1, ' + delayFrames + ')';  // NORMAL: Timeline mode - move all keyframes
             
             csInterface.evalScript(script, function(result) {
-                console.log('Delay nudge forward result' + (isShiftHeld ? ' [TIMELINE MODE]' : ' [BASELINE MODE]') + ':', result);
+                console.log('Delay nudge forward result' + (isShiftHeld ? ' [BASELINE MODE]' : ' [TIMELINE MODE]') + ':', result);
                 handleDelayResult(result, delayIncrementBtn);
             });
         });
@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         delayDecrementBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
-            console.log('Delay decrement (nudge backward) clicked' + (isShiftHeld ? ' [SHIFT - Timeline Mode]' : ' [Normal - Baseline Mode]'));
+            console.log('Delay decrement (nudge backward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]'));
             
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -810,17 +810,17 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Get delay frames from input field
             var delayFrames = parseFloat(delayInputField.value) || 3;
-            console.log('Applying -' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (timeline mode - all keyframes move)' : ' (baseline mode - baseline stays fixed)'));
+            console.log('Applying -' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
             
             delayDecrementBtn.disabled = true;
             
-            // Choose function based on shift key
+            // Choose function based on shift key (SWAPPED: normal = timeline, shift = baseline)
             var script = isShiftHeld 
-                ? 'nudgeDelayTimelineMode(-1, ' + delayFrames + ')'  // Timeline mode: move all keyframes
-                : 'nudgeDelayWithFrames(-1, ' + delayFrames + ')';   // Baseline mode: respect baseline
+                ? 'nudgeDelayWithFrames(-1, ' + delayFrames + ')'   // SHIFT: Baseline mode - respect baseline
+                : 'nudgeDelayTimelineMode(-1, ' + delayFrames + ')';  // NORMAL: Timeline mode - move all keyframes
             
             csInterface.evalScript(script, function(result) {
-                console.log('Delay nudge backward result' + (isShiftHeld ? ' [TIMELINE MODE]' : ' [BASELINE MODE]') + ':', result);
+                console.log('Delay nudge backward result' + (isShiftHeld ? ' [BASELINE MODE]' : ' [TIMELINE MODE]') + ':', result);
                 handleDelayResult(result, delayDecrementBtn);
             });
         });

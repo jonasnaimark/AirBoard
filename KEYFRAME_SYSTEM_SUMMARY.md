@@ -906,9 +906,86 @@ if (playheadTime >= contentStartTime && playheadTime < contentEndTime) {
 3. **Consistent Boundary Logic**: Uses the same content boundary calculation for all layer operations
 4. **Fixed Circular Problem**: Solved the issue where fixing trimmed layers broke natural layer processing
 
+### **Challenge 11: Timeline Mode Layer Movement with Trimmed Layers**
+**Problem**: When using timeline mode to move multiple layers together (no keyframes selected), only one layer was moving when both should move. This occurred specifically when dealing with a mix of trimmed and natural layers at the same visual position.
+
+**Context**: Timeline mode should move ALL selected layers together by the same amount. However, the `nudgeDelayTimelineMode` function was directly modifying layer `startTime` without accounting for the difference between trimmed and natural layers' visual positions.
+
+**THE PROBLEM IN DETAIL** (Discovered December 2024):
+When you have two layers at the same visual position:
+1. Layer 1: Natural layer with `inPoint == startTime == 0`
+2. Layer 2: Trimmed layer with `inPoint == 0` but `startTime == -2.133` (negative due to trimming)
+3. User selects both and uses timeline mode (normal click) to move forward
+4. Expected: Both layers move together maintaining their visual alignment
+5. Actual: Only one layer moves, breaking the visual alignment
+
+**Root Cause**:
+The simplified layer movement code in `nudgeDelayTimelineMode` was using:
+```javascript
+// WRONG: Treats all layers the same
+var newStartTime = layer.startTime + timeOffset;
+layer.startTime = newStartTime;
+```
+
+This fails because:
+- Natural layers: Visual position = startTime, so moving startTime moves the visual position correctly
+- Trimmed layers: Visual position = inPoint, moving startTime doesn't correctly move the visual position
+
+**THE SOLUTION** (December 2024):
+```javascript
+// Determine visual position for the layer
+var layerVisualPosition;
+var isTrimmed = Math.abs(layer.inPoint - layer.startTime) > 0.001;
+
+if (isTrimmed) {
+    // Trimmed layer - visual position is at inPoint
+    layerVisualPosition = layer.inPoint;
+} else {
+    // Natural layer - visual position is startTime
+    layerVisualPosition = layer.startTime;
+}
+
+// Calculate new visual position
+var newVisualPosition = layerVisualPosition + timeOffset;
+
+// Calculate the offset between visual position and startTime
+var visualToStartOffset = layer.startTime - layerVisualPosition;
+
+// Calculate new startTime maintaining the offset
+var newStartTime = newVisualPosition + visualToStartOffset;
+
+// Only clamp visual position to 0, allow negative startTime for trimmed layers
+if (newVisualPosition < 0) {
+    newVisualPosition = 0;
+    newStartTime = visualToStartOffset; // Maintain trim offset
+}
+
+layer.startTime = newStartTime;
+```
+
+**Why This Solution Works**:
+1. **Identifies Layer Type**: Checks if `inPoint != startTime` to detect trimmed layers
+2. **Uses Correct Visual Position**: Natural layers use startTime, trimmed layers use inPoint
+3. **Maintains Trim Offset**: Preserves the difference between visual position and startTime
+4. **Moves Visual Position**: Both layer types move by the same visual amount
+5. **Allows Negative startTime**: Trimmed layers can have negative startTime as long as visual position >= 0
+
+**Key Insight for Future Development**:
+When working with layer timing in After Effects, ALWAYS consider:
+- **Visual Position**: Where the layer bar appears in the timeline (what users see)
+- **startTime**: Internal timing property that can be negative for trimmed layers
+- **inPoint**: For trimmed layers, this represents the visual position
+- **Natural vs Trimmed**: Test your code with both layer types to ensure consistent behavior
+
+**Test Cases That Now Work**:
+- ✅ Two natural layers at same position: Both move together
+- ✅ Two trimmed layers at same position: Both move together
+- ✅ Mix of natural and trimmed at same position: Both move together maintaining alignment
+- ✅ Trimmed layer with negative startTime: Moves correctly maintaining trim offset
+
 ---
 
 *Last Updated: December 2024*  
-*Version: v4.16.25 - Global Delay System Complete with All Layer Type Fixes*  
+*Version: v4.16.26 - Timeline Mode Fixed for Trimmed Layer Movement*  
 *Status: All keyframe systems fully implemented and production-ready*  
-*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, and precomp boundary calculation documented*
+*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, and timeline mode layer movement documented*
