@@ -5525,6 +5525,7 @@ function nudgeDelayWithFrames(direction, frames) {
 // Global variable to track cumulative timeline mode offset
 var TIMELINE_MODE_CUMULATIVE = 0;
 var TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+var LAST_TIMELINE_SELECTION_HASH = ""; // Separate hash for timeline mode that ignores keyframe times
 var IS_IN_FORCED_TIMELINE_MODE = false;
 var CUSTOM_INCREMENT_MS = 0; // For passing custom increment to forced timeline mode
 
@@ -5630,6 +5631,53 @@ function getSelectionHash() {
     }
 }
 
+// Selection hash without keyframe times - for timeline mode cumulative tracking
+function getSelectionHashWithoutTimes() {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "no_comp";
+        }
+        
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "no_selection";
+        }
+        
+        // Build a string representing the current selection WITHOUT keyframe times
+        var hash = "";
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+            hash += layer.index + "_" + layer.name + ";";
+            
+            // Add selected keyframe info but WITHOUT the times
+            var selectedProps = layer.selectedProperties;
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    // Include property name and which keyframe indices are selected
+                    var keyInfo = prop.name + ":";
+                    var selectedIndices = [];
+                    for (var k = 1; k <= prop.numKeys; k++) {
+                        if (prop.keySelected(k)) {
+                            selectedIndices.push(k);
+                            // Only include the index, NOT the time
+                            keyInfo += k + ",";
+                        }
+                    }
+                    if (selectedIndices.length > 0) {
+                        hash += keyInfo + ";";
+                    }
+                }
+            }
+        }
+        
+        return hash;
+    } catch(e) {
+        return "error";
+    }
+}
+
 function nudgeDelayTimelineMode(direction, frames) {
     try {
         DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames");
@@ -5644,6 +5692,17 @@ function nudgeDelayTimelineMode(direction, frames) {
         
         var frameRate = comp.frameRate || 30;
         var timeOffset = (frames * direction) / frameRate; // Time offset in seconds
+        
+        // Check if selection changed and reset cumulative if needed
+        // For timeline mode, use a special hash that doesn't include keyframe times
+        var currentSelectionHash = getSelectionHashWithoutTimes();
+        if (typeof LAST_TIMELINE_SELECTION_HASH === 'undefined') {
+            LAST_TIMELINE_SELECTION_HASH = currentSelectionHash;
+        } else if (currentSelectionHash !== LAST_TIMELINE_SELECTION_HASH) {
+            DEBUG_JSX.log("Selection changed - resetting timeline mode cumulative offset");
+            TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
+            LAST_TIMELINE_SELECTION_HASH = currentSelectionHash;
+        }
         
         // Update cumulative offset
         TIMELINE_MODE_CUMULATIVE_OFFSET += timeOffset;

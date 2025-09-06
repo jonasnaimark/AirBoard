@@ -986,6 +986,6 @@ When working with layer timing in After Effects, ALWAYS consider:
 ---
 
 *Last Updated: December 2024*  
-*Version: v4.16.27 - Global Delay Restored + Timeline Mode Fixed for Trimmed Layers*  
+*Version: v4.16.28 - Fixed Timeline Mode Cumulative Tracking for Keyframes*  
 *Status: All keyframe systems fully implemented and production-ready*  
 *Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, and global delay functionality restored*
