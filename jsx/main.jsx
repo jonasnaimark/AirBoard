@@ -4718,7 +4718,6 @@ function nudgeFromPlayhead(direction, frames) {
         if (typeof GLOBAL_DELAY_CUMULATIVE === 'undefined') {
             GLOBAL_DELAY_CUMULATIVE = 0;
         }
-        GLOBAL_DELAY_CUMULATIVE += (direction > 0 ? 50 : -50);
         
         // Track processed items to prevent double-processing
         var processedItems = {};
@@ -4740,6 +4739,9 @@ function nudgeFromPlayhead(direction, frames) {
         DEBUG_JSX.log(comp.name + "@" + frameRate + "fps");
         
         var timeOffset = (frames * direction) / frameRate; // Time offset in seconds
+        
+        // Update cumulative with the actual time offset in milliseconds
+        GLOBAL_DELAY_CUMULATIVE += (timeOffset * 1000);
         var playheadTime = comp.time; // Current playhead position
         
         DEBUG_JSX.log("Δ=" + (timeOffset * 1000).toFixed(0) + "ms, PH=" + playheadTime.toFixed(3) + "s");
