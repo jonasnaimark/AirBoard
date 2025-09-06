@@ -4770,15 +4770,17 @@ function nudgeFromPlayhead(direction, frames) {
             // Calculate layer timeline positions
             var layerStartTime = layer.startTime;
             // For visible content position: distinguish between trimmed and naturally positioned layers
-            // If inPoint equals startTime, layer is naturally positioned (not trimmed)
-            // If inPoint differs from startTime, layer is trimmed
+            // Apply the same fix as layer delay reading (Challenge 8 in KEYFRAME_SYSTEM_SUMMARY.md)
+            // Natural layers: visual position = startTime
+            // Trimmed layers: visual position = inPoint value directly
             var layerTimelineInPoint;
             if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
                 // Layer is naturally positioned (not trimmed) - visible content starts at startTime
                 layerTimelineInPoint = layer.startTime;
             } else {
-                // Layer is trimmed - visible content starts at startTime + inPoint
-                layerTimelineInPoint = layer.startTime + layer.inPoint;
+                // Layer is trimmed - the visual bar position is at the inPoint value
+                // This is the key fix: use inPoint directly, not startTime + inPoint
+                layerTimelineInPoint = layer.inPoint;
             }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
             // The actual end time of the layer's visible content
@@ -5374,15 +5376,17 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
             
             // Calculate actual timeline positions of layer's in and out points (same logic as main comp)
             // For visible content position: distinguish between trimmed and naturally positioned layers
-            // If inPoint equals startTime, layer is naturally positioned (not trimmed)
-            // If inPoint differs from startTime, layer is trimmed
+            // Apply the same fix as layer delay reading (Challenge 8 in KEYFRAME_SYSTEM_SUMMARY.md)
+            // Natural layers: visual position = startTime
+            // Trimmed layers: visual position = inPoint value directly
             var layerTimelineInPoint;
             if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
                 // Layer is naturally positioned (not trimmed) - visible content starts at startTime
                 layerTimelineInPoint = layer.startTime;
             } else {
-                // Layer is trimmed - visible content starts at startTime + inPoint
-                layerTimelineInPoint = layer.startTime + layer.inPoint;
+                // Layer is trimmed - the visual bar position is at the inPoint value
+                // This is the key fix: use inPoint directly, not startTime + inPoint
+                layerTimelineInPoint = layer.inPoint;
             }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
             
