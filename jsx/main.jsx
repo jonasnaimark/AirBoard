@@ -892,9 +892,28 @@ function readLayerDelays(selectedLayers, comp) {
                 latestOutPoint = outPoint;
             }
             
+            // For delay reading, we need the visual position of the layer bar in the timeline
+            // Text layers and other layers handle inPoint differently:
+            // - Naturally positioned layers often have inPoint == startTime
+            // - Trimmed layers have inPoint != startTime
+            
+            var layerBarPosition;
+            
+            // Check if this is a naturally positioned layer
+            // For text layers and many other layer types, a naturally positioned layer has inPoint == startTime
+            if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                // Natural layer - bar position is simply startTime
+                layerBarPosition = layer.startTime;
+            } else {
+                // Trimmed layer - the layer has been trimmed
+                // For trimmed layers, the visual bar position seems to be at the inPoint value
+                // This works for both negative startTime (pulled back) and positive startTime cases
+                layerBarPosition = layer.inPoint;
+            }
+            
             layerTimes.push({
                 name: layer.name,
-                time: layer.startTime,
+                time: layerBarPosition,  // The visual position of the layer bar
                 inPoint: inPoint,
                 outPoint: outPoint,
                 index: layer.index // Add layer index for proper stagger calculation
@@ -1004,10 +1023,11 @@ function readLayerDelays(selectedLayers, comp) {
             }
         }
         
-        // Build debug string
+        // Build debug string with more detail
         var debugStrings = [];
         for (var k = 0; k < layerTimes.length; k++) {
-            debugStrings.push(layerTimes[k].name + " at " + delays[k] + "ms");
+            var lt = layerTimes[k];
+            debugStrings.push(lt.name + " at " + delays[k] + "ms (startTime=" + lt.time.toFixed(3) + "s, in=" + lt.inPoint.toFixed(3) + "s, out=" + lt.outPoint.toFixed(3) + "s)");
         }
         
         // Calculate stagger for layers (layer mode)

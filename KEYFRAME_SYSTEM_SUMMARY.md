@@ -709,7 +709,58 @@ if (layerTimelineInPoint >= playheadTime) {
 - Layers that span playhead vs layers entirely after playhead
 - Content that starts before vs after playhead position
 
-### **Challenge 8: Split Dimension Keyframe Handling - NO DELETION SOLUTION**
+### **Challenge 8: Layer Delay Reading for Trimmed vs Natural Layers**
+**Problem**: When reading delays between layers (not keyframes), After Effects reports different `startTime` values depending on whether a layer has been trimmed, making accurate delay calculation impossible. Trimming a layer's in-point and then moving it changes the internal `startTime` to unexpected values.
+
+**Context**: Users need to read the visual delay between layers in the timeline. But After Effects internally tracks layers differently based on their trimming state:
+- **Natural layers**: Never trimmed, `inPoint == startTime` 
+- **Trimmed layers**: Had their in-point adjusted, `inPoint != startTime`
+
+**THE PROBLEM IN DETAIL** (Discovered December 2024):
+When you trim a layer's in-point and move it:
+1. Create two text layers at frame 0 and frame 30
+2. Trim the first layer's in-point by 30 frames
+3. Move the trimmed layer back so it visually starts at frame 0
+4. After Effects now reports bizarre `startTime` values (like -2.133s) that don't match the visual position
+
+**Failed Approaches**:
+1. ❌ Using `layer.startTime` directly - gives wrong values for trimmed layers
+2. ❌ Using `layer.startTime + layer.inPoint` - gives wrong values in different scenarios
+3. ❌ Using `layer.startTime - layer.inPoint` - also incorrect
+4. ❌ Complex conditionals based on negative startTime - inconsistent results
+
+**THE SOLUTION** (December 2024):
+```javascript
+// The key insight: For delay reading, we need the VISUAL position of the layer bar
+// Natural layers: visual position = startTime
+// Trimmed layers: visual position = inPoint (surprisingly!)
+
+var layerBarPosition;
+
+if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+    // Natural layer (inPoint == startTime)
+    // The layer bar appears at startTime
+    layerBarPosition = layer.startTime;
+} else {
+    // Trimmed layer (inPoint != startTime)
+    // For ALL trimmed layers, the visual bar position equals the inPoint value
+    // This works whether startTime is negative (pulled back) or positive
+    layerBarPosition = layer.inPoint;
+}
+```
+
+**Why This Works**:
+1. **Natural text layers have `inPoint == startTime`** - Unlike other layer types, text layers set both values equal when naturally positioned
+2. **Trimmed layers always show bar at `inPoint` position** - Regardless of how they were moved after trimming
+3. **Simple and consistent** - No complex calculations needed
+
+**Test Cases Verified**:
+- ✅ Two natural text layers at frame 0 and 30: Shows 30f delay correctly
+- ✅ Trimmed layer pulled back to frame 0: Shows correct delay using inPoint
+- ✅ Trimmed layer at positive position: Shows correct delay using inPoint
+- ✅ Mixed natural and trimmed layers: All calculate correctly
+
+### **Challenge 9: Split Dimension Keyframe Handling - NO DELETION SOLUTION**
 **Problem**: When Position dimensions are separated (X Position/Y Position), the original "Position" property becomes hidden but still exists. Processing it causes keyframe deletion because After Effects can't handle operations on hidden properties.
 
 **Context**: After Effects allows separating Position into X Position and Y Position for independent animation. When separated, `position.dimensionsSeparated = true`, and the original Position property becomes inaccessible but still shows up in property traversal.
