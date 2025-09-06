@@ -5650,8 +5650,10 @@ function nudgeDelayTimelineMode(direction, frames) {
         
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
+            // GLOBAL DELAY: When nothing is selected, nudge everything after playhead
             app.endUndoGroup();
-            return "error|No layers selected";
+            DEBUG_JSX.log("GLOBAL DELAY: No selection, nudging from playhead with " + frames + " frames");
+            return nudgeFromPlayhead(direction, frames);
         }
         
         // STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
