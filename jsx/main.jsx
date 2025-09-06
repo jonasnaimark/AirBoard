@@ -4787,7 +4787,8 @@ function nudgeFromPlayhead(direction, frames) {
             }
             var layerTimelineOutPoint = layer.startTime + layer.outPoint;
             // The actual end time of the layer's visible content
-            var layerEndTime = layerTimelineOutPoint;
+            // CRITICAL: Use the layer's duration (outPoint - inPoint) not just outPoint
+            var layerEndTime = layer.startTime + (layer.outPoint - layer.inPoint);
             
             // Check if the LAYER ITSELF (not just visible content) starts after playhead
             
@@ -4850,43 +4851,40 @@ function nudgeFromPlayhead(direction, frames) {
             }
             
             // Process precomps (5 levels deep)
-            // Only process precomp contents if the precomp layer starts before playhead
-            // (If precomp layer starts at/after playhead, it was moved entirely and contents move with it)
+            // Only process precomp contents if the playhead is over the ACTIVE content area
             if (layer.source && layer.source instanceof CompItem) {
                 DEBUG_JSX.log("  PC: " + layer.source.name.substring(0, 15));
                 
-                // Use same timeline-based logic as main comp for consistency  
-                // For visible content position: distinguish between trimmed and naturally positioned layers
-                var layerTimelineInPoint;
-                if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
-                    // Layer is naturally positioned (not trimmed) - visible content starts at startTime
-                    layerTimelineInPoint = layer.startTime;
-                } else {
-                    // Layer is trimmed - visible content starts at startTime + inPoint
-                    layerTimelineInPoint = layer.startTime + layer.inPoint;
-                }
-                var layerTimelineOutPoint = layer.startTime + layer.outPoint;
+                // CRITICAL: Check if playhead is over the actual ACTIVE content of the precomp
+                // For trimmed layers, we need to check if playhead is within the visible bar area
+                var precompActiveStart, precompActiveEnd;
                 
-                if (layerStartTime < playheadTime) {
-                    // Precomp layer spans playhead - process its contents
-                DEBUG_JSX.log("    PC@" + layerTimelineInPoint.toFixed(2) + "-" + layerTimelineOutPoint.toFixed(2) + "s");
-                    
-                    // Only process if the precomp is active at or after the playhead
-                    if (layerTimelineOutPoint > playheadTime) {
-                        DEBUG_JSX.log("    →Process PC");
-                        var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
-                        movedKeyframes += precompResult.movedKeyframes;
-                        movedLayers += precompResult.movedLayers;
-                        movedLabels += precompResult.movedLabels || 0;
-                        if (precompResult.furthestTime > furthestTime) {
-                            furthestTime = precompResult.furthestTime;
-                        }
-                        DEBUG_JSX.log("    PC: " + precompResult.movedKeyframes + "k/" + precompResult.movedLayers + "L");
-                    } else {
-                        DEBUG_JSX.log("    Skip PC (ends<PH)");
-                    }
+                if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
+                    // Natural layer - active content is from startTime to startTime + (outPoint - inPoint)
+                    precompActiveStart = layer.startTime;
+                    precompActiveEnd = layer.startTime + (layer.outPoint - layer.inPoint);
                 } else {
-                    DEBUG_JSX.log("    Skip PC (moved)");
+                    // Trimmed layer - the visual bar position determines active area
+                    // The bar starts at layer.inPoint and ends at layer.inPoint + (outPoint - inPoint)
+                    precompActiveStart = layer.inPoint;
+                    precompActiveEnd = layer.inPoint + (layer.outPoint - layer.inPoint);
+                }
+                
+                DEBUG_JSX.log("    PC@" + precompActiveStart.toFixed(2) + "-" + precompActiveEnd.toFixed(2) + "s");
+                
+                // Only process if playhead is within the active content area
+                if (playheadTime >= precompActiveStart && playheadTime < precompActiveEnd) {
+                    DEBUG_JSX.log("    →Process PC (playhead in active area)");
+                    var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
+                    movedKeyframes += precompResult.movedKeyframes;
+                    movedLayers += precompResult.movedLayers;
+                    movedLabels += precompResult.movedLabels || 0;
+                    if (precompResult.furthestTime > furthestTime) {
+                        furthestTime = precompResult.furthestTime;
+                    }
+                    DEBUG_JSX.log("    PC: " + precompResult.movedKeyframes + "k/" + precompResult.movedLayers + "L");
+                } else {
+                    DEBUG_JSX.log("    Skip PC (playhead not in active area)");
                 }
             }
             
