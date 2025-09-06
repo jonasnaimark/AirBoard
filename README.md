@@ -17,7 +17,7 @@
 
 ## 📥 Get the Plugin
 
-**[⬇️ Download AirBoard v4.16.25](dist/AirBoard-v4.16.25.zxp)** (Latest - Dec 5, 2024)
+**[⬇️ Download AirBoard v4.16.25](dist/AirBoard-v4.16.25.zxp)**
 
 ### Install Steps
 1. Download the `.zxp` file above
