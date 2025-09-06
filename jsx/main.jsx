@@ -3529,13 +3529,16 @@ function nudgeDelay(direction) {
                     
                     // Don't reset cumulative on selection change - it's causing issues
                     
+                    // Use custom increment if set, otherwise default to 50ms
+                    var incrementAmount = CUSTOM_INCREMENT_MS > 0 ? CUSTOM_INCREMENT_MS : 50;
+                    
                     // Track cumulative offset
-                    TIMELINE_MODE_CUMULATIVE += (direction > 0 ? 50 : -50);
+                    TIMELINE_MODE_CUMULATIVE += (direction > 0 ? incrementAmount : -incrementAmount);
                     DEBUG_JSX.log("CUM:" + TIMELINE_MODE_CUMULATIVE + "ms");
                     
                     // For display and movement: the cumulative value represents total offset from start
                     // But we need to calculate the actual movement from the current position
-                    var nudgeMs = (direction > 0 ? 50 : -50);
+                    var nudgeMs = (direction > 0 ? incrementAmount : -incrementAmount);
                     var nudgeSeconds = nudgeMs / 1000.0;
                     var newTimelineTime = Math.max(0, scanEarliestTime + nudgeSeconds);
                     DEBUG_JSX.log("MOVE:" + Math.round(scanEarliestTime * 1000) + "→" + Math.round(newTimelineTime * 1000) + "ms");
@@ -5531,6 +5534,7 @@ function nudgeDelayWithFrames(direction, frames) {
 var TIMELINE_MODE_CUMULATIVE = 0;
 var TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
 var IS_IN_FORCED_TIMELINE_MODE = false;
+var CUSTOM_INCREMENT_MS = 0; // For passing custom increment to forced timeline mode
 
 // Track selection and playhead for auto-reset
 var LAST_SELECTION_HASH = "";
@@ -6205,6 +6209,9 @@ function nudgeDelayWithCustomIncrement(direction, incrementMs) {
         // Store the original calculateDelaySnap function
         var originalCalculateDelaySnap = calculateDelaySnap;
         
+        // Set global variable for forced timeline mode to use
+        CUSTOM_INCREMENT_MS = incrementMs;
+        
         // Temporarily replace the global calculateDelaySnap function
         calculateDelaySnap = function(currentDelayMs, dir) {
             return calculateDelaySnapWithIncrement(currentDelayMs, dir, incrementMs);
@@ -6213,16 +6220,18 @@ function nudgeDelayWithCustomIncrement(direction, incrementMs) {
         // Call the existing nudgeDelay function which will use our custom snapping
         var result = nudgeDelay(direction);
         
-        // Restore the original function
+        // Restore the original function and reset custom increment
         calculateDelaySnap = originalCalculateDelaySnap;
+        CUSTOM_INCREMENT_MS = 0;
         
         return result;
         
     } catch(e) {
-        // Make sure to restore the original function even if there's an error
+        // Make sure to restore the original function and reset custom increment even if there's an error
         if (originalCalculateDelaySnap) {
             calculateDelaySnap = originalCalculateDelaySnap;
         }
+        CUSTOM_INCREMENT_MS = 0;
         return "error|Failed to nudge delay with custom increment: " + e.toString();
     }
 }
