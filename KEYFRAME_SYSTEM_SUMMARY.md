@@ -983,9 +983,296 @@ When working with layer timing in After Effects, ALWAYS consider:
 - ✅ Mix of natural and trimmed at same position: Both move together maintaining alignment
 - ✅ Trimmed layer with negative startTime: Moves correctly maintaining trim offset
 
+### **Challenge 12: Time Remap Layers and Global Delay Keyframe Processing**
+**Problem**: When a layer has Time Remap enabled and its content starts before the layer bar (due to negative time remapping), keyframes after the playhead were not being delayed during global delay operations, even though they should be.
+
+**Context**: Time Remap allows a layer's content to play at different times than the layer bar suggests. A layer can appear to start at 0.583s in the timeline, but its actual content (due to Time Remap) can start at 0.350s. This creates a disconnect between the layer's position and its content position.
+
+**THE PROBLEM IN DETAIL** (Discovered December 2024):
+Scenario with Time Remap layer:
+1. Layer bar starts at 0.583s (`layer.startTime`)
+2. Time Remap makes content start at 0.350s (visible in timeline)
+3. Playhead is at 0.433s
+4. Time Remap keyframes are after the playhead (should be delayed)
+5. Global delay was checking `if (layerStartTime < playheadTime)` 
+6. Since 0.583 > 0.433, keyframes were skipped with "Skip keys (moved)"
+7. Result: Visible keyframes after playhead were not being delayed
+
+**Root Cause**:
+The global delay system was using `layerStartTime` to decide whether to process keyframes:
+```javascript
+// WRONG: Only considers layer bar position
+if (layerStartTime < playheadTime) {
+    // Process keyframes
+} else {
+    // Skip - assumes layer was moved entirely
+}
+```
+
+This fails for Time Remap layers where content position ≠ layer position.
+
+**THE SOLUTION** (December 2024):
+```javascript
+// Use contentStartTime which accounts for Time Remap
+// contentStartTime is the actual visible content start position
+if (contentStartTime < playheadTime) {
+    DEBUG_JSX.log("  Keys@" + layer.name.substring(0, 10));
+    var keyframeResult = moveKeyframesAfterTime(layer, playheadTime, timeOffset, processedItems);
+    // Process keyframes normally
+} else {
+    DEBUG_JSX.log("  Skip keys (moved)");
+}
+```
+
+**Why This Solution Works**:
+1. **`contentStartTime` represents actual visible content position** - For Time Remap layers, this is where the content actually appears
+2. **Handles both Time Remap and regular layers** - For regular layers, `contentStartTime == layerStartTime`
+3. **Correct keyframe processing decision** - Keyframes are processed based on where content is visible, not where the layer bar is
+4. **Preserves the skip logic** - If content truly starts after playhead, keyframes are still skipped (layer was moved entirely)
+
+**Key Insight - Time Remap Creates Two Timeline Positions**:
+- **Layer Timeline Position**: Where the layer bar appears (`layer.startTime`)
+- **Content Timeline Position**: Where the content actually plays (calculated from Time Remap)
+- **Global Delay Must Use Content Position**: Decisions about keyframe processing must be based on visible content, not layer bar position
+
+**How `contentStartTime` is Calculated**:
+```javascript
+// For Time Remap layers with first keyframe value != 0
+if (layer.timeRemapEnabled && layer.timeRemap.numKeys > 0) {
+    var firstKeyTime = layer.timeRemap.keyTime(1);
+    var firstKeyValue = layer.timeRemap.keyValue(1);
+    
+    if (Math.abs(firstKeyValue) > 0.001) {
+        // Time Remap shifts content
+        contentStartTime = layer.startTime - firstKeyValue + layer.inPoint;
+    }
+}
+```
+
+**Test Cases That Now Work**:
+- ✅ Time Remap layer with content before layer bar: Keyframes after playhead get delayed
+- ✅ Regular layer: Behavior unchanged (contentStartTime == layerStartTime)
+- ✅ Time Remap layer entirely after playhead: Still skipped correctly
+- ✅ Complex Time Remap with multiple keyframes: Processes based on visible content position
+
+**Debug Output Before/After**:
+```
+Before Fix:
+L1: Gesture - Tap 3@0.58s
+→Skip keys (moved)  // WRONG - keyframes after playhead not processed
+
+After Fix:
+L1: Gesture - Tap 3@0.58s
+Keys@Gesture - Ta
+  2k  // CORRECT - Time Remap keyframes processed
+```
+
+### **Challenge 13: Time Remap Keyframe Movement and Selection Preservation (CRITICAL)**
+**Problem**: Time Remap keyframes require completely different handling than other keyframe properties. They cannot be manipulated using the standard "remove and re-add" approach, were being processed twice causing double-movement, and were losing selection after nudging operations.
+
+**Context**: Time Remap is a special property in After Effects that controls the playback timing of a layer. Unlike Position, Opacity, etc., Time Remap keyframes have unique constraints:
+1. Cannot use `prop.removeKey()` followed by `prop.addKey()` like other properties
+2. Often not included in `layer.selectedProperties` array, requiring explicit checking
+3. Can appear both in selectedProperties AND need explicit checking, causing duplicate processing
+4. Selection preservation requires special handling after movement
+
+**THE COMPLETE TIME REMAP SOLUTION** (December 2024)
+
+This implementation took extensive debugging to get right. Here are the critical lessons learned:
+
+#### **Issue 1: Time Remap Keyframes Being Deleted**
+**Failed Approach**: Using standard remove-then-add pattern
+```javascript
+// ❌ WRONG: This causes Time Remap keyframes to be deleted
+prop.removeKey(keyIndex);
+var newIdx = prop.addKey(newTime);
+// Error: Can not "addKey" with this property, because the property or a parent property is hidden
+```
+
+**Solution**: Use `setValueAtTime` to create new keyframes, then carefully remove old ones
+```javascript
+// ✅ RIGHT: Add new keyframe first, then remove old
+var value = prop.keyValue(data.index);
+prop.setValueAtTime(data.newTime, value);
+// Then find and remove the old keyframe
+```
+
+#### **Issue 2: Time Remap Being Processed Twice (Double Movement)**
+**Root Cause**: Time Remap was being cached twice:
+1. Once through `layer.selectedProperties` iteration
+2. Again through explicit Time Remap checking
+
+**Failed Detection**:
+```javascript
+// ❌ WRONG: Only checking property reference equality
+var alreadyCached = false;
+for (var c = 0; c < cachedSelections.length; c++) {
+    if (cachedSelections[c].property === layer.timeRemap) {
+        alreadyCached = true;
+        break;
+    }
+}
+```
+
+**Working Solution**:
+```javascript
+// ✅ RIGHT: Check both layer AND property name
+var timeRemapAlreadyCached = false;
+for (var c = 0; c < cachedSelections.length; c++) {
+    if (cachedSelections[c].layer === layer && 
+        (cachedSelections[c].propertyName === "Time Remap" || 
+         cachedSelections[c].propertyName === "ADBE Time Remapping")) {
+        timeRemapAlreadyCached = true;
+        break;
+    }
+}
+```
+
+#### **Issue 3: Selection Not Being Preserved**
+**Problem**: After moving Time Remap keyframes, they would become deselected.
+
+**Solution**: Track new indices after movement and restore selection
+```javascript
+// After moving keyframes, find their new indices
+var newIndices = [];
+for (var k = 0; k < actualKeyframesToMove.length; k++) {
+    var targetTime = actualKeyframesToMove[k].newTime;
+    for (var j = 1; j <= prop.numKeys; j++) {
+        if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+            newIndices.push(j);
+            break;
+        }
+    }
+}
+
+// Later, during selection restoration
+var freshProp = findPropertyByName(layer, "Time Remap");
+if (freshProp) {
+    // Deselect all first
+    for (var k = 1; k <= freshProp.numKeys; k++) {
+        freshProp.setSelectedAtKey(k, false);
+    }
+    // Then select only our moved keyframes
+    for (var j = 0; j < newIndices.length; j++) {
+        freshProp.setSelectedAtKey(newIndices[j], true);
+    }
+}
+```
+
+#### **THE COMPLETE TIME REMAP HANDLING PATTERN**
+
+When implementing any feature that moves Time Remap keyframes:
+
+```javascript
+// 1. DETECTION: Check if property is Time Remap
+var isTimeRemap = false;
+try {
+    isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+} catch(e) {
+    // Continue with normal handling
+}
+
+// 2. CACHING: Prevent duplicate caching
+// Check BOTH in selectedProperties loop:
+if (prop.name === "Time Remap") {
+    DEBUG_JSX.log("Found Time Remap via selectedProperties");
+    // Cache it
+}
+
+// AND in explicit Time Remap check:
+var timeRemapAlreadyCached = false;
+for (var c = 0; c < cachedSelections.length; c++) {
+    if (cachedSelections[c].layer === layer && 
+        cachedSelections[c].propertyName === "Time Remap") {
+        timeRemapAlreadyCached = true;
+        break;
+    }
+}
+
+if (!timeRemapAlreadyCached && layer.timeRemapEnabled) {
+    // Cache it
+}
+
+// 3. MOVEMENT: Special handling for Time Remap
+if (isTimeRemap) {
+    // Verify keyframes exist at expected times
+    var actualKeyframesToMove = [];
+    for (var k = 0; k < keyframesToMove.length; k++) {
+        var foundAtOldTime = false;
+        for (var j = 1; j <= prop.numKeys; j++) {
+            if (Math.abs(prop.keyTime(j) - data.oldTime) < 0.001) {
+                foundAtOldTime = true;
+                break;
+            }
+        }
+        if (foundAtOldTime) {
+            actualKeyframesToMove.push(data);
+        }
+    }
+    
+    // Add new keyframes
+    for (var k = 0; k < actualKeyframesToMove.length; k++) {
+        var value = prop.keyValue(actualKeyframesToMove[k].index);
+        prop.setValueAtTime(actualKeyframesToMove[k].newTime, value);
+    }
+    
+    // Remove old keyframes (carefully!)
+    var oldKeyIndicesToRemove = [];
+    for (var k = 0; k < actualKeyframesToMove.length; k++) {
+        var oldTime = actualKeyframesToMove[k].oldTime;
+        for (var j = prop.numKeys; j >= 1; j--) {
+            var keyTime = prop.keyTime(j);
+            if (Math.abs(keyTime - oldTime) < 0.001) {
+                // Make sure this isn't a new keyframe
+                var isNewKey = false;
+                for (var n = 0; n < actualKeyframesToMove.length; n++) {
+                    if (Math.abs(keyTime - actualKeyframesToMove[n].newTime) < 0.001) {
+                        isNewKey = true;
+                        break;
+                    }
+                }
+                if (!isNewKey) {
+                    oldKeyIndicesToRemove.push(j);
+                }
+            }
+        }
+    }
+    
+    // Remove in descending order
+    oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+    for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
+        prop.removeKey(oldKeyIndicesToRemove[k]);
+    }
+}
+```
+
+#### **Key Insights for Time Remap**
+
+1. **Never use the standard remove-then-add pattern** - Time Remap will throw errors
+2. **Always check for duplicate processing** - Time Remap can appear in multiple places
+3. **Use setValueAtTime for movement** - This is the safe way to move Time Remap keyframes
+4. **Verify keyframes exist before moving** - Prevents double-processing errors
+5. **Track new indices for selection** - Required for selection preservation
+6. **Test with mixed selections** - Always test Time Remap with Position, Opacity, etc. selected together
+
+#### **Common Pitfalls**
+- ❌ Assuming Time Remap behaves like other properties
+- ❌ Not checking for duplicate caching (causes 2x movement)
+- ❌ Using removeKey before addKey (causes deletion)
+- ❌ Not preserving selection after movement
+- ❌ Not testing with multiple property types selected
+
+#### **Testing Checklist**
+- ✅ Time Remap keyframe alone moves correctly
+- ✅ Time Remap with Position/Opacity moves together
+- ✅ Selection is preserved after movement
+- ✅ No double-movement when clicking multiple times
+- ✅ No keyframes are deleted
+- ✅ Works in both timeline and baseline modes
+
 ---
 
 *Last Updated: December 2024*  
-*Version: v4.16.28 - Fixed Timeline Mode Cumulative Tracking for Keyframes*  
+*Version: v4.16.29 - Time Remap Movement and Selection Fix*  
 *Status: All keyframe systems fully implemented and production-ready*  
-*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, and global delay functionality restored*
+*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, global delay functionality restored, Time Remap keyframe processing, and Time Remap selection preservation*
