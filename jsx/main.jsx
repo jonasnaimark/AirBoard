@@ -7962,6 +7962,31 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 collectKeyframes(layer.effect, "Effects > ");
             }
             
+            // IMPORTANT: Check Time Remap separately (not in property groups)
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    var selectedTimeRemapKeys = [];
+                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                        if (layer.timeRemap.keySelected(k)) {
+                            selectedTimeRemapKeys.push(k);
+                        }
+                    }
+                    
+                    if (selectedTimeRemapKeys.length > 0) {
+                        DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index);
+                        layerKeyframes.push({
+                            property: layer.timeRemap,
+                            propertyName: "Time Remap",
+                            selectedKeys: selectedTimeRemapKeys,
+                            isTimeRemap: true // Flag for special handling
+                        });
+                        hasSelectedKeyframes = true;
+                    }
+                }
+            } catch(e) {
+                // Time Remap might not be accessible on this layer
+            }
+            
             if (layerKeyframes.length > 0) {
                 layerGroups.push({
                     layer: layer,
@@ -8088,99 +8113,184 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 var prop = propData.property;
                 var selectedKeys = propData.selectedKeys;
                 
-                // Process all keyframes in this property (none would clamp)
-                var keyframeData = [];
-                for (var k = 0; k < selectedKeys.length; k++) {
-                    var keyIndex = selectedKeys[k];
-                    var oldTime = prop.keyTime(keyIndex);
-                    var newTime = oldTime + staggerOffset; // Use cumulative offset
-                    var finalTime = Math.max(0, newTime); // Clamp small negatives to zero
+                // Check if this is Time Remap property for special handling
+                if (propData.isTimeRemap) {
+                    DEBUG_JSX.log("Using special Time Remap handling for stagger");
                     
-                    // Track if this keyframe actually moved
-                    if (Math.abs(finalTime - oldTime) > 0.001) {
-                        layerHadMovement = true;
+                    // TIME REMAP: Special handling - add new keyframes first, then remove old
+                    var timeRemapMoves = [];
+                    for (var k = 0; k < selectedKeys.length; k++) {
+                        var keyIndex = selectedKeys[k];
+                        var oldTime = prop.keyTime(keyIndex);
+                        var newTime = oldTime + staggerOffset;
+                        var finalTime = Math.max(0, newTime);
+                        
+                        // Track if this keyframe actually moved
+                        if (Math.abs(finalTime - oldTime) > 0.001) {
+                            layerHadMovement = true;
+                        }
+                        
+                        DEBUG_JSX.log("Time Remap: Moving keyframe from " + (oldTime * 1000) + "ms to " + (finalTime * 1000) + "ms");
+                        
+                        timeRemapMoves.push({
+                            oldIndex: keyIndex,
+                            oldTime: oldTime,
+                            newTime: finalTime,
+                            value: prop.keyValue(keyIndex)
+                        });
                     }
                     
-                    DEBUG_JSX.log("Moving keyframe from " + (oldTime * 1000) + "ms to " + (finalTime * 1000) + "ms");
+                    // Add new keyframes first
+                    for (var k = 0; k < timeRemapMoves.length; k++) {
+                        var move = timeRemapMoves[k];
+                        prop.setValueAtTime(move.newTime, move.value);
+                    }
                     
-                    var keyData = {
-                        oldIndex: keyIndex,
-                        newTime: finalTime,
-                        value: prop.keyValue(keyIndex),
-                        inInterp: prop.keyInInterpolationType(keyIndex),
-                        outInterp: prop.keyOutInterpolationType(keyIndex),
-                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
-                    };
-                    
-                    // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
-                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
-                        keyData.outInterp === KeyframeInterpolationType.BEZIER) {
-                        try {
-                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
-                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
-                        } catch(e) {
-                            // Temporal ease might not be available for some properties
+                    // Remove old keyframes (carefully check they exist and aren't at new positions)
+                    var oldKeyIndicesToRemove = [];
+                    for (var k = 0; k < timeRemapMoves.length; k++) {
+                        var oldTime = timeRemapMoves[k].oldTime;
+                        
+                        // Find the keyframe at the old time
+                        for (var j = prop.numKeys; j >= 1; j--) {
+                            var keyTime = prop.keyTime(j);
+                            if (Math.abs(keyTime - oldTime) < 0.001) {
+                                // Make sure this isn't a new keyframe
+                                var isNewKey = false;
+                                for (var n = 0; n < timeRemapMoves.length; n++) {
+                                    if (Math.abs(keyTime - timeRemapMoves[n].newTime) < 0.001) {
+                                        isNewKey = true;
+                                        break;
+                                    }
+                                }
+                                if (!isNewKey) {
+                                    oldKeyIndicesToRemove.push(j);
+                                }
+                            }
                         }
                     }
                     
-                    // CRITICAL FIX: Preserve spatial properties for position keyframes (same as timeline mode)
-                    if (prop.isSpatial) {
+                    // Remove in descending order
+                    oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                    for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
                         try {
-                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
-                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
-                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
-                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                            prop.removeKey(oldKeyIndicesToRemove[k]);
                         } catch(e) {
-                            // Spatial properties might not be available
+                            DEBUG_JSX.log("Failed to remove old Time Remap key: " + e.toString());
                         }
                     }
                     
-                    keyframeData.push(keyData);
+                    // Find new indices for selection
+                    var newSelIndices = [];
+                    for (var k = 0; k < timeRemapMoves.length; k++) {
+                        var targetTime = timeRemapMoves[k].newTime;
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                                newSelIndices.push(j);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Store the new indices for final selection
+                    propData.newSelIndices = newSelIndices;
+                    
+                } else {
+                    // NORMAL PROPERTIES: Standard remove/recreate approach
+                    // Process all keyframes in this property (none would clamp)
+                    var keyframeData = [];
+                    for (var k = 0; k < selectedKeys.length; k++) {
+                        var keyIndex = selectedKeys[k];
+                        var oldTime = prop.keyTime(keyIndex);
+                        var newTime = oldTime + staggerOffset; // Use cumulative offset
+                        var finalTime = Math.max(0, newTime); // Clamp small negatives to zero
+                        
+                        // Track if this keyframe actually moved
+                        if (Math.abs(finalTime - oldTime) > 0.001) {
+                            layerHadMovement = true;
+                        }
+                        
+                        DEBUG_JSX.log("Moving keyframe from " + (oldTime * 1000) + "ms to " + (finalTime * 1000) + "ms");
+                        
+                        var keyData = {
+                            oldIndex: keyIndex,
+                            newTime: finalTime,
+                            value: prop.keyValue(keyIndex),
+                            inInterp: prop.keyInInterpolationType(keyIndex),
+                            outInterp: prop.keyOutInterpolationType(keyIndex),
+                            temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                        };
+                        
+                        // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
+                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                            keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            try {
+                                keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                                keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                            } catch(e) {
+                                // Temporal ease might not be available for some properties
+                            }
+                        }
+                        
+                        // CRITICAL FIX: Preserve spatial properties for position keyframes (same as timeline mode)
+                        if (prop.isSpatial) {
+                            try {
+                                keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                                keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                                keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                                keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                            } catch(e) {
+                                // Spatial properties might not be available
+                            }
+                        }
+                        
+                        keyframeData.push(keyData);
+                    }
+                    
+                    // Remove old keyframes (in reverse order to maintain indices)
+                    for (var k = keyframeData.length - 1; k >= 0; k--) {
+                        prop.removeKey(keyframeData[k].oldIndex);
+                    }
+                    
+                    // Create new keyframes with preserved properties and collect new indices
+                    var newSelIndices = [];
+                    for (var k = 0; k < keyframeData.length; k++) {
+                        var data = keyframeData[k];
+                        var newIdx = prop.addKey(data.newTime);
+                        
+                        // Restore value and interpolation
+                        prop.setValueAtKey(newIdx, data.value);
+                        prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                        
+                        // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+                        if (data.inEase !== undefined && data.outEase !== undefined) {
+                            try {
+                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            } catch(e) {
+                                // Some properties might not support temporal ease
+                            }
+                        }
+                        prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                        prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                        
+                        // CRITICAL FIX: Restore spatial properties if they exist (same as timeline mode)
+                        if (data.spatialContinuous !== undefined) {
+                            try {
+                                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            } catch(e) {
+                                // Some properties might not support spatial settings
+                            }
+                        }
+                        
+                        newSelIndices.push(newIdx);
+                    }
+                    
+                    // Store the new indices for final selection
+                    propData.newSelIndices = newSelIndices;
                 }
-                
-                // Remove old keyframes (in reverse order to maintain indices)
-                for (var k = keyframeData.length - 1; k >= 0; k--) {
-                    prop.removeKey(keyframeData[k].oldIndex);
-                }
-                
-                // Create new keyframes with preserved properties and collect new indices
-                var newSelIndices = [];
-                for (var k = 0; k < keyframeData.length; k++) {
-                    var data = keyframeData[k];
-                    var newIdx = prop.addKey(data.newTime);
-                    
-                    // Restore value and interpolation
-                    prop.setValueAtKey(newIdx, data.value);
-                    prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                    
-                    // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
-                    if (data.inEase !== undefined && data.outEase !== undefined) {
-                        try {
-                            prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
-                        } catch(e) {
-                            // Some properties might not support temporal ease
-                        }
-                    }
-                    prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
-                    prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
-                    
-                    // CRITICAL FIX: Restore spatial properties if they exist (same as timeline mode)
-                    if (data.spatialContinuous !== undefined) {
-                        try {
-                            prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
-                            prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                            prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
-                        } catch(e) {
-                            // Some properties might not support spatial settings
-                        }
-                    }
-                    
-                    newSelIndices.push(newIdx);
-                }
-                
-                // Store the new indices for final selection
-                propData.newSelIndices = newSelIndices;
             }
             
             // Move the layer markers that were synced with keyframes
