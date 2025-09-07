@@ -1903,7 +1903,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         }
                         
                         // Try using setKeyTime method for time remapping with deferred selection
-                        var processedIndices = [];
+                        var newKeyTimes = []; // Track the new times instead of indices
                         for (var k = keyData.length - 1; k >= 0; k--) { // Reverse order
                             var data = keyData[k];
                             // Calculate relative position (0 to 1) within the selected keyframe range
@@ -1915,8 +1915,8 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                             try {
                                 // Try to move the keyframe time
                                 prop.setKeyTime(keyIndex, newTime);
-                                // COLLECT indices first, don't select yet
-                                processedIndices.push(keyIndex);
+                                // Track the new time for later index lookup
+                                newKeyTimes.push(newTime);
                             } catch(e) {
                                 // If setKeyTime fails, fall back to record/delete/recreate but with minimal properties
                                 console.log("setKeyTime failed for time remapping, trying fallback...");
@@ -1924,22 +1924,37 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                                 var newIdx = prop.addKey(newTime);
                                 try {
                                     prop.setValueAtKey(newIdx, data.value);
-                                    // COLLECT indices first, don't select yet
-                                    processedIndices.push(newIdx);
+                                    // Track the new time for later index lookup
+                                    newKeyTimes.push(newTime);
                                 } catch(e2) {
                                     // Even this might fail
                                 }
                             }
                         }
                         
-                        // DEFERRED SELECTION: Select all time remap keyframes at the very end
-                        for (var i = 0; i < processedIndices.length; i++) {
-                            try {
-                                prop.setSelectedAtKey(processedIndices[i], true);
-                            } catch(e) {
-                                // Selection might fail but continue
+                        // Find the actual indices of the moved keyframes
+                        var processedIndices = [];
+                        for (var t = 0; t < newKeyTimes.length; t++) {
+                            var targetTime = newKeyTimes[t];
+                            // Find the keyframe at this time
+                            for (var j = 1; j <= prop.numKeys; j++) {
+                                if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                                    processedIndices.push(j);
+                                    break;
+                                }
                             }
                         }
+                        
+                        // COLLECT selections for GLOBAL restoration instead of selecting immediately
+                        // This ensures Time Remap selection is preserved along with other properties
+                        DEBUG_JSX.log("🎬 COLLECTING " + processedIndices.length + " Time Remap keyframe selections for layer " + cached.layerName);
+                        allProcessedSelections.push({
+                            property: prop,
+                            indices: processedIndices,
+                            propertyName: "Time Remap",
+                            layer: cached.layer,
+                            isTimeRemap: true  // Flag for special handling during restoration
+                        });
                         
                     } catch(timeRemapError) {
                         console.log("Time remapping failed: " + timeRemapError.toString());
@@ -5040,9 +5055,116 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
             for (var i = 1; i <= propGroup.numProperties; i++) {
                 var prop = propGroup.property(i);
                 
-                // Skip time remap keyframes
+                // Time Remap requires special handling - process it separately
                 if (prop && prop.name === "Time Remap") {
-                    continue;
+                    // Handle Time Remap keyframes with special approach
+                    try {
+                        var timeRemapKeys = [];
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            var keyTime = prop.keyTime(j);
+                            if (keyTime >= cutoffTime) {
+                                // Create unique key ID for tracking
+                                var keyId = layer.index + "_TimeRemap_" + j + "_" + keyTime.toFixed(3);
+                                
+                                // Skip if already processed
+                                if (processedKeys[keyId]) {
+                                    continue;
+                                }
+                                
+                                var newTime = keyTime + timeOffset;
+                                timeRemapKeys.push({
+                                    index: j,
+                                    oldTime: keyTime,
+                                    newTime: newTime,
+                                    value: prop.keyValue(j),
+                                    keyId: keyId
+                                });
+                                
+                                // Mark as processed
+                                processedKeys[keyId] = true;
+                            }
+                        }
+                        
+                        if (timeRemapKeys.length > 0) {
+                            DEBUG_JSX.log("    Time Remap: Moving " + timeRemapKeys.length + " keyframes");
+                            
+                            // Verify keyframes exist at expected times
+                            var actualKeysToMove = [];
+                            for (var k = 0; k < timeRemapKeys.length; k++) {
+                                var keyData = timeRemapKeys[k];
+                                var foundAtOldTime = false;
+                                for (var j = 1; j <= prop.numKeys; j++) {
+                                    if (Math.abs(prop.keyTime(j) - keyData.oldTime) < 0.001) {
+                                        foundAtOldTime = true;
+                                        break;
+                                    }
+                                }
+                                if (foundAtOldTime) {
+                                    actualKeysToMove.push(keyData);
+                                } else {
+                                    DEBUG_JSX.log("    WARNING: Time Remap key not found at " + keyData.oldTime + "s");
+                                }
+                            }
+                            
+                            if (actualKeysToMove.length > 0) {
+                                // CRITICAL: Use setValueAtTime to add new keyframes first
+                                for (var k = 0; k < actualKeysToMove.length; k++) {
+                                    var keyData = actualKeysToMove[k];
+                                    prop.setValueAtTime(keyData.newTime, keyData.value);
+                                    DEBUG_JSX.log("    Added Time Remap key at " + keyData.newTime.toFixed(3) + "s");
+                                }
+                                
+                                // Then remove old keyframes (only those not at new positions)
+                                var indicesToRemove = [];
+                                for (var k = 0; k < actualKeysToMove.length; k++) {
+                                    var oldTime = actualKeysToMove[k].oldTime;
+                                    // Find the index of the keyframe at oldTime
+                                    for (var j = prop.numKeys; j >= 1; j--) {
+                                        var keyTime = prop.keyTime(j);
+                                        if (Math.abs(keyTime - oldTime) < 0.001) {
+                                            // Check if this is a new keyframe position
+                                            var isNewPosition = false;
+                                            for (var n = 0; n < actualKeysToMove.length; n++) {
+                                                if (Math.abs(keyTime - actualKeysToMove[n].newTime) < 0.001) {
+                                                    isNewPosition = true;
+                                                    break;
+                                                }
+                                            }
+                                            if (!isNewPosition) {
+                                                indicesToRemove.push(j);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // Remove in descending order
+                                indicesToRemove.sort(function(a, b) { return b - a; });
+                                for (var k = 0; k < indicesToRemove.length; k++) {
+                                    try {
+                                        prop.removeKey(indicesToRemove[k]);
+                                        DEBUG_JSX.log("    Removed old Time Remap key at index " + indicesToRemove[k]);
+                                    } catch(e) {
+                                        DEBUG_JSX.log("    Could not remove Time Remap key: " + e.toString());
+                                    }
+                                }
+                                
+                                // Update moved count and furthest time
+                                movedCount += actualKeysToMove.length;
+                                for (var k = 0; k < actualKeysToMove.length; k++) {
+                                    if (actualKeysToMove[k].newTime > furthestTime) {
+                                        furthestTime = actualKeysToMove[k].newTime;
+                                    }
+                                }
+                                
+                                DEBUG_JSX.log("    Time Remap: Moved " + actualKeysToMove.length + " keyframes successfully");
+                            }
+                        }
+                    } catch(timeRemapError) {
+                        DEBUG_JSX.log("    Time Remap error: " + timeRemapError.toString());
+                        // Continue processing other properties
+                    }
+                    continue; // Skip to next property
                 }
                 
                 // Skip Hue/Saturation effects - they can't be moved reliably
@@ -5351,6 +5473,119 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
         // 7. Audio properties
         if (layer.audio && layer.audio.numProperties > 0) {
             processPropertyGroup(layer.audio);
+        }
+        
+        // 8. Time Remap - special layer property (not in any property group)
+        // Must be handled separately at the layer level
+        try {
+            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                var prop = layer.timeRemap;
+                var timeRemapKeys = [];
+                
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    var keyTime = prop.keyTime(j);
+                    if (keyTime >= cutoffTime) {
+                        // Create unique key ID for tracking
+                        var keyId = layer.index + "_TimeRemap_" + j + "_" + keyTime.toFixed(3);
+                        
+                        // Skip if already processed
+                        if (processedKeys[keyId]) {
+                            continue;
+                        }
+                        
+                        var newTime = keyTime + timeOffset;
+                        timeRemapKeys.push({
+                            index: j,
+                            oldTime: keyTime,
+                            newTime: newTime,
+                            value: prop.keyValue(j),
+                            keyId: keyId
+                        });
+                        
+                        // Mark as processed
+                        processedKeys[keyId] = true;
+                    }
+                }
+                
+                if (timeRemapKeys.length > 0) {
+                    DEBUG_JSX.log("    Time Remap: Moving " + timeRemapKeys.length + " keyframes on " + layer.name);
+                    
+                    // Verify keyframes exist at expected times
+                    var actualKeysToMove = [];
+                    for (var k = 0; k < timeRemapKeys.length; k++) {
+                        var keyData = timeRemapKeys[k];
+                        var foundAtOldTime = false;
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (Math.abs(prop.keyTime(j) - keyData.oldTime) < 0.001) {
+                                foundAtOldTime = true;
+                                break;
+                            }
+                        }
+                        if (foundAtOldTime) {
+                            actualKeysToMove.push(keyData);
+                        } else {
+                            DEBUG_JSX.log("    WARNING: Time Remap key not found at " + keyData.oldTime + "s");
+                        }
+                    }
+                    
+                    if (actualKeysToMove.length > 0) {
+                        // CRITICAL: Use setValueAtTime to add new keyframes first
+                        for (var k = 0; k < actualKeysToMove.length; k++) {
+                            var keyData = actualKeysToMove[k];
+                            prop.setValueAtTime(keyData.newTime, keyData.value);
+                            DEBUG_JSX.log("    Added Time Remap key at " + keyData.newTime.toFixed(3) + "s");
+                        }
+                        
+                        // Then remove old keyframes (only those not at new positions)
+                        var indicesToRemove = [];
+                        for (var k = 0; k < actualKeysToMove.length; k++) {
+                            var oldTime = actualKeysToMove[k].oldTime;
+                            // Find the index of the keyframe at oldTime
+                            for (var j = prop.numKeys; j >= 1; j--) {
+                                var keyTime = prop.keyTime(j);
+                                if (Math.abs(keyTime - oldTime) < 0.001) {
+                                    // Check if this is a new keyframe position
+                                    var isNewPosition = false;
+                                    for (var n = 0; n < actualKeysToMove.length; n++) {
+                                        if (Math.abs(keyTime - actualKeysToMove[n].newTime) < 0.001) {
+                                            isNewPosition = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!isNewPosition) {
+                                        indicesToRemove.push(j);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Remove in descending order
+                        indicesToRemove.sort(function(a, b) { return b - a; });
+                        for (var k = 0; k < indicesToRemove.length; k++) {
+                            try {
+                                prop.removeKey(indicesToRemove[k]);
+                                DEBUG_JSX.log("    Removed old Time Remap key at index " + indicesToRemove[k]);
+                            } catch(e) {
+                                DEBUG_JSX.log("    Could not remove Time Remap key: " + e.toString());
+                            }
+                        }
+                        
+                        // Update moved count and furthest time
+                        movedCount += actualKeysToMove.length;
+                        for (var k = 0; k < actualKeysToMove.length; k++) {
+                            if (actualKeysToMove[k].newTime > furthestTime) {
+                                furthestTime = actualKeysToMove[k].newTime;
+                            }
+                        }
+                        
+                        DEBUG_JSX.log("    Time Remap: Moved " + actualKeysToMove.length + " keyframes successfully");
+                    }
+                }
+            }
+        } catch(timeRemapError) {
+            DEBUG_JSX.log("    Time Remap error: " + timeRemapError.toString());
+            // Continue processing
         }
         
     } catch(e) {
