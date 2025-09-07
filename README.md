@@ -28,21 +28,6 @@
 
 **File Setup**: Auto-generate an AE and Finder folder structure
 
-## 🎯 Key Features
-
-### Keyframe Nudger
-- **Duration Control**: Smart snapping to frame intervals (3f = 50ms at 60fps)
-- **Position Nudging**: Precise X/Y movement with directional display
-- **Delay & Stagger**: Timeline positioning with automatic stagger detection
-- **Multi-Property**: Works across Position, Opacity, Scale simultaneously
-- **Perfect Selection**: Maintains keyframe selection through all operations
-
-### Templates & Presets
-- **Device Compositions**: iPhone/Desktop with 1x-6x scaling
-- **Gesture Animations**: Tap, Long Press, Double Tap, Mouse Click
-- **UI Components**: Counters, loaders, progress indicators
-- **Material Effects**: Squircles, elevation shadows, blur presets
-
 ---
 
 [All Releases](https://github.com/jonasnaimark/AirBoard/releases) • [Documentation](KEYFRAME_SYSTEM_SUMMARY.md) • [Changelog](CHANGELOG.md)
