@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.33] - 2025-09-07 🎨 **UI REFINEMENT**
+### 🎨 UI/UX Improvements
+- **Section Corner Rounding**: Tested various border-radius values (6px, 8px, 10px) for optimal appearance
+- **Visual Polish**: Refined section container corners, settled on 6px for best visual balance
+- **CSS Styling**: Minor adjustments to section container border-radius property
+
+## [4.16.32] - 2025-09-07 🎨 **UI ENHANCEMENTS**
+### 🎨 UI/UX Improvements  
+- **Section Backgrounds**: Lightened section containers from #272727 to #2a2a2a for better contrast
+- **Button Styling**: Updated button backgrounds from #2f2f2f to #333333 for improved visibility
+- **Drop Shadows**: Added subtle shadows to sections for depth (0 2px 8px rgba(0,0,0,0.15))
+- **Divider Lines**: Added two-tone dividers between subsections for visual separation
+- **Spacing Refinements**: Added 4px padding below subsection titles (SHAPE, EFFECTS, SHIMMER)
+- **Title Brightness**: Increased subsection title color to #f5f5f5 for better readability
+- **Visual Hierarchy**: Improved overall visual organization with dividers and spacing
+
+## [4.16.31] - 2025-09-07 🔧 **STAGGER TIME REMAP SUPPORT**
+### ✨ New Features
+- **Time Remap Stagger Support**: Added full Time Remap keyframe support to stagger feature
+- **Special Handling**: Implemented setValueAtTime() pattern for Time Remap to prevent keyframe deletion
+- **Add-Before-Delete Pattern**: Time Remap keyframes now use safe movement pattern during stagger operations
+
+### 🎨 UI/UX Improvements
+- **Shape Control Consolidation**: Combined Add Squircle/Replace Rect into dropdown + button interface
+- **Dropdown Options**: "New Shape" and "Replace Shape" in dropdown with single "Add Squircle" button
+- **Button Renaming**: Changed "Fit To Rect" to "Fit to Squircle" throughout the interface
+- **Cleaner Layout**: Reduced button clutter by consolidating related actions into dropdowns
+
+### 📚 Documentation
+- **README Reorganization**: Moved "Get the Plugin" section above "What It Does" for better visibility
+- **Section Cleanup**: Removed redundant "Key Features" section from README
+
 ## [4.16.7] - 2025-09-05 🔧 **EFFECT NAME-BASED KEY IDS**
 ### 🔧 Fixed - TINT 2 EFFECT PROCESSING
 - **Effect Name-Based KeyIDs**: Changed duplicate detection to use actual effect names (e.g., "Tint" vs "Tint 2") instead of effect indices
