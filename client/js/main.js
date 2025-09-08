@@ -173,8 +173,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Get the buttons
-    var createButton = document.getElementById('createSquircle');
-    var replaceButton = document.getElementById('replaceRectangle');
+    var addSquircleButton = document.getElementById('addSquircle');
+    var squircleModeDropdown = document.getElementById('squircleMode');
     var addNullButton = document.getElementById('addNull');
     var addDeviceButton = document.getElementById('addDevice');
     var addGestureButton = document.getElementById('addGesture');
@@ -1711,41 +1711,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Create Squircle button handler
-    createButton.addEventListener('click', function() {
-        console.log('Create Squircle clicked');
+    // Add Squircle button handler (handles both new and replace based on dropdown)
+    addSquircleButton.addEventListener('click', function() {
+        var mode = squircleModeDropdown.value;
+        console.log('Add Squircle clicked with mode:', mode);
         
         // Disable button while working
-        createButton.classList.add('loading');
+        addSquircleButton.classList.add('loading');
         
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
         csInterface.evalScript(setPathScript);
         
-        // Call the After Effects script
-        csInterface.evalScript('createSquircleFromPanel()', function(result) {
+        // Call the appropriate After Effects function based on mode
+        var scriptFunction = (mode === 'replace') ? 'replaceRectangleFromPanel()' : 'createSquircleFromPanel()';
+        
+        csInterface.evalScript(scriptFunction, function(result) {
             console.log('Squircle result:', result);
             // Re-enable button
-            createButton.classList.remove('loading');
-        });
-    });
-    
-    // Replace Rectangle button handler
-    replaceButton.addEventListener('click', function() {
-        console.log('Replace Rectangle clicked');
-        
-        // Disable button while working
-        replaceButton.classList.add('loading');
-        
-        // Pass the extension path to the JSX
-        var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
-        csInterface.evalScript(setPathScript);
-        
-        // Call the replace function
-        csInterface.evalScript('replaceRectangleFromPanel()', function(result) {
-            console.log('Replace result:', result);
-            // Re-enable button
-            replaceButton.classList.remove('loading');
+            addSquircleButton.classList.remove('loading');
         });
     });
     
@@ -1786,7 +1770,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (debugMessages.length > 0) {
                     var debugLog = document.getElementById('debug-log');
                     if (debugLog) {
-                        debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Fit To Rect Debug:</div>';
+                        debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Fit to Squircle Debug:</div>'
                         for (var j = 0; j < debugMessages.length; j++) {
                             debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
                         }
@@ -1796,15 +1780,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Show result status
                 if (status === 'error') {
-                    console.error('Fit To Rect failed:', parts[1] || 'Unknown error');
+                    console.error('Fit to Squircle failed:', parts[1] || 'Unknown error');
                 } else {
-                    console.log('Fit To Rect succeeded:', parts[1] || 'Success');
+                    console.log('Fit to Squircle succeeded:', parts[1] || 'Success');
                 }
             }
             
             // Re-enable button
             addNullButton.disabled = false;
-            addNullButton.textContent = 'Fit To Rect';
+            addNullButton.textContent = 'Fit to Squircle';
         });
     });
     

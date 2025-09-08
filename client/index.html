@@ -11,7 +11,7 @@
         <div class="section-container">
             <section class="section">
                 <div class="section-header">
-                    <h2>Device Templates [DEV MODE] 
+                    <h2>Device Templates 
                         <button onclick="addDebugPanel()" style="
                             background: #444; 
                             border: 1px solid #666; 
@@ -192,12 +192,12 @@
                 <div class="section-content" data-section="effect-presets">
                 <div class="subsection-title">Shape</div>
                 <div class="control-row">
-                    <button id="createSquircle" class="main-button">
-                        <span class="full-text">Add Squircle</span>
-                        <span class="short-text">Squircle</span>
-                    </button>
-                    <button id="replaceRectangle" class="main-button">
-                        Replace Rect
+                    <select id="squircleMode" class="dropdown">
+                        <option value="new">New Shape</option>
+                        <option value="replace">Replace Shape</option>
+                    </select>
+                    <button id="addSquircle" class="main-button">
+                        Add Squircle
                     </button>
                 </div>
                 <div class="control-row">
@@ -206,9 +206,10 @@
                         <option value="layers-padding">Layers + Padding</option>
                         <option value="vertex-nulls">Vertex Nulls</option>
                     </select>
-                    <button id="addNull" class="main-button">Fit To Rect</button>
+                    <button id="addNull" class="main-button">Fit to Squircle</button>
                 </div>
-                <div class="subsection-title spaced">Effects</div>
+                <hr class="subsection-divider">
+                <div class="subsection-title">Effects</div>
                 <div class="control-row">
                     <select id="elevationType" class="dropdown">
                         <option value="1">Elevation 1</option>
@@ -233,7 +234,8 @@
                     </select>
                     <button id="addBlur" class="main-button">Add Blur</button>
                 </div>
-                <div class="subsection-title spaced">Shimmer</div>
+                <hr class="subsection-divider">
+                <div class="subsection-title">Shimmer</div>
                 <div class="control-row">
                     <button id="addOverlay" class="main-button">
                         Add Overlay

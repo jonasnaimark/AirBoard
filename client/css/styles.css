@@ -21,12 +21,12 @@ body {
 
 /* Section container styling - creates visual containers around sections */
 .section-container {
-    background-color: #272727;
+    background-color: #2a2a2a;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 6px;
     padding: 12px 10px;
     margin-bottom: 10px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1);
     transition: transform 0.3s ease, border-color 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
@@ -72,14 +72,14 @@ body {
 
 /* Subsection titles within sections */
 .subsection-title {
-    color: #f0f0f0;
+    color: #f5f5f5;
     font-size: 10px;
     font-weight: 400;
-    margin: 4px 0 6px 0; /* Reduced top margin, added bottom padding */
+    margin: 4px 0 10px 0; /* Added 4px to bottom margin (was 6px, now 10px) */
     padding: 0;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    opacity: 0.8;
+    opacity: 0.85;
 }
 
 /* First subsection title (Shape) - less top margin */
@@ -90,6 +90,19 @@ body {
 /* Spaced subsection titles (Effects, Shimmer) - extra top margin */
 .subsection-title.spaced {
     margin-top: 18px; /* 14px extra + 4px additional = 18px total */
+}
+
+/* Add subtle divider line between subsections */
+.subsection-divider {
+    width: calc(100% - 20px);
+    height: 2px;
+    background: linear-gradient(to bottom, 
+        rgba(0, 0, 0, 0.3) 0%, 
+        rgba(0, 0, 0, 0.3) 50%, 
+        rgba(255, 255, 255, 0.06) 50%, 
+        rgba(255, 255, 255, 0.06) 100%);
+    margin: 14px 10px;
+    border: none;
 }
 
 /* Section controls container */
@@ -204,7 +217,7 @@ body {
 .section-content {
     overflow: hidden;
     transition: max-height 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00), opacity 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
-    max-height: 300px; /* Increased to accommodate Presets section with multiple subsections */
+    max-height: 350px; /* Increased to accommodate Shimmer buttons and all subsections */
     opacity: 1;
 }
 
@@ -243,7 +256,7 @@ body {
 .main-button {
     height: 35px;
     padding: 12px 20px;
-    background-color: #2f2f2f;
+    background-color: #333333;
     color: #cccccc;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 6px;
