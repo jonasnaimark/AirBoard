@@ -9695,6 +9695,96 @@ function applyFitToShape(mode) {
         // Make shape layer visible
         shapeLayer.enabled = true;
         
+        // Create the mask layer by duplicating the shape layer
+        var maskLayer = shapeLayer.duplicate();
+        maskLayer.name = shapeLayer.name + " - Mask";
+        
+        // Move mask layer above the original shape layer (index - 1)
+        maskLayer.moveBefore(shapeLayer);
+        
+        // Parent mask layer to original shape layer
+        maskLayer.parent = shapeLayer;
+        
+        // Link opacity and anchor point to original shape layer using expressions
+        maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
+        maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
+        
+        // Clean up mask layer effects - remove all except Squircle
+        var maskEffects = maskLayer.property("Effects");
+        if (maskEffects && maskEffects.numProperties > 0) {
+            // Go backwards to avoid index shifting issues
+            for (var fx = maskEffects.numProperties; fx >= 1; fx--) {
+                var effect = maskEffects.property(fx);
+                var effectName = effect.name;
+                var effectMatchName = effect.matchName;
+                
+                // Keep Squircle effect, remove everything else (especially shadows)
+                if (effectMatchName !== "ADBE_Squircle" && effectName !== "Squircle") {
+                    effect.remove();
+                    DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
+                }
+            }
+        }
+        
+        // Link Squircle effect parameters if it exists
+        var originalSquircle = null;
+        var maskSquircle = null;
+        
+        // Find Squircle effect on original layer
+        if (shapeLayer.property("Effects")) {
+            for (var j = 1; j <= shapeLayer.property("Effects").numProperties; j++) {
+                var effect = shapeLayer.property("Effects").property(j);
+                if (effect.matchName === "ADBE_Squircle" || effect.name === "Squircle") {
+                    originalSquircle = effect;
+                    break;
+                }
+            }
+        }
+        
+        // Find Squircle effect on mask layer
+        if (maskEffects) {
+            for (var k = 1; k <= maskEffects.numProperties; k++) {
+                var effect = maskEffects.property(k);
+                if (effect.matchName === "ADBE_Squircle" || effect.name === "Squircle") {
+                    maskSquircle = effect;
+                    break;
+                }
+            }
+        }
+        
+        // Link Squircle parameters from mask to original using expressions
+        if (originalSquircle && maskSquircle) {
+            // Link ALL Squircle parameters
+            var squircleParams = [
+                "Alignment",
+                "Width", 
+                "Height",
+                "Unified Corners",
+                "Unified Radius",
+                "Top Left",
+                "Top Right",
+                "Bottom Left",
+                "Bottom Right",
+                "Corner Smoothing",
+                "Unlock max radius",
+                "Curvature",
+                "Maintain Curvature"
+            ];
+            
+            for (var p = 0; p < squircleParams.length; p++) {
+                var paramName = squircleParams[p];
+                try {
+                    var maskParam = maskSquircle.property(paramName);
+                    if (maskParam) {
+                        maskParam.expression = 'thisComp.layer(index + 1).effect("Squircle")("' + paramName + '")';
+                        DEBUG_JSX.log("Linked Squircle parameter: " + paramName);
+                    }
+                } catch(paramError) {
+                    DEBUG_JSX.log("Could not link parameter " + paramName + ": " + paramError.toString());
+                }
+            }
+        }
+        
         // Process each other layer (content layers only, not the shape layer)
         for (var layerIndex = 0; layerIndex < otherLayers.length; layerIndex++) {
             var otherLayer = otherLayers[layerIndex];
@@ -9715,16 +9805,16 @@ function applyFitToShape(mode) {
             
             DEBUG_JSX.log("Applying FitToShape to content layer: " + otherLayer.name);
             
-            // Parent the other layer to the shape layer
+            // Parent the other layer to the shape layer (not the mask layer)
             otherLayer.parent = shapeLayer;
             
-            // Set up track matte - works regardless of layer positions
-            otherLayer.setTrackMatte(shapeLayer, TrackMatteType.ALPHA);
+            // Set up track matte using the MASK layer (not the original shape layer)
+            otherLayer.setTrackMatte(maskLayer, TrackMatteType.ALPHA);
             
             // Make layer visible
             otherLayer.enabled = true;
             
-            // Keep shape layer visible (track matte automatically hides it)
+            // Shape layer stays visible, mask layer is auto-hidden by track matte
             shapeLayer.enabled = true;
             
             // Split dimensions on position for the other layer
@@ -10071,9 +10161,9 @@ function applyFitToShape(mode) {
                 // Set collapse transformations
                 precomp.collapseTransformation = true;
                 
-                // Set up track matte
+                // Set up track matte using the MASK layer (not the original shape layer)
                 try {
-                    precomp.setTrackMatte(shapeLayer, TrackMatteType.ALPHA);
+                    precomp.setTrackMatte(maskLayer, TrackMatteType.ALPHA);
                 } catch (e) {
                     precomp.trackMatteType = TrackMatteType.ALPHA;
                 }
