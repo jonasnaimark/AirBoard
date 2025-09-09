@@ -9712,80 +9712,90 @@ function applyFitToShape(mode) {
         maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
         maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
         
-        // Clean up mask layer effects - remove all except Squircle
+        // Clean up mask layer effects - remove ALL effects including Squircle
         var maskEffects = maskLayer.property("Effects");
         if (maskEffects && maskEffects.numProperties > 0) {
             // Go backwards to avoid index shifting issues
             for (var fx = maskEffects.numProperties; fx >= 1; fx--) {
                 var effect = maskEffects.property(fx);
                 var effectName = effect.name;
-                var effectMatchName = effect.matchName;
-                
-                // Keep Squircle effect, remove everything else (especially shadows)
-                if (effectMatchName !== "ADBE_Squircle" && effectName !== "Squircle") {
-                    effect.remove();
-                    DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
-                }
+                effect.remove();
+                DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
             }
         }
         
-        // Link Squircle effect parameters if it exists
-        var originalSquircle = null;
-        var maskSquircle = null;
-        
-        // Find Squircle effect on original layer
-        if (shapeLayer.property("Effects")) {
-            for (var j = 1; j <= shapeLayer.property("Effects").numProperties; j++) {
-                var effect = shapeLayer.property("Effects").property(j);
-                if (effect.matchName === "ADBE_Squircle" || effect.name === "Squircle") {
-                    originalSquircle = effect;
-                    break;
-                }
-            }
-        }
-        
-        // Find Squircle effect on mask layer
-        if (maskEffects) {
-            for (var k = 1; k <= maskEffects.numProperties; k++) {
-                var effect = maskEffects.property(k);
-                if (effect.matchName === "ADBE_Squircle" || effect.name === "Squircle") {
-                    maskSquircle = effect;
-                    break;
-                }
-            }
-        }
-        
-        // Link Squircle parameters from mask to original using expressions
-        if (originalSquircle && maskSquircle) {
-            // Link ALL Squircle parameters
-            var squircleParams = [
-                "Alignment",
-                "Width", 
-                "Height",
-                "Unified Corners",
-                "Unified Radius",
-                "Top Left",
-                "Top Right",
-                "Bottom Left",
-                "Bottom Right",
-                "Corner Smoothing",
-                "Unlock max radius",
-                "Curvature",
-                "Maintain Curvature"
-            ];
+        // Link the shape path from mask layer to original layer
+        try {
+            // Find the shape group in both layers
+            var originalContents = shapeLayer.property("Contents");
+            var maskContents = maskLayer.property("Contents");
             
-            for (var p = 0; p < squircleParams.length; p++) {
-                var paramName = squircleParams[p];
-                try {
-                    var maskParam = maskSquircle.property(paramName);
-                    if (maskParam) {
-                        maskParam.expression = 'thisComp.layer(index + 1).effect("Squircle")("' + paramName + '")';
-                        DEBUG_JSX.log("Linked Squircle parameter: " + paramName);
+            if (originalContents && maskContents) {
+                // Look for shape groups in both layers
+                for (var i = 1; i <= maskContents.numProperties; i++) {
+                    var maskGroup = maskContents.property(i);
+                    
+                    // Check if this is a shape group with a path
+                    if (maskGroup.property("Contents")) {
+                        var maskGroupContents = maskGroup.property("Contents");
+                        
+                        // Find the path property in the mask layer
+                        for (var j = 1; j <= maskGroupContents.numProperties; j++) {
+                            var maskProp = maskGroupContents.property(j);
+                            
+                            // Look for Path property
+                            if (maskProp.matchName === "ADBE Vector Shape - Rect" || 
+                                maskProp.matchName === "ADBE Vector Shape - Ellipse" ||
+                                maskProp.matchName === "ADBE Vector Shape - Group") {
+                                
+                                // Find corresponding path in original layer
+                                if (i <= originalContents.numProperties) {
+                                    var originalGroup = originalContents.property(i);
+                                    if (originalGroup.property("Contents")) {
+                                        var originalGroupContents = originalGroup.property("Contents");
+                                        
+                                        // Link the path
+                                        if (j <= originalGroupContents.numProperties) {
+                                            var originalProp = originalGroupContents.property(j);
+                                            
+                                            // Link size/radius for rectangle/ellipse
+                                            if (maskProp.property("Size") && originalProp.property("Size")) {
+                                                maskProp.property("Size").expression = 
+                                                    'thisComp.layer(index + 1).content("' + originalGroup.name + '").content("' + originalProp.name + '").size';
+                                                DEBUG_JSX.log("Linked shape size property");
+                                            }
+                                            
+                                            // Link position if it exists
+                                            if (maskProp.property("Position") && originalProp.property("Position")) {
+                                                maskProp.property("Position").expression = 
+                                                    'thisComp.layer(index + 1).content("' + originalGroup.name + '").content("' + originalProp.name + '").position';
+                                                DEBUG_JSX.log("Linked shape position property");
+                                            }
+                                            
+                                            // Link roundness for rounded rectangles
+                                            if (maskProp.property("Roundness") && originalProp.property("Roundness")) {
+                                                maskProp.property("Roundness").expression = 
+                                                    'thisComp.layer(index + 1).content("' + originalGroup.name + '").content("' + originalProp.name + '").roundness';
+                                                DEBUG_JSX.log("Linked shape roundness property");
+                                            }
+                                            
+                                            // For path objects (like from Squircle effect)
+                                            if (maskProp.property("Path") && originalProp.property("Path")) {
+                                                maskProp.property("Path").expression = 
+                                                    'thisComp.layer(index + 1).content("' + originalGroup.name + '").content("' + originalProp.name + '").path';
+                                                DEBUG_JSX.log("Linked shape path property");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                } catch(paramError) {
-                    DEBUG_JSX.log("Could not link parameter " + paramName + ": " + paramError.toString());
                 }
             }
+        } catch(pathLinkError) {
+            DEBUG_JSX.log("Could not link shape paths: " + pathLinkError.toString());
+            // Not critical - mask layer will still work as a duplicate
         }
         
         // Process each other layer (content layers only, not the shape layer)
