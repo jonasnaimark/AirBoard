@@ -9705,6 +9705,9 @@ function applyFitToShape(mode) {
         // Parent mask layer to original shape layer
         maskLayer.parent = shapeLayer;
         
+        // Shy the mask layer to reduce clutter
+        maskLayer.shy = true;
+        
         // Link opacity and anchor point to original shape layer using expressions
         maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
         maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
