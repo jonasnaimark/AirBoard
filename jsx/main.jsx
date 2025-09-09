@@ -8720,13 +8720,13 @@ function createDeviceComposition(deviceType, multiplier) {
                                 debugInfo.push("✓ Exact match found!");
                                 break;
                             }
-                            // For iPhone 15, also try partial matches
+                            // For iPhone 15, look for the template comp specifically
+                            // Must have layers to be the template (not the newly created comp)
                             if (deviceType === "iphone15" && 
-                                (item.name.indexOf("iPhone 15") !== -1 || 
-                                 item.name.indexOf("iPhone15") !== -1 || 
-                                 item.name.indexOf("iphone15") !== -1)) {
+                                item.name === "iPhone 15 - 393" &&
+                                item.layers && item.layers.length > 0) {
                                 templateComp = item;
-                                debugInfo.push("✓ Partial match found: '" + item.name + "'");
+                                debugInfo.push("✓ Found iPhone 15 template with " + item.layers.length + " layers");
                                 break;
                             }
                         }
@@ -8764,13 +8764,13 @@ function createDeviceComposition(deviceType, multiplier) {
                                     debugInfo.push("✓ Exact match found after import!");
                                     break;
                                 }
-                                // Try partial match for iPhone 15
+                                // For iPhone 15, look for the exact template comp
+                                // Must have layers to be the template
                                 if (deviceType === "iphone15" && 
-                                    (item.name.indexOf("iPhone 15") !== -1 || 
-                                     item.name.indexOf("iPhone15") !== -1 || 
-                                     item.name.indexOf("iphone15") !== -1)) {
+                                    item.name === "iPhone 15 - 393" &&
+                                    item.layers && item.layers.length > 0) {
                                     templateComp = item;
-                                    debugInfo.push("✓ Partial match found after import: '" + item.name + "'");
+                                    debugInfo.push("✓ Found iPhone 15 template after import with " + item.layers.length + " layers");
                                     break;
                                 }
                             }
@@ -8813,9 +8813,13 @@ function createDeviceComposition(deviceType, multiplier) {
                                         scaleFactor = (multiplier / 2) * 50.5;
                                         debugInfo.push("iPhone 15 Pro Frame detected, using special scale: " + scaleFactor + "%");
                                     } else {
-                                        // Regular scaling for other layers (iPhone UI, Shadow)
+                                        // Regular scaling for other layers (iPhone UI, Shadow, Screen Matte)
                                         scaleFactor = (multiplier / 2) * 100;
-                                        debugInfo.push("Regular layer, using standard scale: " + scaleFactor + "%");
+                                        if (newLayer.name === "Screen Matte") {
+                                            debugInfo.push("Screen Matte layer detected, using standard scale: " + scaleFactor + "%");
+                                        } else {
+                                            debugInfo.push("Regular layer, using standard scale: " + scaleFactor + "%");
+                                        }
                                     }
                                     
                                     // Apply scaling
@@ -8993,6 +8997,65 @@ function createDeviceComposition(deviceType, multiplier) {
                                     }
                                     
                                     debugInfo.push("✓ iPhone UI - 393 added as base layer");
+                                    
+                                    // Step 3: Find Screen Matte layer and set up track matte
+                                    debugInfo.push("=== Setting up Screen Matte ===");
+                                    var screenMatteLayer = null;
+                                    
+                                    // Look for Screen Matte layer in the composition
+                                    for (var m = 1; m <= comp.layers.length; m++) {
+                                        if (comp.layer(m).name === "Screen Matte") {
+                                            screenMatteLayer = comp.layer(m);
+                                            debugInfo.push("✓ Found Screen Matte layer at index " + m);
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (screenMatteLayer) {
+                                        // Set up track matte for iPhone UI layer
+                                        try {
+                                            // Make sure Screen Matte is positioned directly above iPhone UI in layer stack
+                                            // The matte layer needs to be right above the layer it's matting
+                                            
+                                            // Find current positions
+                                            var iPhoneUIIndex = iPhoneUILayer.index;
+                                            var screenMatteIndex = screenMatteLayer.index;
+                                            
+                                            debugInfo.push("iPhone UI at index: " + iPhoneUIIndex);
+                                            debugInfo.push("Screen Matte at index: " + screenMatteIndex);
+                                            
+                                            // Screen Matte needs to be at iPhone UI index - 1 (above it)
+                                            if (screenMatteIndex !== iPhoneUIIndex - 1) {
+                                                // Move Screen Matte to be right above iPhone UI
+                                                if (screenMatteIndex > iPhoneUIIndex) {
+                                                    // Screen Matte is below, move it above
+                                                    screenMatteLayer.moveBefore(iPhoneUILayer);
+                                                } else {
+                                                    // Screen Matte is too far above, move it to right above
+                                                    screenMatteLayer.moveAfter(iPhoneUILayer);
+                                                    screenMatteLayer.moveBefore(iPhoneUILayer);
+                                                }
+                                                debugInfo.push("Repositioned Screen Matte to be above iPhone UI");
+                                            }
+                                            
+                                            // Set the track matte
+                                            iPhoneUILayer.setTrackMatte(screenMatteLayer, TrackMatteType.ALPHA);
+                                            debugInfo.push("✓ Track matte set: iPhone UI using Screen Matte as Alpha");
+                                            
+                                        } catch(matteError) {
+                                            debugInfo.push("❌ Error setting up track matte: " + matteError.toString());
+                                            // Try alternate method
+                                            try {
+                                                iPhoneUILayer.trackMatteType = TrackMatteType.ALPHA;
+                                                debugInfo.push("✓ Track matte set using alternate method");
+                                            } catch(altError) {
+                                                debugInfo.push("❌ Alternate method also failed: " + altError.toString());
+                                            }
+                                        }
+                                    } else {
+                                        debugInfo.push("⚠️ Screen Matte layer not found - iPhone UI will not be masked");
+                                    }
+                                    
                                 } else {
                                     debugInfo.push("❌ iPhone UI - 393 comp not found");
                                 }
