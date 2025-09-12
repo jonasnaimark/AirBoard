@@ -11353,13 +11353,17 @@ function createFinderFoldersFromPanel() {
                 
                 try {
                     app.project.save(saveFile);
-                    alert("Project folder structure created successfully!\nProject saved to: " + saveFile.fsName);
                 } catch(saveError) {
                     alert("Folder structure created, but could not save project: " + saveError.toString());
                 }
-            } else {
-                alert("Project folder structure created successfully!\nProject save was cancelled.");
             }
+        }
+        
+        // Automatically open the created folder in Finder
+        try {
+            system.callSystem('open "' + rootFolder.fsName + '"');
+        } catch(openError) {
+            // Non-fatal if we can't open the folder
         }
         
         return "success";
