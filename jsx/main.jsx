@@ -9758,33 +9758,139 @@ function applyFitToShape(mode) {
         // Make shape layer visible
         shapeLayer.enabled = true;
         
-        // Create the mask layer by duplicating the shape layer
-        var maskLayer = shapeLayer.duplicate();
-        maskLayer.name = shapeLayer.name + " - Mask";
-        
-        // Move mask layer above the original shape layer (index - 1)
-        maskLayer.moveBefore(shapeLayer);
-        
-        // Parent mask layer to original shape layer
-        maskLayer.parent = shapeLayer;
-        
-        // Shy the mask layer to reduce clutter
-        maskLayer.shy = true;
-        
-        // Link opacity and anchor point to original shape layer using expressions
-        maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
-        maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
-        
-        // Clean up mask layer effects - remove ALL effects including Squircle
-        var maskEffects = maskLayer.property("Effects");
-        if (maskEffects && maskEffects.numProperties > 0) {
-            // Go backwards to avoid index shifting issues
-            for (var fx = maskEffects.numProperties; fx >= 1; fx--) {
-                var effect = maskEffects.property(fx);
-                var effectName = effect.name;
-                effect.remove();
-                DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
+        // Check if there's already an existing mask layer for this shape layer
+        var maskLayer = null;
+        for (var i = 1; i <= comp.layers.length; i++) {
+            var layer = comp.layers[i];
+            // Check if this layer is parented to our shape layer
+            if (layer.parent === shapeLayer) {
+                // Check if this layer is being used as a track matte by any layer
+                var isUsedAsTrackMatte = false;
+                for (var j = 1; j <= comp.layers.length; j++) {
+                    var otherLayer = comp.layers[j];
+                    try {
+                        DEBUG_JSX.log("Checking layer '" + otherLayer.name + "' (index " + otherLayer.index + ") - trackMatteType: " + otherLayer.trackMatteType);
+                        
+                        if (otherLayer.trackMatteType !== TrackMatteType.NO_TRACK_MATTE) {
+                            DEBUG_JSX.log("Layer '" + otherLayer.name + "' uses track matte, checking if it uses '" + layer.name + "'");
+                            
+                            // Simple approach: use setTrackMatte to test if our layer is the matte source
+                            // We'll temporarily try to get the track matte relationship
+                            try {
+                                // Try to check the track matte source directly 
+                                // In After Effects scripting, we can use the layer's trackMatte property if available
+                                
+                                // Method: Check if setting our layer as track matte would be redundant
+                                // This indicates our layer is already the matte source
+                                var currentMatteType = otherLayer.trackMatteType;
+                                
+                                // Temporarily try to set the track matte to see if it's already set
+                                try {
+                                    otherLayer.setTrackMatte(layer, currentMatteType);
+                                    // If this succeeds without error and doesn't change anything, 
+                                    // it likely means our layer was already the matte source
+                                    DEBUG_JSX.log("✓ Track matte test passed - layer '" + layer.name + "' appears to be matte source for '" + otherLayer.name + "'");
+                                    isUsedAsTrackMatte = true;
+                                    break;
+                                } catch(matteError) {
+                                    // If this fails, our layer might not be the current matte source
+                                    DEBUG_JSX.log("Track matte test failed: " + matteError.toString());
+                                    
+                                    // Alternative: check if our layer name appears in error messages when trying to set track matte
+                                    if (matteError.toString().indexOf(layer.name) !== -1) {
+                                        DEBUG_JSX.log("✓ Layer name found in matte error - likely already the matte source");
+                                        isUsedAsTrackMatte = true;
+                                        break;
+                                    }
+                                }
+                                
+                            } catch(e) {
+                                DEBUG_JSX.log("Track matte detection error: " + e.toString());
+                            }
+                        }
+                    } catch(e) {
+                        // Skip if we can't check track matte
+                        DEBUG_JSX.log("Error checking track matte for layer '" + otherLayer.name + "': " + e.toString());
+                    }
+                }
+                
+                DEBUG_JSX.log("Layer '" + layer.name + "' - parent check: " + (layer.parent === shapeLayer) + ", track matte check: " + isUsedAsTrackMatte);
+                
+                if (isUsedAsTrackMatte) {
+                    maskLayer = layer;
+                    DEBUG_JSX.log("Found existing mask layer: " + maskLayer.name);
+                    break;
+                }
             }
+        }
+        
+        // Create new mask layer only if none exists
+        if (!maskLayer) {
+            DEBUG_JSX.log("No existing mask layer found, creating new one");
+            // Create the mask layer by duplicating the shape layer
+            maskLayer = shapeLayer.duplicate();
+            maskLayer.name = shapeLayer.name + " - Mask";
+            
+            // Move mask layer above the original shape layer (index - 1)
+            maskLayer.moveBefore(shapeLayer);
+            
+            // Parent mask layer to original shape layer
+            maskLayer.parent = shapeLayer;
+            
+            // Shy the mask layer to reduce clutter
+            maskLayer.shy = true;
+            
+            // Link opacity and anchor point to original shape layer using expressions
+            maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
+            maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
+            
+            // Clean up mask layer effects - remove ALL effects including Squircle
+            var maskEffects = maskLayer.property("Effects");
+            if (maskEffects && maskEffects.numProperties > 0) {
+                // Go backwards to avoid index shifting issues
+                for (var fx = maskEffects.numProperties; fx >= 1; fx--) {
+                    var effect = maskEffects.property(fx);
+                    var effectName = effect.name;
+                    effect.remove();
+                    DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
+                }
+            }
+            
+            // Clean up keyframes from mask layer - remove all keyframes from transform properties
+            try {
+                var transform = maskLayer.property("Transform");
+                var transformProps = ["Position", "Scale", "Rotation", "Opacity"];
+                for (var p = 0; p < transformProps.length; p++) {
+                    var prop = transform.property(transformProps[p]);
+                    if (prop && prop.numKeys > 0) {
+                        // Remove all keyframes
+                        for (var k = prop.numKeys; k >= 1; k--) {
+                            prop.removeKey(k);
+                        }
+                        DEBUG_JSX.log("Removed keyframes from mask layer: " + transformProps[p]);
+                    }
+                }
+            } catch(keyframeError) {
+                DEBUG_JSX.log("Could not remove keyframes from mask layer: " + keyframeError.toString());
+            }
+            
+            // Remove layer markers from mask layer
+            try {
+                var markers = maskLayer.property("Marker");
+                if (markers && markers.numKeys > 0) {
+                    // Remove all markers in reverse order to avoid index shifting
+                    for (var m = markers.numKeys; m >= 1; m--) {
+                        markers.removeKey(m);
+                    }
+                    DEBUG_JSX.log("Removed " + markers.numKeys + " markers from mask layer");
+                } else {
+                    DEBUG_JSX.log("No markers found on mask layer");
+                }
+            } catch(markerError) {
+                DEBUG_JSX.log("Could not remove markers from mask layer: " + markerError.toString());
+            }
+        } else {
+            DEBUG_JSX.log("Reusing existing mask layer: " + maskLayer.name);
         }
         
         // Link the shape path from mask layer to original layer
