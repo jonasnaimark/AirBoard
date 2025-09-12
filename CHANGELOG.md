@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.39] - 2025-09-12 ✨ **FINDER AUTO-OPEN**
+### ✨ New Features
+- **Automatic Finder Opening**: Finder window now automatically opens after creating project folder structure
+- **Seamless Workflow**: User selects location → folders created → Finder opens automatically showing the new structure
+- **Silent Operation**: Removed success alert dialogs since Finder window provides visual confirmation
+
+### 🎨 UI/UX Improvements
+- **Cleaner Experience**: No more alert pop-ups interrupting the workflow
+- **Visual Feedback**: Finder window serves as both confirmation and immediate access to created folders
+- **One-Click Flow**: Complete project setup with minimal user interaction
+
 ## [4.16.33] - 2025-09-07 🎨 **UI REFINEMENT**
 ### 🎨 UI/UX Improvements
 - **Section Corner Rounding**: Tested various border-radius values (6px, 8px, 10px) for optimal appearance
