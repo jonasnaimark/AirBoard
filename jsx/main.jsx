@@ -2211,8 +2211,12 @@ function stretchKeyframesWithFrames(direction, frames) {
             DEBUG_JSX.log("🎬 MANUAL CHECK: Layer " + layer.name + " has " + selectedProps.length + " selected properties");
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
-                var selKeys = prop.selectedKeys;
-                DEBUG_JSX.log("🎬 MANUAL CHECK: Property " + prop.name + " has " + selKeys.length + " selected keyframes");
+                try {
+                    var selKeys = prop.selectedKeys;
+                    DEBUG_JSX.log("🎬 MANUAL CHECK: Property " + prop.name + " has " + selKeys.length + " selected keyframes");
+                } catch(e) {
+                    DEBUG_JSX.log("🎬 MANUAL CHECK: Property " + prop.name + " - ERROR accessing selectedKeys: " + e.toString());
+                }
             }
         }
         
