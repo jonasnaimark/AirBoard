@@ -7567,11 +7567,21 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 
                 // Check if this uniform interval needs to snap to the target increment
                 var difference = Math.abs(referenceInterval - staggerSeconds);
+                var negDifference = Math.abs(referenceInterval - (-staggerSeconds)); // Also check negative target
                 DEBUG_JSX.log("Target interval: " + (staggerSeconds * 1000).toFixed(1) + "ms, difference: " + (difference * 1000).toFixed(1) + "ms");
+                DEBUG_JSX.log("Negative target: " + (-staggerSeconds * 1000).toFixed(1) + "ms, difference: " + (negDifference * 1000).toFixed(1) + "ms");
                 
-                if (difference > tolerance) {
+                // If the interval matches either positive or negative target, it's clean
+                if (difference > tolerance && negDifference > tolerance) {
                     DEBUG_JSX.log("Uniform interval needs snapping to target increment");
                     isCleanPattern = false;
+                } else {
+                    // Pattern matches either positive or negative target - it's clean
+                    if (negDifference <= tolerance) {
+                        DEBUG_JSX.log("Uniform interval already matches negative target - no snapping needed");
+                    } else {
+                        DEBUG_JSX.log("Uniform interval already matches positive target - no snapping needed");
+                    }
                 }
             }
         }
@@ -7619,7 +7629,7 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 if (isCurrentlyNegative) {
                     // From negative, move toward zero first, then positive
                     targetMultiple = -currentMultiple + 1; // e.g., from -2 to -1
-                    if (targetMultiple > 0) targetMultiple = 1; // Skip zero, go to +1
+                    if (targetMultiple >= 0) targetMultiple = 1; // Skip zero, go to +1
                 } else {
                     targetMultiple = Math.max(currentMultiple, Math.ceil(currentInterval / staggerSeconds));
                     if (Math.abs(currentInterval - (currentMultiple * staggerSeconds)) < 0.001) {
@@ -7955,10 +7965,20 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             }
         }
         
+        // Collect the actual offsets that were applied to each layer
+        var layerOffsets = [];
+        for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+            var layerGroup = layerGroups[layerIdx];
+            layerOffsets.push({
+                layerIndex: layerGroup.layer.index,
+                offsetSeconds: layerGroup.snapOffset || 0
+            });
+        }
+        
         // Return both success status and the actual applied stagger interval in milliseconds
         var actualStaggerMs = currentDirection * staggerSeconds * 1000;
         DEBUG_JSX.log("Smart snapping applied uniform stagger of " + actualStaggerMs.toFixed(1) + "ms");
-        return {success: true, staggerMs: actualStaggerMs};
+        return {success: true, staggerMs: actualStaggerMs, layerOffsets: layerOffsets};
         
     } catch(e) {
         DEBUG_JSX.log("Smart keyframe stagger snapping failed: " + e.toString());
@@ -7967,12 +7987,20 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
 }
 
 // Helper function to snap inconsistent staggers to clean multiples of the input value (for layers)
-function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, direction) {
+function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, direction, isTopToBottom) {
     try {
         DEBUG_JSX.log("=== SMART SNAPPING ANALYSIS ===");
         DEBUG_JSX.log("Checking if staggers need snapping to " + staggerFrames + " frame increments");
         
         var staggerSeconds = staggerFrames / frameRate; // Convert to seconds
+        
+        // Adjust target interval based on stagger direction
+        var targetStaggerSeconds = staggerSeconds;
+        if (isTopToBottom) {
+            // For top-to-bottom stagger, we might expect negative intervals
+            // Don't force positive - let the direction logic handle it
+        }
+        
         var tolerance = 0.005; // 5ms tolerance (more forgiving)
         
         if (layerArray.length < 2) {
@@ -7993,8 +8021,16 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, directio
             });
         }
         
-        // Sort by layer index (bottom to top: highest to lowest)
-        layerTimes.sort(function(a, b) { return b.index - a.index; });
+        // Sort by layer index based on stagger direction
+        if (isTopToBottom) {
+            // Top to bottom: lowest index to highest (Layer 1, Layer 2, Layer 3...)
+            layerTimes.sort(function(a, b) { return a.index - b.index; });
+            DEBUG_JSX.log("Smart snapping: Sorting layers top to bottom (index ascending)");
+        } else {
+            // Bottom to top: highest index to lowest (Layer 3, Layer 2, Layer 1...)
+            layerTimes.sort(function(a, b) { return b.index - a.index; });
+            DEBUG_JSX.log("Smart snapping: Sorting layers bottom to top (index descending)");
+        }
         
         // Calculate actual intervals between layers
         var actualIntervals = [];
@@ -8043,11 +8079,22 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, directio
             
             // Check if this single interval needs to snap to the target increment
             var difference = Math.abs(singleInterval - staggerSeconds);
+            var negDifference = Math.abs(singleInterval - (-staggerSeconds)); // Also check negative target
             DEBUG_JSX.log("Target interval: " + (staggerSeconds * 1000).toFixed(1) + "ms, difference: " + (difference * 1000).toFixed(1) + "ms");
+            DEBUG_JSX.log("Negative target: " + (-staggerSeconds * 1000).toFixed(1) + "ms, difference: " + (negDifference * 1000).toFixed(1) + "ms");
             
-            if (difference > tolerance) {
+            // If the interval matches either positive or negative target, it's clean
+            if (difference > tolerance && negDifference > tolerance) {
                 DEBUG_JSX.log("Single interval needs snapping to target increment");
                 isCleanPattern = false;
+            } else {
+                // Pattern matches either positive or negative target - it's clean
+                if (negDifference <= tolerance) {
+                    DEBUG_JSX.log("Single interval already matches negative target - no snapping needed");
+                } else {
+                    DEBUG_JSX.log("Single interval already matches positive target - no snapping needed");
+                }
+                isCleanPattern = true;
             }
         }
         
@@ -8082,7 +8129,7 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, directio
                 if (isCurrentlyNegative) {
                     // From negative, move toward zero first, then positive
                     targetMultiple = -currentMultiple + 1; // e.g., from -2 to -1
-                    if (targetMultiple > 0) targetMultiple = 1; // Skip zero, go to +1
+                    if (targetMultiple >= 0) targetMultiple = 1; // Skip zero, go to +1
                 } else {
                     targetMultiple = Math.max(currentMultiple, Math.ceil(currentInterval / staggerSeconds));
                     if (Math.abs(currentInterval - (currentMultiple * staggerSeconds)) < 0.001) {
@@ -8297,10 +8344,161 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             DEBUG_JSX.log("Sorting keyframe layers bottom to top (index descending)");
         }
         
+        // Skip cross-property staggering - only stagger between different layers
+        
         // First: Snap inconsistent staggers to clean multiples of input value
         var snapResult = snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction);
+        
         if (snapResult.success) {
             DEBUG_JSX.log("Snapped keyframes to clean " + staggerFrames + " frame increments");
+            
+            // MARKER SYNCING: Move layer markers that are synchronized with keyframes after smart snapping
+            // Store keyframe selection info before marker operations (same as delay nudging)
+            var keyframeSelectionInfo = [];
+            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                var layerGroup = layerGroups[layerIdx];
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    if (propData.selectedKeys && propData.selectedKeys.length > 0) {
+                        keyframeSelectionInfo.push({
+                            property: propData.property,
+                            propertyName: propData.propertyName,
+                            newSelIndices: propData.selectedKeys.slice() // Use selectedKeys as the indices to preserve
+                        });
+                    }
+                }
+            }
+            
+            try {
+                DEBUG_JSX.log("Starting marker sync after keyframe smart snapping");
+                
+                for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                    var layerGroup = layerGroups[layerIdx];
+                    var layer = layerGroup.layer;
+                    
+                    // Get the actual offset that was applied to this layer's keyframes during smart snapping
+                    var layerStaggerOffset = 0;
+                    if (snapResult.layerOffsets) {
+                        // Use the actual offsets from smart snapping
+                        for (var offsetIdx = 0; offsetIdx < snapResult.layerOffsets.length; offsetIdx++) {
+                            var offsetData = snapResult.layerOffsets[offsetIdx];
+                            if (offsetData.layerIndex === layer.index) {
+                                layerStaggerOffset = offsetData.offsetSeconds;
+                                break;
+                            }
+                        }
+                    } else {
+                        // Fallback to the old calculation method if layerOffsets aren't available
+                        layerStaggerOffset = layerIdx * direction * (snapResult.staggerMs / 1000); // Convert ms to seconds
+                    }
+                    
+                    if (Math.abs(layerStaggerOffset) < 0.001) {
+                        continue; // Skip layers with no offset
+                    }
+                    
+                    // Collect layer markers that need to be moved with keyframes
+                    var markersToMove = [];
+                    if (layer.marker && layer.marker.numKeys > 0) {
+                        DEBUG_JSX.log("Checking " + layer.marker.numKeys + " markers on layer " + layer.name + " for sync (offset: " + (layerStaggerOffset * 1000).toFixed(1) + "ms)");
+                        
+                        // Collect all original keyframe times from this layer before stagger
+                        var originalKeyframeTimes = [];
+                        for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                            var propData = layerGroup.keyframes[propIdx];
+                            var prop = propData.property;
+                            var selectedKeys = propData.selectedKeys;
+                            
+                            for (var k = 0; k < selectedKeys.length; k++) {
+                                var keyIndex = selectedKeys[k];
+                                var currentKeyTime = prop.keyTime(keyIndex);
+                                var originalKeyTime = currentKeyTime - layerStaggerOffset; // Reverse the stagger to get original time
+                                originalKeyframeTimes.push(originalKeyTime);
+                            }
+                        }
+                        
+                        // Check each marker to see if it was at the same time as a keyframe before stagger
+                        for (var m = 1; m <= layer.marker.numKeys; m++) {
+                            var markerTime = layer.marker.keyTime(m);
+                            
+                            // Check if this marker time matches any original keyframe time
+                            for (var t = 0; t < originalKeyframeTimes.length; t++) {
+                                if (Math.abs(markerTime - originalKeyframeTimes[t]) < 0.001) { // 1ms tolerance
+                                    var markerValue = layer.marker.keyValue(m);
+                                    var markerComment = markerValue.comment || "";
+                                    var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
+                                    
+                                    DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
+                                    
+                                    markersToMove.push({
+                                        markerIndex: m,
+                                        oldTime: markerTime,
+                                        newTime: newMarkerTime,
+                                        markerValue: markerValue,
+                                        comment: markerComment
+                                    });
+                                    break; // Only match each marker once
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Move the layer markers that were synced with keyframes
+                    if (markersToMove.length > 0) {
+                        DEBUG_JSX.log("Moving " + markersToMove.length + " synced markers on layer " + layer.name);
+                        
+                        // Sort markers in reverse order to avoid index shifting
+                        markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                        
+                        for (var m = 0; m < markersToMove.length; m++) {
+                            var markerInfo = markersToMove[m];
+                            
+                            try {
+                                // Remove the old marker
+                                layer.marker.removeKey(markerInfo.markerIndex);
+                                
+                                // Add new marker at the new time with same properties
+                                var newMarkerIndex = layer.marker.addKey(markerInfo.newTime);
+                                layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                
+                                DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + (markerInfo.oldTime * 1000).toFixed(1) + "ms to " + (markerInfo.newTime * 1000).toFixed(1) + "ms");
+                                
+                            } catch(markerMoveError) {
+                                DEBUG_JSX.log("Failed to move marker '" + markerInfo.comment + "': " + markerMoveError.toString());
+                            }
+                        }
+                    }
+                }
+                
+            } catch(markerSyncError) {
+                DEBUG_JSX.log("Marker sync failed after smart snapping: " + markerSyncError.toString());
+            }
+            
+            // CRITICAL: Restore keyframe selection after marker operations (same as delay nudging)
+            try {
+                DEBUG_JSX.log("Restoring keyframe selection after smart snapping marker sync for " + keyframeSelectionInfo.length + " properties");
+                
+                for (var i = 0; i < keyframeSelectionInfo.length; i++) {
+                    var selInfo = keyframeSelectionInfo[i];
+                    var prop = selInfo.property;
+                    
+                    // First deselect all keyframes
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        prop.setSelectedAtKey(j, false);
+                    }
+                    
+                    // Then select our keyframes
+                    for (var k = 0; k < selInfo.newSelIndices.length; k++) {
+                        var idx = selInfo.newSelIndices[k];
+                        prop.setSelectedAtKey(idx, true);
+                        DEBUG_JSX.log("Reselected keyframe at index " + idx + " on " + selInfo.propertyName);
+                    }
+                }
+                
+                DEBUG_JSX.log("Keyframe selection restored after smart snapping marker sync");
+                
+            } catch(selectionRestoreError) {
+                DEBUG_JSX.log("Selection restore failed after smart snapping marker sync: " + selectionRestoreError.toString());
+            }
             
             // Smart snapping already created the correct uniform pattern - no additional stagger needed
             var successMessage = "Applied stagger to " + layerGroups.length + " layers|" + snapResult.staggerMs + "ms per layer";
@@ -8640,6 +8838,143 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             DEBUG_JSX.log("Final keyframe selection pass failed: " + finalPassError.toString());
         }
         
+        // MARKER SYNCING: Move layer markers that are synchronized with keyframes after cumulative stagger
+        if (layersWithActualMovement > 0) {
+            // Store keyframe selection info before marker operations (same as delay nudging)
+            var keyframeSelectionInfo = [];
+            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                var layerGroup = layerGroups[layerIdx];
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    if (propData.newSelIndices && propData.newSelIndices.length > 0) {
+                        keyframeSelectionInfo.push({
+                            property: propData.property,
+                            propertyName: propData.propertyName,
+                            newSelIndices: propData.newSelIndices.slice() // Make a copy
+                        });
+                    }
+                }
+            }
+            
+            try {
+                DEBUG_JSX.log("Starting marker sync after keyframe cumulative stagger");
+                
+                for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                    var layerGroup = layerGroups[layerIdx];
+                    var layer = layerGroup.layer;
+                    
+                    // Calculate the cumulative stagger offset that was applied to this layer's keyframes
+                    var layerStaggerOffset = layerIdx * direction * staggerMs / 1000; // Convert ms to seconds
+                    
+                    if (Math.abs(layerStaggerOffset) < 0.001) {
+                        continue; // Skip layers with no offset
+                    }
+                    
+                    // Collect layer markers that need to be moved with keyframes
+                    var markersToMove = [];
+                    if (layer.marker && layer.marker.numKeys > 0) {
+                        DEBUG_JSX.log("Checking " + layer.marker.numKeys + " markers on layer " + layer.name + " for sync (offset: " + (layerStaggerOffset * 1000).toFixed(1) + "ms)");
+                        
+                        // Collect all original keyframe times from this layer before stagger
+                        var originalKeyframeTimes = [];
+                        for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                            var propData = layerGroup.keyframes[propIdx];
+                            var prop = propData.property;
+                            var selectedKeys = propData.selectedKeys;
+                            
+                            for (var k = 0; k < selectedKeys.length; k++) {
+                                var keyIndex = selectedKeys[k];
+                                var currentKeyTime = prop.keyTime(keyIndex);
+                                var originalKeyTime = currentKeyTime - layerStaggerOffset; // Reverse the stagger to get original time
+                                originalKeyframeTimes.push(originalKeyTime);
+                            }
+                        }
+                        
+                        // Check each marker to see if it was at the same time as a keyframe before stagger
+                        for (var m = 1; m <= layer.marker.numKeys; m++) {
+                            var markerTime = layer.marker.keyTime(m);
+                            
+                            // Check if this marker time matches any original keyframe time
+                            for (var t = 0; t < originalKeyframeTimes.length; t++) {
+                                if (Math.abs(markerTime - originalKeyframeTimes[t]) < 0.001) { // 1ms tolerance
+                                    var markerValue = layer.marker.keyValue(m);
+                                    var markerComment = markerValue.comment || "";
+                                    var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
+                                    
+                                    DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
+                                    
+                                    markersToMove.push({
+                                        markerIndex: m,
+                                        oldTime: markerTime,
+                                        newTime: newMarkerTime,
+                                        markerValue: markerValue,
+                                        comment: markerComment
+                                    });
+                                    break; // Only match each marker once
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Move the layer markers that were synced with keyframes
+                    if (markersToMove.length > 0) {
+                        DEBUG_JSX.log("Moving " + markersToMove.length + " synced markers on layer " + layer.name);
+                        
+                        // Sort markers in reverse order to avoid index shifting
+                        markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
+                        
+                        for (var m = 0; m < markersToMove.length; m++) {
+                            var markerInfo = markersToMove[m];
+                            
+                            try {
+                                // Remove the old marker
+                                layer.marker.removeKey(markerInfo.markerIndex);
+                                
+                                // Add new marker at the new time with same properties
+                                var newMarkerIndex = layer.marker.addKey(markerInfo.newTime);
+                                layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                                
+                                DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + (markerInfo.oldTime * 1000).toFixed(1) + "ms to " + (markerInfo.newTime * 1000).toFixed(1) + "ms");
+                                
+                            } catch(markerMoveError) {
+                                DEBUG_JSX.log("Failed to move marker '" + markerInfo.comment + "': " + markerMoveError.toString());
+                            }
+                        }
+                    }
+                }
+                
+            } catch(markerSyncError) {
+                DEBUG_JSX.log("Marker sync failed after cumulative stagger: " + markerSyncError.toString());
+            }
+            
+            // CRITICAL: Restore keyframe selection after marker operations (same as delay nudging)
+            try {
+                DEBUG_JSX.log("Restoring keyframe selection after cumulative stagger marker sync for " + keyframeSelectionInfo.length + " properties");
+                
+                for (var i = 0; i < keyframeSelectionInfo.length; i++) {
+                    var selInfo = keyframeSelectionInfo[i];
+                    var prop = selInfo.property;
+                    
+                    // First deselect all keyframes
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        prop.setSelectedAtKey(j, false);
+                    }
+                    
+                    // Then select our keyframes
+                    for (var k = 0; k < selInfo.newSelIndices.length; k++) {
+                        var idx = selInfo.newSelIndices[k];
+                        prop.setSelectedAtKey(idx, true);
+                        DEBUG_JSX.log("Reselected keyframe at index " + idx + " on " + selInfo.propertyName);
+                    }
+                }
+                
+                DEBUG_JSX.log("Keyframe selection restored after cumulative stagger marker sync");
+                
+            } catch(selectionRestoreError) {
+                DEBUG_JSX.log("Selection restore failed after cumulative stagger marker sync: " + selectionRestoreError.toString());
+            }
+        }
+        
         // If no layers had actual movement, show 0ms stagger since nothing actually moved
         var effectiveStagger = layersWithActualMovement > 0 ? (direction * staggerMs) : 0;
         
@@ -8681,7 +9016,7 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, is
         
         // First: Snap inconsistent staggers to clean multiples of input value
         DEBUG_JSX.log("About to call snapStaggersToInputValue with " + layerArray.length + " layers and " + staggerFrames + " frames");
-        var snapResult = snapStaggersToInputValue(layerArray, staggerFrames, frameRate, direction);
+        var snapResult = snapStaggersToInputValue(layerArray, staggerFrames, frameRate, direction, isTopToBottom);
         DEBUG_JSX.log("snapStaggersToInputValue returned: " + JSON.stringify(snapResult));
         if (snapResult.success) {
             DEBUG_JSX.log("Snapped layers to clean " + staggerFrames + " frame increments");
