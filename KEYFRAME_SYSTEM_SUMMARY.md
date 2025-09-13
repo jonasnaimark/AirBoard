@@ -1273,6 +1273,6 @@ if (isTimeRemap) {
 ---
 
 *Last Updated: December 2024*  
-*Version: v4.16.29 - Time Remap Movement and Selection Fix*  
+*Version: v4.16.42 - Time Remap Stagger Fix*  
 *Status: All keyframe systems fully implemented and production-ready*  
 *Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, global delay functionality restored, Time Remap keyframe processing, and Time Remap selection preservation*

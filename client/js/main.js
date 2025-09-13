@@ -1072,11 +1072,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             xDistanceText.style.opacity = '1';
-                        } else {
-                            // No X position keyframes selected - show 0
-                            xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
-                            xDistanceText.style.opacity = '1';
                         }
+                        // If hasXDistance is false, leave the element untouched in its default HTML state
                     
                         // Update Y Distance display
                         var yDistanceText = document.getElementById('yDistanceText');
@@ -1098,11 +1095,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             yDistanceText.style.opacity = '1';
-                        } else {
-                            // No Y position keyframes selected - show 0
-                            yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
-                            yDistanceText.style.opacity = '1';
                         }
+                        // If hasYDistance is false, leave the element untouched in its default HTML state
                     
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                         console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
