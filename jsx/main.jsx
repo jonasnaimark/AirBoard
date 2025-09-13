@@ -8295,6 +8295,34 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 collectKeyframes(layer.effect, "Effects > ");
             }
             
+            // Search mask properties
+            if (layer.mask && layer.mask.numProperties > 0) {
+                collectKeyframes(layer.mask, "Masks > ");
+            }
+            
+            // Search audio levels (if audio layer)
+            try {
+                if (layer.hasAudio && layer.audioLevels && layer.audioLevels.canVaryOverTime && layer.audioLevels.numKeys > 0) {
+                    var selectedAudioKeys = [];
+                    for (var k = 1; k <= layer.audioLevels.numKeys; k++) {
+                        if (layer.audioLevels.keySelected(k)) {
+                            selectedAudioKeys.push(k);
+                        }
+                    }
+                    
+                    if (selectedAudioKeys.length > 0) {
+                        layerKeyframes.push({
+                            property: layer.audioLevels,
+                            propertyName: "Audio Levels",
+                            selectedKeys: selectedAudioKeys
+                        });
+                        hasSelectedKeyframes = true;
+                    }
+                }
+            } catch(e) {
+                // Audio levels might not be available
+            }
+            
             // IMPORTANT: Check Time Remap separately (not in property groups)
             try {
                 if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {

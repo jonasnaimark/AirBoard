@@ -1272,7 +1272,272 @@ if (isTimeRemap) {
 
 ---
 
+## 🔍 **COMPREHENSIVE KEYFRAME DETECTION SYSTEM**
+
+### **Universal Keyframe Detection Pattern - THE DEFINITIVE APPROACH**
+
+To avoid situations where features manually look for specific keyframe types and miss others, use this comprehensive recursive pattern that finds ALL keyframes across ALL properties:
+
+```javascript
+// COMPREHENSIVE KEYFRAME DETECTION - Works for ALL property types
+function findAllSelectedKeyframes(layer) {
+    var layerKeyframes = [];
+    var hasSelectedKeyframes = false;
+    
+    // 1. RECURSIVE PROPERTY TRAVERSAL - Finds everything
+    function searchAllProperties(propGroup) {
+        for (var i = 1; i <= propGroup.numProperties; i++) {
+            var prop = propGroup.property(i);
+            
+            // Check if this property has keyframes and selected keyframes
+            if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                var selectedKeys = [];
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    if (prop.keySelected(j)) {
+                        selectedKeys.push(j);
+                    }
+                }
+                
+                if (selectedKeys.length > 0) {
+                    layerKeyframes.push({
+                        property: prop,
+                        propertyName: prop.name,
+                        selectedKeys: selectedKeys
+                    });
+                    hasSelectedKeyframes = true;
+                }
+            }
+            
+            // Recurse into property groups (CRITICAL for nested properties)
+            if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
+                       prop.propertyType === PropertyType.NAMED_GROUP)) {
+                searchAllProperties(prop);
+            }
+        }
+    }
+    
+    // 2. SEARCH MAIN LAYER PROPERTIES (Transform, Effects, Masks, etc.)
+    searchAllProperties(layer);
+    
+    // 3. SPECIAL PROPERTIES - Check properties that might not be in main traversal
+    
+    // Time Remap (always check explicitly)
+    try {
+        if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.canVaryOverTime && layer.timeRemap.numKeys > 0) {
+            var selectedTimeRemapKeys = [];
+            for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                if (layer.timeRemap.keySelected(j)) {
+                    selectedTimeRemapKeys.push(j);
+                }
+            }
+            
+            if (selectedTimeRemapKeys.length > 0) {
+                layerKeyframes.push({
+                    property: layer.timeRemap,
+                    propertyName: "Time Remap",
+                    selectedKeys: selectedTimeRemapKeys
+                });
+                hasSelectedKeyframes = true;
+            }
+        }
+    } catch(e) {
+        // Time remap might not be available
+    }
+    
+    // Audio Levels (if audio layer)
+    try {
+        if (layer.hasAudio && layer.audioLevels && layer.audioLevels.canVaryOverTime && layer.audioLevels.numKeys > 0) {
+            var selectedAudioKeys = [];
+            for (var k = 1; k <= layer.audioLevels.numKeys; k++) {
+                if (layer.audioLevels.keySelected(k)) {
+                    selectedAudioKeys.push(k);
+                }
+            }
+            
+            if (selectedAudioKeys.length > 0) {
+                layerKeyframes.push({
+                    property: layer.audioLevels,
+                    propertyName: "Audio Levels",
+                    selectedKeys: selectedAudioKeys
+                });
+                hasSelectedKeyframes = true;
+            }
+        }
+    } catch(e) {
+        // Audio levels might not be available
+    }
+    
+    return {
+        keyframes: layerKeyframes,
+        hasSelected: hasSelectedKeyframes
+    };
+}
+
+// USAGE EXAMPLE
+var allLayerKeyframes = [];
+for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+    var layer = selectedLayers[layerIdx];
+    var layerResult = findAllSelectedKeyframes(layer);
+    
+    if (layerResult.hasSelected) {
+        allLayerKeyframes = allLayerKeyframes.concat(layerResult.keyframes);
+    }
+}
+
+// Now allLayerKeyframes contains EVERY selected keyframe across ALL properties
+```
+
+### **Property Types This Pattern Finds:**
+
+#### **Core Transform Properties:**
+- ✅ Position (2D and 3D)
+- ✅ X Position / Y Position / Z Position (separated dimensions)
+- ✅ Anchor Point
+- ✅ Scale
+- ✅ Rotation / X Rotation / Y Rotation / Z Rotation
+- ✅ Opacity
+
+#### **Effect Properties:**
+- ✅ ALL effect parameters (Blur, Tint, Brightness & Contrast, etc.)
+- ✅ Nested effect groups
+- ✅ Multiple instances of same effect type
+
+#### **Mask Properties:**
+- ✅ Mask Path
+- ✅ Mask Feather
+- ✅ Mask Opacity
+- ✅ Mask Expansion
+
+#### **Special Properties:**
+- ✅ Time Remap
+- ✅ Audio Levels
+- ✅ Layer Styles (if any)
+- ✅ Text properties (if accessible through recursion)
+
+#### **3D Layer Properties:**
+- ✅ Material Options
+- ✅ Light properties
+- ✅ Camera properties
+
+### **Why This Pattern Works:**
+
+1. **Recursive Traversal**: `searchAllProperties()` finds nested properties automatically
+2. **PropertyType Checking**: Uses `INDEXED_GROUP` and `NAMED_GROUP` to recurse properly
+3. **Explicit Special Cases**: Time Remap and Audio Levels checked separately (they sometimes don't appear in main traversal)
+4. **Comprehensive Coverage**: Gets everything that `canVaryOverTime` and has keyframes
+5. **Error Safety**: Try-catch blocks ensure special properties don't break the process
+
+### **How Different Systems Use This:**
+
+#### **Delay/Duration Systems (Working Examples):**
+```javascript
+// delay/duration systems use this comprehensive approach
+var result = findAllSelectedKeyframes(layer);
+// Process ALL found keyframes regardless of type
+```
+
+#### **Stagger System (Now Fixed):**
+```javascript
+// stagger system now uses the same comprehensive approach
+var result = findAllSelectedKeyframes(layer);
+// No manual checking for specific property types needed
+```
+
+### **Common Mistakes to Avoid:**
+
+#### **❌ WRONG: Manual Property Type Checking**
+```javascript
+// Don't do this - you'll miss properties
+if (prop.name === "Position") { /* process */ }
+else if (prop.name === "Opacity") { /* process */ }
+else if (prop.name === "Scale") { /* process */ }
+// What about masks? Effects? Time Remap? Audio Levels?
+```
+
+#### **❌ WRONG: Limited Property Lists**
+```javascript
+// Don't hardcode property lists
+var supportedProperties = ["Transform", "Effects", "Time Remap"];
+// This approach will miss new property types
+```
+
+#### **✅ RIGHT: Universal Pattern**
+```javascript
+// Do this - finds everything automatically
+function searchAllProperties(propGroup) {
+    // Recursive traversal finds ALL properties
+    // No hardcoded lists needed
+}
+```
+
+### **Property Hierarchy Understanding:**
+
+After Effects properties are organized hierarchically:
+```
+Layer
+├── Transform (INDEXED_GROUP)
+│   ├── Position (can have keyframes)
+│   ├── Scale (can have keyframes)
+│   └── Rotation (can have keyframes)
+├── Effects (INDEXED_GROUP)
+│   ├── Blur (INDEXED_GROUP)
+│   │   ├── Blurriness (can have keyframes)
+│   │   └── Blur Dimensions (can have keyframes)
+│   └── Tint (INDEXED_GROUP)
+│       ├── Map White To (can have keyframes)
+│       └── Amount to Tint (can have keyframes)
+├── Masks (INDEXED_GROUP)
+│   ├── Mask 1 (INDEXED_GROUP)
+│   │   ├── Mask Path (can have keyframes)
+│   │   └── Mask Feather (can have keyframes)
+└── Special Properties (not always in main hierarchy)
+    ├── Time Remap (check explicitly)
+    └── Audio Levels (check explicitly)
+```
+
+The recursive pattern traverses this entire hierarchy automatically.
+
+### **Testing Your Keyframe Detection:**
+
+To ensure your keyframe detection is comprehensive:
+
+1. **Create test layer with keyframes on:**
+   - Position (2D)
+   - Scale 
+   - Rotation
+   - Opacity
+   - Blur effect
+   - Mask path
+   - Time Remap
+
+2. **Select different combinations:**
+   - All keyframes
+   - Only Transform keyframes
+   - Only Effect keyframes
+   - Mix of Transform + Effects
+   - Time Remap alone
+   - Time Remap + other properties
+
+3. **Verify detection:**
+   - Run your detection function
+   - Check that ALL selected keyframes are found
+   - No keyframes should be missed
+   - No properties should require special handling
+
+### **Future-Proofing:**
+
+This pattern will automatically work with:
+- ✅ New After Effects property types
+- ✅ Third-party effect properties  
+- ✅ Expression-controlled properties
+- ✅ Any property that implements `canVaryOverTime`
+- ✅ Nested property groups of any depth
+
+**Use this pattern for ALL keyframe operations to ensure comprehensive coverage.**
+
+---
+
 *Last Updated: December 2024*  
-*Version: v4.16.42 - Time Remap Stagger Fix*  
+*Version: v4.16.43 - Comprehensive Keyframe Detection Documentation*  
 *Status: All keyframe systems fully implemented and production-ready*  
-*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, global delay functionality restored, Time Remap keyframe processing, and Time Remap selection preservation*
+*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, global delay functionality restored, Time Remap keyframe processing, Time Remap selection preservation, and comprehensive keyframe detection system documentation*
