@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.42] - 2025-09-12 🔧 **TIME REMAP STAGGER FIX**
+### 🔧 Fixed
+- **Time Remap Stagger**: Fixed Time Remap keyframes getting deleted during stagger operations
+- **Selection Preservation**: Time Remap keyframes now properly stagger and remain selected after operations
+- **Add-Before-Delete Pattern**: Implemented complete "add-before-delete" pattern following KEYFRAME_SYSTEM_SUMMARY.md guidelines
+- **Property Name Fix**: Corrected data.time vs data.oldTime mismatch in stagger system
+- **Phase 2 Skip**: Time Remap properties now skip deletion phase and are handled entirely in Phase 3
+
+### 🎯 Technical Improvements
+- **Keyframe Verification**: Added verification that keyframes exist before moving them
+- **Safe Removal**: Old keyframes are only removed after new ones are successfully created
+- **Debug Logging**: Enhanced logging for Time Remap stagger operations
+- **Pattern Compliance**: Follows documented Time Remap handling patterns from Challenge 13
+
 ## [4.16.39] - 2025-09-12 ✨ **FINDER AUTO-OPEN**
 ### ✨ New Features
 - **Automatic Finder Opening**: Finder window now automatically opens after creating project folder structure
