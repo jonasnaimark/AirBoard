@@ -329,7 +329,7 @@ function readKeyframesSmart() {
                 }
             }
             
-            // Use -999 as a special flag for "Select > 1 Keyframe" in duration field
+            // Use -999 as a special flag for "Select > 1 Key" in duration field
             return "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|Stagger|" + debugInfo;
         }
         
@@ -342,7 +342,9 @@ function readKeyframesSmart() {
             // Calculate all delays from earliest keyframe
             var delays = [];
             for (var k = 0; k < propertyTimes.length; k++) {
-                var delayMs = roundMs(propertyTimes[k].time - earliestTime);
+                var timeDiff = propertyTimes[k].time - earliestTime;
+                var delayMs = roundMs(timeDiff);
+                DEBUG_JSX.log("Delay calc " + k + ": " + (propertyTimes[k].time * 1000).toFixed(3) + "ms - " + (earliestTime * 1000).toFixed(3) + "ms = " + (timeDiff * 1000).toFixed(3) + "ms -> rounded: " + delayMs + "ms");
                 delays.push(delayMs);
             }
             
@@ -637,7 +639,7 @@ function readKeyframesSmart() {
             var staggerMs = 0, staggerFrames = 0, staggerText = "Stagger";
             try {
                 DEBUG_JSX.log("About to call calculateStagger with " + propertyTimes.length + " property times");
-                staggerText = calculateStagger(propertyTimes, frameRate, true); // true = keyframe mode
+                staggerText = calculateStagger(propertyTimes, frameRate, true, false); // true = keyframe mode, false = use auto-detection
                 DEBUG_JSX.log("calculateStagger returned: " + staggerText);
                 if (staggerText.indexOf("ms") > 0) {
                     // Extract numeric values for backward compatibility
@@ -744,7 +746,7 @@ function readKeyframesSmart() {
 }
 
 // Calculate stagger from timing data (works for both keyframes and layers)
-function calculateStagger(timingData, frameRate, isKeyframeMode) {
+function calculateStagger(timingData, frameRate, isKeyframeMode, isReverseDirection) {
     try {
         DEBUG_JSX.log("calculateStagger called with " + timingData.length + " items, isKeyframeMode=" + isKeyframeMode);
         
@@ -771,18 +773,18 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
                     };
                 }
                 
-                // Collect all keyframe times for this layer (not just earliest)
-                var timeMs = roundMs(item.time);
+                // Collect all keyframe times for this layer in seconds (preserve precision)
+                var timeSeconds = item.time;
                 // ExtendScript doesn't have indexOf, so use manual search
                 var timeExists = false;
                 for (var t = 0; t < layerGroups[layerIndex].times.length; t++) {
-                    if (layerGroups[layerIndex].times[t] === timeMs) {
+                    if (Math.abs(layerGroups[layerIndex].times[t] - timeSeconds) < 0.001) { // 1ms tolerance in seconds
                         timeExists = true;
                         break;
                     }
                 }
                 if (!timeExists) {
-                    layerGroups[layerIndex].times.push(timeMs);
+                    layerGroups[layerIndex].times.push(timeSeconds);
                 }
             }
             
@@ -790,9 +792,14 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
             for (var layerIndex in layerGroups) {
                 var group = layerGroups[layerIndex];
                 group.times.sort(function(a, b) { return a - b; }); // Sort times
-                DEBUG_JSX.log("Layer " + group.name + " (index " + group.index + ") has times: " + group.times.join(", ") + "ms, using earliest: " + group.times[0] + "ms");
+                // Build debug string manually since ExtendScript doesn't have map()
+                var timesDebug = [];
+                for (var t = 0; t < group.times.length; t++) {
+                    timesDebug.push((group.times[t] * 1000).toFixed(3) + "ms");
+                }
+                DEBUG_JSX.log("Layer " + group.name + " (index " + group.index + ") has times: " + timesDebug.join(", ") + ", using earliest: " + (group.times[0] * 1000).toFixed(3) + "ms");
                 layerTimes.push({
-                    time: group.times[0] / 1000, // Use earliest time in seconds
+                    time: group.times[0], // Use earliest time in seconds (already precise)
                     index: group.index,
                     name: group.name,
                     allTimes: group.times // Keep all times for pattern analysis
@@ -816,8 +823,27 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         }
         
         // Sort by layer index for both keyframe and layer modes to get correct stagger sign
-        // (bottom to top = highest index to lowest index)
+        // FIXED: Detect reverse patterns and sort accordingly
+        // First, sort to analyze the pattern
         layerTimes.sort(function(a, b) { return b.index - a.index; });
+        
+        // Check if this looks like a reverse stagger pattern
+        // In reverse mode: higher-indexed layers should start earlier than lower-indexed layers
+        var looksLikeReverse = false;
+        if (layerTimes.length >= 2) {
+            // Check if higher layer indices have earlier start times (reverse pattern)  
+            var firstLayerTime = layerTimes[0].time; // Highest index
+            var lastLayerTime = layerTimes[layerTimes.length - 1].time; // Lowest index
+            if (firstLayerTime < lastLayerTime) {
+                looksLikeReverse = true;
+            }
+        }
+        
+        // If it looks like reverse, sort top-to-bottom for proper stagger calculation
+        if (looksLikeReverse) {
+            layerTimes.sort(function(a, b) { return a.index - b.index; });
+            DEBUG_JSX.log("Detected reverse stagger pattern - sorting top to bottom for calculation");
+        }
         
         if (isKeyframeMode) {
             DEBUG_JSX.log("After sorting by layer index (bottom to top):");
@@ -826,12 +852,13 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
             }
         }
         
-        // Calculate time differences between consecutive items
+        // Calculate time differences between consecutive items using same method as delay calculation
         var staggers = [];
         for (var i = 1; i < layerTimes.length; i++) {
-            var staggerSeconds = layerTimes[i].time - layerTimes[i-1].time;
-            var staggerMs = roundMs(staggerSeconds);
-            DEBUG_JSX.log("Stagger " + i + ": " + Math.round(layerTimes[i-1].time * 1000) + "ms -> " + Math.round(layerTimes[i].time * 1000) + "ms = " + staggerMs + "ms");
+            // Use the same direct calculation method as delay for consistency
+            var timeDiff = layerTimes[i].time - layerTimes[i-1].time;
+            var staggerMs = roundMs(timeDiff);
+            DEBUG_JSX.log("Stagger " + i + ": " + (layerTimes[i-1].time * 1000).toFixed(3) + "ms -> " + (layerTimes[i].time * 1000).toFixed(3) + "ms = " + (timeDiff * 1000).toFixed(3) + "ms -> rounded: " + staggerMs + "ms");
             staggers.push(staggerMs);
         }
         
@@ -885,9 +912,14 @@ function calculateStagger(timingData, frameRate, isKeyframeMode) {
         
         // Convert to frames and return formatted string
         var staggerFrames = Math.round((Math.abs(firstStagger) / 1000) * frameRate);
-        var sign = firstStagger < 0 ? "-" : "";
         
-        return sign + Math.abs(firstStagger) + "ms / " + sign + staggerFrames + "f";
+        // Keep the actual measured stagger value - don't invert based on direction
+        // The stagger represents the actual time intervals between keyframes
+        var finalStagger = firstStagger;
+        
+        var sign = finalStagger < 0 ? "-" : "";
+        
+        return sign + Math.abs(finalStagger) + "ms / " + sign + staggerFrames + "f";
         
     } catch(e) {
         DEBUG_JSX.log("calculateStagger error: " + e.toString());
@@ -1065,7 +1097,7 @@ function readLayerDelays(selectedLayers, comp) {
         // Calculate stagger for layers (layer mode)
         var staggerText = "Stagger";
         try {
-            staggerText = calculateStagger(layerTimes, frameRate, false); // false = layer mode
+            staggerText = calculateStagger(layerTimes, frameRate, false, false); // false = layer mode, false = not reverse (N/A for layers)
         } catch(e) {
             DEBUG_JSX.log("Layer stagger calculation failed: " + e.toString());
         }
@@ -1205,7 +1237,7 @@ function readKeyframesDuration() {
         }
         
         if (!keyframeData) {
-            return "error|Select > 1 Keyframe";
+            return "error|Select > 1 Key";
         }
         
         var selectedKeys = keyframeData.keys;
@@ -1724,7 +1756,7 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
         app.endUndoGroup();
         
         if (!processedAny) {
-            return "error|Select > 1 Keyframe";
+            return "error|Select > 1 Key";
         }
         
         // Return success with new duration
@@ -2055,7 +2087,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
         app.endUndoGroup();
         
         if (!processedAny) {
-            return "error|Select > 1 Keyframe";
+            return "error|Select > 1 Key";
         }
         
         // FRESH PROPERTY REFERENCE ACQUISITION: Re-acquire fresh references to prevent staleness
@@ -3747,6 +3779,35 @@ function nudgeDelay(direction) {
                             
                             // Check for LAYER MARKERS instead of composition markers
                             // Since we're moving keyframes on specific layers, check those layers for markers
+                            
+                            // COLLECT ALL SELECTED KEYFRAME TIMES and find the range (first to last)
+                            var allSelectedKeyframeTimes = [];
+                            for (var propName in propertyMap) {
+                                var propData = propertyMap[propName];
+                                var keyframes = propData.keyframes;
+                                for (var k = 0; k < keyframes.length; k++) {
+                                    var keyTime = keyframes[k].time;
+                                    // Check if this time is already in our array (avoid duplicates)
+                                    var timeExists = false;
+                                    for (var t = 0; t < allSelectedKeyframeTimes.length; t++) {
+                                        if (Math.abs(allSelectedKeyframeTimes[t] - keyTime) < 0.001) {
+                                            timeExists = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!timeExists) {
+                                        allSelectedKeyframeTimes.push(keyTime);
+                                    }
+                                }
+                            }
+                            
+                            // Sort keyframe times and find the range
+                            allSelectedKeyframeTimes.sort(function(a, b) { return a - b; });
+                            var firstKeyframeTime = allSelectedKeyframeTimes[0];
+                            var lastKeyframeTime = allSelectedKeyframeTimes[allSelectedKeyframeTimes.length - 1];
+                            
+                            DEBUG_JSX.log("Keyframe range for marker sync: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s (" + allSelectedKeyframeTimes.length + " unique times)");
+                            
                             var selectedLayers = comp.selectedLayers;
                             for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
                                 var layer = selectedLayers[layerIdx];
@@ -3758,17 +3819,21 @@ function nudgeDelay(direction) {
                                         try {
                                             var markerTime = layer.marker.keyTime(m);
                                             
-                                            DEBUG_JSX.log("Checking layer marker " + m + " at time " + markerTime + "s vs original " + originalEarliestTime + "s");
+                                            DEBUG_JSX.log("Checking layer marker " + m + " at time " + markerTime + "s");
                                             
-                                            // Check if marker is at same time as original first keyframes (with small tolerance)
-                                            if (Math.abs(markerTime - originalEarliestTime) < (0.5 / frameRate)) {
+                                            // Check if marker is within the keyframe range (between first and last keyframe)
+                                            var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
+                                            
+                                            if (markerInRange) {
                                                 var markerValue = layer.marker.keyValue(m);
                                                 var markerComment = markerValue.comment || "";
                                                 
-                                                DEBUG_JSX.log("Found layer marker '" + markerComment + "' at original timeline position " + markerTime + "s on layer " + layer.name);
-                                                debugInfo.push("MARKER SYNC: Found layer marker '" + markerComment + "' at " + markerTime + "s");
+                                                DEBUG_JSX.log("Found layer marker '" + markerComment + "' within keyframe range " + markerTime + "s (range: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s) on layer " + layer.name);
+                                                debugInfo.push("MARKER SYNC: Found layer marker '" + markerComment + "' in range " + markerTime + "s");
                                                 
-                                                var newMarkerTime = Math.max(0, newTimelineTime);
+                                                // For timeline mode, all markers move by the same amount (timeline offset)
+                                                var timelineOffset = newTimelineTime - originalEarliestTime;
+                                                var newMarkerTime = Math.max(0, markerTime + timelineOffset);
                                                 
                                                 markersToMove.push({
                                                     markerIndex: m,
@@ -3776,7 +3841,8 @@ function nudgeDelay(direction) {
                                                     newTime: newMarkerTime,
                                                     markerValue: markerValue,
                                                     comment: markerComment,
-                                                    layer: layer // Include layer reference for layer markers
+                                                    layer: layer, // Include layer reference for layer markers
+                                                    timelineOffset: timelineOffset // For debugging
                                                 });
                                             }
                                         } catch(markerCheckError) {
@@ -3840,6 +3906,34 @@ function nudgeDelay(direction) {
                         var selectedLayers = comp.selectedLayers;
                         var markersToMove = [];
                         
+                        // COLLECT ALL SELECTED KEYFRAME TIMES and find the range (first to last) - same as forced timeline mode
+                        var allSelectedKeyframeTimes = [];
+                        for (var propName in propertyMap) {
+                            var propData = propertyMap[propName];
+                            var keyframes = propData.keyframes;
+                            for (var k = 0; k < keyframes.length; k++) {
+                                var keyTime = keyframes[k].time;
+                                // Check if this time is already in our array (avoid duplicates)
+                                var timeExists = false;
+                                for (var t = 0; t < allSelectedKeyframeTimes.length; t++) {
+                                    if (Math.abs(allSelectedKeyframeTimes[t] - keyTime) < 0.001) {
+                                        timeExists = true;
+                                        break;
+                                    }
+                                }
+                                if (!timeExists) {
+                                    allSelectedKeyframeTimes.push(keyTime);
+                                }
+                            }
+                        }
+                        
+                        // Sort keyframe times and find the range
+                        allSelectedKeyframeTimes.sort(function(a, b) { return a - b; });
+                        var firstKeyframeTime = allSelectedKeyframeTimes[0];
+                        var lastKeyframeTime = allSelectedKeyframeTimes[allSelectedKeyframeTimes.length - 1];
+                        
+                        DEBUG_JSX.log("Post-undo: Keyframe range for marker sync: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s (" + allSelectedKeyframeTimes.length + " unique times)");
+                        
                         // Check for layer markers on selected layers
                         for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
                             var layer = selectedLayers[layerIdx];
@@ -3851,20 +3945,27 @@ function nudgeDelay(direction) {
                                     try {
                                         var markerTime = layer.marker.keyTime(m);
                                         
-                                        // Check if marker is at same time as original first keyframes
-                                        if (Math.abs(markerTime - originalEarliestTime) < (0.5 / frameRate)) {
+                                        // Check if marker is within the keyframe range (between first and last keyframe)
+                                        var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
+                                        
+                                        if (markerInRange) {
                                             var markerValue = layer.marker.keyValue(m);
                                             var markerComment = markerValue.comment || "";
                                             
-                                            DEBUG_JSX.log("Found layer marker '" + markerComment + "' to sync from " + markerTime + "s to " + newTimelineTime + "s");
+                                            DEBUG_JSX.log("Found layer marker '" + markerComment + "' within keyframe range " + markerTime + "s (range: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s)");
+                                            
+                                            // For timeline mode, all markers move by the same amount (timeline offset)
+                                            var timelineOffset = newTimelineTime - originalEarliestTime;
+                                            var newMarkerTime = Math.max(0, markerTime + timelineOffset);
                                             
                                             markersToMove.push({
                                                 markerIndex: m,
                                                 oldTime: markerTime,
-                                                newTime: Math.max(0, newTimelineTime),
+                                                newTime: newMarkerTime,
                                                 markerValue: markerValue,
                                                 comment: markerComment,
-                                                layer: layer
+                                                layer: layer,
+                                                timelineOffset: timelineOffset // For debugging
                                             });
                                         }
                                     } catch(markerCheckError) {
@@ -3939,7 +4040,9 @@ function nudgeDelay(direction) {
                     var displayDelayMs = Math.round(TIMELINE_MODE_CUMULATIVE);
                     var displayDelayFrames = Math.round((displayDelayMs / 1000) * frameRate);
                     
-                    return "success|" + displayDelayMs + "|" + displayDelayFrames + "|TIMELINE-FORCED";
+                    // Include debug messages in result for debug panel
+                    var debugMessages = DEBUG_JSX.getMessages();
+                    return "success|" + displayDelayMs + "|" + displayDelayFrames + "|TIMELINE-FORCED|" + debugMessages.join("|");
                 } catch(forcedError) {
                     DEBUG_JSX.log("FTL_ERR:" + forcedError.toString());
                 }
@@ -3965,7 +4068,9 @@ function nudgeDelay(direction) {
                     if (newTimelineTime < 0) {
                         if (Math.abs(firstKeyframeTime) < 0.001 && direction < 0) {
                             app.endUndoGroup();
-                            return "success|0|0|TIMELINE"; 
+                            // Include debug messages in result for debug panel
+                            var debugMessages = DEBUG_JSX.getMessages();
+                            return "success|0|0|TIMELINE|" + debugMessages.join("|"); 
                         }
                         newTimelineTime = 0;
                     }
@@ -4150,7 +4255,9 @@ function nudgeDelay(direction) {
                     var newTimelinePositionFrames = Math.round(newTimelineTime * frameRate);
                     
                     app.endUndoGroup();
-                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE";
+                    // Include debug messages in result for debug panel
+                    var debugMessages = DEBUG_JSX.getMessages();
+                    return "success|" + newTimelinePositionMs + "|" + newTimelinePositionFrames + "|TIMELINE|" + debugMessages.join("|");
                 } catch(timelineError) {
                     DEBUG_JSX.log("TL_ERR:" + timelineError.toString());
                     // Fall through to baseline mode
@@ -4329,112 +4436,192 @@ function nudgeDelay(direction) {
             
             debugInfo.push("Total keyframes moved: " + movedCount);
             
-            // COMPOSITION MARKER SYNCING: Move markers that are at the same frame as first keyframes of properties
+            // COMPOSITION MARKER SYNCING: Move markers that are at the same frame as ANY selected keyframes of properties
             try {
                 DEBUG_JSX.log("Starting composition marker sync check");
                 var comp = app.project.activeItem;
                 var markersToMove = [];
                 
-                // For each property that had keyframes moved, check if there are markers at the same time as the first keyframe
+                // COLLECT ALL SELECTED KEYFRAME TIMES (not just first keyframe) - same as forced timeline mode
+                var allSelectedKeyframeTimes = [];
                 for (var i = 0; i < propertyDelays.length; i++) {
                     var propData = propertyDelays[i];
-                    
-                    // Find the first keyframe time for this property (before movement)
                     if (propData.keyframes && propData.keyframes.length > 0) {
-                        var firstKeyframeTime = propData.keyframes[0].time; // Original time before movement
-                        var firstKeyframeFrameNumber = Math.round(firstKeyframeTime * frameRate) + 1; // Convert to 1-based frame number
-                        
-                        
-                        // Check all composition markers for ones at this exact frame
-                        for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
-                            var markerTime = comp.markerProperty.keyTime(m);
-                            var markerFrameNumber = Math.round(markerTime * frameRate) + 1;
-                            
-                            // Check if marker is at same frame as first keyframe (with small tolerance for floating point)
-                            if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
-                                var markerValue = comp.markerProperty.keyValue(m);
-                                var markerComment = markerValue.comment || ""; // Get marker comment/label
-                                
-                                // Calculate new marker time based on the same offset as the keyframe
-                                var currentTime = propData.currentDelay;
-                                var newKeyframeTime;
-                                
-                                if (useIndividualDelays) {
-                                    var targetDelaySeconds = propData.targetDelay / 1000;
-                                    newKeyframeTime = originalEarliestTime + targetDelaySeconds;
-                                } else {
-                                    if (propData.isOriginalBaseline) {
-                                        newKeyframeTime = originalEarliestTime; // Baseline stays at original time
-                                    } else {
-                                        var targetDelaySeconds = targetDelayMs / 1000;
-                                        newKeyframeTime = originalEarliestTime + targetDelaySeconds;
-                                    }
+                        for (var k = 0; k < propData.keyframes.length; k++) {
+                            var keyTime = propData.keyframes[k].time;
+                            // Check if this time is already in our array (avoid duplicates)
+                            var timeExists = false;
+                            for (var t = 0; t < allSelectedKeyframeTimes.length; t++) {
+                                if (Math.abs(allSelectedKeyframeTimes[t] - keyTime) < 0.001) {
+                                    timeExists = true;
+                                    break;
                                 }
-                                
-                                // Calculate the time offset applied to the keyframe
-                                var keyframeOffset = newKeyframeTime - currentTime;
-                                var newMarkerTime = markerTime + keyframeOffset;
-                                
-                                // Ensure marker doesn't go to negative time
-                                newMarkerTime = Math.max(0, newMarkerTime);
-                                
-                                // Store marker info for movement (avoid duplicate moves)
-                                var alreadyQueued = false;
-                                for (var q = 0; q < markersToMove.length; q++) {
-                                    if (markersToMove[q].type === "comp" && markersToMove[q].markerIndex === m) {
-                                        alreadyQueued = true;
+                            }
+                            if (!timeExists) {
+                                allSelectedKeyframeTimes.push(keyTime);
+                            }
+                        }
+                    }
+                }
+                
+                // Sort keyframe times and find the range
+                allSelectedKeyframeTimes.sort(function(a, b) { return a - b; });
+                var firstKeyframeTime = allSelectedKeyframeTimes[0];
+                var lastKeyframeTime = allSelectedKeyframeTimes[allSelectedKeyframeTimes.length - 1];
+                
+                DEBUG_JSX.log("Keyframe range for baseline marker sync: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s (" + allSelectedKeyframeTimes.length + " unique times)");
+                
+                // Check all composition markers for ones within the keyframe range
+                for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
+                    var markerTime = comp.markerProperty.keyTime(m);
+                    
+                    // Check if marker is within the keyframe range (between first and last keyframe)
+                    var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
+                    var correspondingPropData = null;
+                    
+                    if (markerInRange) {
+                        // Find the closest keyframe time for offset calculation
+                        var closestKeyframeTime = allSelectedKeyframeTimes[0];
+                        var minDistance = Math.abs(markerTime - closestKeyframeTime);
+                        
+                        for (var t = 1; t < allSelectedKeyframeTimes.length; t++) {
+                            var distance = Math.abs(markerTime - allSelectedKeyframeTimes[t]);
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestKeyframeTime = allSelectedKeyframeTimes[t];
+                            }
+                        }
+                            
+                        // Find which property this keyframe belongs to for offset calculation
+                        for (var i = 0; i < propertyDelays.length; i++) {
+                            var propData = propertyDelays[i];
+                            if (propData.keyframes) {
+                                for (var k = 0; k < propData.keyframes.length; k++) {
+                                    if (Math.abs(propData.keyframes[k].time - closestKeyframeTime) < 0.001) {
+                                        correspondingPropData = propData;
                                         break;
                                     }
                                 }
-                                
-                                if (!alreadyQueued) {
-                                    markersToMove.push({
-                                        type: "comp",
-                                        markerIndex: m,
-                                        oldTime: markerTime,
-                                        newTime: newMarkerTime,
-                                        markerValue: markerValue,
-                                        property: propData.property,
-                                        comment: markerComment
-                                    });
-                                }
+                            }
+                            if (correspondingPropData) break;
+                        }
+                    }
+                    
+                    if (markerInRange && correspondingPropData) {
+                        var markerValue = comp.markerProperty.keyValue(m);
+                        var markerComment = markerValue.comment || "";
+                        
+                        DEBUG_JSX.log("Found comp marker '" + markerComment + "' within keyframe range " + markerTime + "s (range: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s)");
+                        
+                        // Calculate new marker time based on the same offset as the corresponding keyframe
+                        var currentTime = correspondingPropData.currentDelay;
+                        var newKeyframeTime;
+                        
+                        if (useIndividualDelays) {
+                            var targetDelaySeconds = correspondingPropData.targetDelay / 1000;
+                            newKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                        } else {
+                            if (correspondingPropData.isOriginalBaseline) {
+                                newKeyframeTime = originalEarliestTime; // Baseline stays at original time
+                            } else {
+                                var targetDelaySeconds = targetDelayMs / 1000;
+                                newKeyframeTime = originalEarliestTime + targetDelaySeconds;
                             }
                         }
                         
-                        // Also check layer markers on the same layer as this property
-                        // Extract layer from property name (format is "LayerName:PropertyName")
-                        var layerName = propData.property.split(":")[0];
-                        var targetLayer = null;
-                        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
-                            if (selectedLayers[layerIdx].name === layerName) {
-                                targetLayer = selectedLayers[layerIdx];
+                        // Calculate the time offset applied to the keyframe
+                        var keyframeOffset = newKeyframeTime - currentTime;
+                        var newMarkerTime = markerTime + keyframeOffset;
+                        
+                        // Ensure marker doesn't go to negative time
+                        newMarkerTime = Math.max(0, newMarkerTime);
+                        
+                        DEBUG_JSX.log("Comp marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
+                        
+                        // Store marker info for movement (avoid duplicate moves)
+                        var alreadyQueued = false;
+                        for (var q = 0; q < markersToMove.length; q++) {
+                            if (markersToMove[q].type === "comp" && markersToMove[q].markerIndex === m) {
+                                alreadyQueued = true;
                                 break;
                             }
                         }
                         
-                        if (targetLayer && targetLayer.marker && targetLayer.marker.numKeys > 0) {
-                            DEBUG_JSX.log("Checking layer markers on " + layerName + " for property " + propData.property);
-                            
-                            for (var m = 1; m <= targetLayer.marker.numKeys; m++) {
-                                var markerTime = targetLayer.marker.keyTime(m);
-                                var markerFrameNumber = Math.round(markerTime * frameRate) + 1;
+                        if (!alreadyQueued) {
+                            markersToMove.push({
+                                type: "comp",
+                                markerIndex: m,
+                                oldTime: markerTime,
+                                newTime: newMarkerTime,
+                                markerValue: markerValue,
+                                property: correspondingPropData.property,
+                                comment: markerComment
+                            });
+                        }
+                    }
+                }
+                        
+                // Check for layer markers on selected layers
+                var selectedLayers = comp.selectedLayers;
+                for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                    var layer = selectedLayers[layerIdx];
+                    
+                    if (layer.marker && layer.marker.numKeys > 0) {
+                        DEBUG_JSX.log("Checking layer '" + layer.name + "' with " + layer.marker.numKeys + " markers");
+                        
+                        for (var m = 1; m <= layer.marker.numKeys; m++) {
+                            try {
+                                var markerTime = layer.marker.keyTime(m);
                                 
-                                // Check if marker is at same frame as first keyframe (with small tolerance for floating point)
-                                if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
-                                    var markerValue = targetLayer.marker.keyValue(m);
-                                    var markerComment = markerValue.comment || ""; // Get marker comment/label
+                                DEBUG_JSX.log("Checking layer marker " + m + " at time " + markerTime + "s");
+                                
+                                // Check if marker is within the keyframe range (between first and last keyframe)
+                                var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
+                                var correspondingPropData = null;
+                                
+                                if (markerInRange) {
+                                    // Find the closest keyframe time for offset calculation
+                                    var closestKeyframeTime = allSelectedKeyframeTimes[0];
+                                    var minDistance = Math.abs(markerTime - closestKeyframeTime);
                                     
-                                    DEBUG_JSX.log("Found layer marker at frame " + markerFrameNumber + " (time " + markerTime + "s) with comment: '" + markerComment + "' on layer " + layerName);
+                                    for (var t = 1; t < allSelectedKeyframeTimes.length; t++) {
+                                        var distance = Math.abs(markerTime - allSelectedKeyframeTimes[t]);
+                                        if (distance < minDistance) {
+                                            minDistance = distance;
+                                            closestKeyframeTime = allSelectedKeyframeTimes[t];
+                                        }
+                                    }
+                                        
+                                    // Find which property this keyframe belongs to for offset calculation
+                                    for (var i = 0; i < propertyDelays.length; i++) {
+                                        var propData = propertyDelays[i];
+                                        if (propData.keyframes) {
+                                            for (var k = 0; k < propData.keyframes.length; k++) {
+                                                if (Math.abs(propData.keyframes[k].time - closestKeyframeTime) < 0.001) {
+                                                    correspondingPropData = propData;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if (correspondingPropData) break;
+                                    }
+                                }
+                                
+                                if (markerInRange && correspondingPropData) {
+                                    var markerValue = layer.marker.keyValue(m);
+                                    var markerComment = markerValue.comment || "";
                                     
-                                    // Calculate new marker time based on the same offset as the keyframe
-                                    var currentTime = propData.currentDelay;
+                                    DEBUG_JSX.log("Found layer marker '" + markerComment + "' within keyframe range " + markerTime + "s (range: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s) on layer " + layer.name);
+                                    
+                                    // Calculate new marker time based on the same offset as the corresponding keyframe
+                                    var currentTime = correspondingPropData.currentDelay;
                                     var newKeyframeTime;
                                     
                                     if (useIndividualDelays) {
-                                        var targetDelaySeconds = propData.targetDelay / 1000;
+                                        var targetDelaySeconds = correspondingPropData.targetDelay / 1000;
                                         newKeyframeTime = originalEarliestTime + targetDelaySeconds;
                                     } else {
-                                        if (propData.isOriginalBaseline) {
+                                        if (correspondingPropData.isOriginalBaseline) {
                                             newKeyframeTime = originalEarliestTime; // Baseline stays at original time
                                         } else {
                                             var targetDelaySeconds = targetDelayMs / 1000;
@@ -4455,7 +4642,7 @@ function nudgeDelay(direction) {
                                     var alreadyQueued = false;
                                     for (var q = 0; q < markersToMove.length; q++) {
                                         if (markersToMove[q].type === "layer" && 
-                                            markersToMove[q].layer === targetLayer && 
+                                            markersToMove[q].layer === layer && 
                                             markersToMove[q].markerIndex === m) {
                                             alreadyQueued = true;
                                             break;
@@ -4465,22 +4652,24 @@ function nudgeDelay(direction) {
                                     if (!alreadyQueued) {
                                         markersToMove.push({
                                             type: "layer",
-                                            layer: targetLayer,
+                                            layer: layer,
                                             markerIndex: m,
                                             oldTime: markerTime,
                                             newTime: newMarkerTime,
                                             markerValue: markerValue,
-                                            property: propData.property,
+                                            property: correspondingPropData.property,
                                             comment: markerComment
                                         });
                                     }
                                 }
+                            } catch(layerMarkerError) {
+                                DEBUG_JSX.log("Error checking layer marker " + m + " on layer " + layer.name + ": " + layerMarkerError.toString());
                             }
                         }
                     }
                 }
                 
-                // Move the markers that were found to be synchronized with first keyframes
+                // Move the markers that were found to be synchronized with any selected keyframes
                 if (markersToMove.length > 0) {
                     DEBUG_JSX.log("Moving " + markersToMove.length + " synchronized markers:");
                     
@@ -4614,15 +4803,19 @@ function nudgeDelay(direction) {
         var result = "success|" + returnDelayMs + "|" + returnFrames + "|" + isCrossPropertyMode;
         DEBUG_JSX.log("RES:" + returnDelayMs + "ms/" + returnFrames + "f");
         
-        return result + "|BASELINE";
+        // Include debug messages in result for debug panel
+        var debugMessages = DEBUG_JSX.getMessages();
+        return result + "|BASELINE|" + debugMessages.join("|");
         
     } catch(e) {
         app.endUndoGroup();
         var errorMsg = e.toString();
+        // Include debug messages in error result for debug panel
+        var debugMessages = DEBUG_JSX.getMessages();
         if (errorMsg.indexOf("divide by zero") !== -1) {
-            return "error|Divide by zero in delay nudging. Debug: propertyTimes=" + (typeof propertyTimes !== 'undefined' ? propertyTimes.length : 'undefined') + ", direction=" + direction + ". Error: " + errorMsg;
+            return "error|Divide by zero in delay nudging. Debug: propertyTimes=" + (typeof propertyTimes !== 'undefined' ? propertyTimes.length : 'undefined') + ", direction=" + direction + ". Error: " + errorMsg + "|" + debugMessages.join("|");
         } else {
-            return "error|Failed to nudge delay: " + errorMsg;
+            return "error|Failed to nudge delay: " + errorMsg + "|" + debugMessages.join("|");
         }
     }
 }
@@ -6188,113 +6381,98 @@ function nudgeDelayTimelineMode(direction, frames) {
         var movedCount = 0;
         var processedSelections = [];
         
-        // Collect first keyframe times for each property (for marker syncing)
-        var propertyFirstKeyframeTimes = [];
+        // Collect ALL selected keyframe times for range-based marker syncing
+        var allSelectedKeyframeTimes = [];
         for (var i = 0; i < cachedSelections.length; i++) {
             var cached = cachedSelections[i];
             var prop = cached.property;
             var selKeys = cached.selectedIndices;
             
-            // Find the first selected keyframe time for this property
-            var firstKeyTime = Infinity;
+            // Collect ALL selected keyframe times for this property
             for (var k = 0; k < selKeys.length; k++) {
                 var keyTime = prop.keyTime(selKeys[k]);
-                if (keyTime < firstKeyTime) {
-                    firstKeyTime = keyTime;
+                // Check if this time is already in our array (avoid duplicates)
+                var timeExists = false;
+                for (var t = 0; t < allSelectedKeyframeTimes.length; t++) {
+                    if (Math.abs(allSelectedKeyframeTimes[t] - keyTime) < 0.001) {
+                        timeExists = true;
+                        break;
+                    }
+                }
+                if (!timeExists) {
+                    allSelectedKeyframeTimes.push(keyTime);
                 }
             }
             
-            if (firstKeyTime !== Infinity) {
-                propertyFirstKeyframeTimes.push({
-                    layer: cached.layer,
-                    property: cached.propertyName,
-                    firstTime: firstKeyTime
-                });
-                DEBUG_JSX.log("Property " + cached.propertyName + " on layer " + cached.layerName + " has first keyframe at " + firstKeyTime + "s");
-            }
+            DEBUG_JSX.log("Cached " + cached.propertyName + " (" + selKeys.length + " keys)");
         }
+        
+        // Sort keyframe times and find the range
+        allSelectedKeyframeTimes.sort(function(a, b) { return a - b; });
+        var firstKeyframeTime = allSelectedKeyframeTimes[0];
+        var lastKeyframeTime = allSelectedKeyframeTimes[allSelectedKeyframeTimes.length - 1];
+        
+        DEBUG_JSX.log("Marker sync range: " + firstKeyframeTime.toFixed(2) + "s to " + lastKeyframeTime.toFixed(2) + "s");
         
         // Collect markers that need to move with the keyframes
         var markersToMove = [];
         
-        // Check each property's first keyframe time against all markers
-        for (var p = 0; p < propertyFirstKeyframeTimes.length; p++) {
-            var propTiming = propertyFirstKeyframeTimes[p];
-            var firstKeyframeTime = propTiming.firstTime;
-            
-            // Check composition markers
-            if (comp.markerProperty && comp.markerProperty.numKeys > 0) {
-                for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
-                    var markerTime = comp.markerProperty.keyTime(m);
+        // Check composition markers for ones within the keyframe range
+        if (comp.markerProperty && comp.markerProperty.numKeys > 0) {
+            for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
+                var markerTime = comp.markerProperty.keyTime(m);
+                var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
+                
+                if (markerInRange) {
+                    var markerValue = comp.markerProperty.keyValue(m);
+                    var markerComment = markerValue.comment || "";
                     
-                    // Check if marker is at same time as this property's first keyframe (with small tolerance)
-                    if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
-                        var markerValue = comp.markerProperty.keyValue(m);
-                        var markerComment = markerValue.comment || "";
-                        
-                        // Check if we already have this marker queued
-                        var alreadyQueued = false;
-                        for (var q = 0; q < markersToMove.length; q++) {
-                            if (markersToMove[q].type === "comp" && markersToMove[q].markerIndex === m) {
-                                alreadyQueued = true;
-                                break;
-                            }
-                        }
-                        
-                        if (!alreadyQueued) {
-                            DEBUG_JSX.log("Found comp marker '" + markerComment + "' at property first keyframe time " + markerTime + "s (matched with " + propTiming.property + ")");
-                            
-                            markersToMove.push({
-                                type: "comp",
-                                markerIndex: m,
-                                oldTime: markerTime,
-                                newTime: markerTime + timeOffset,
-                                markerValue: markerValue,
-                                comment: markerComment
-                            });
-                        }
-                    }
+                    DEBUG_JSX.log("Found comp marker '" + markerComment + "' at " + markerTime.toFixed(2) + "s");
+                    
+                    markersToMove.push({
+                        type: "comp",
+                        markerIndex: m,
+                        oldTime: markerTime,
+                        newTime: markerTime + timeOffset,
+                        markerValue: markerValue,
+                        comment: markerComment
+                    });
                 }
             }
+        }
+        
+        // Check layer markers on all selected layers
+        var selectedLayers = comp.selectedLayers;
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
             
-            // Check layer markers on the same layer as the property
-            var layer = propTiming.layer;
             if (layer.marker && layer.marker.numKeys > 0) {
                 for (var m = 1; m <= layer.marker.numKeys; m++) {
                     var markerTime = layer.marker.keyTime(m);
+                    var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
                     
-                    // Check if marker is at same time as this property's first keyframe
-                    if (Math.abs(markerTime - firstKeyframeTime) < (0.5 / frameRate)) {
+                    if (markerInRange) {
                         var markerValue = layer.marker.keyValue(m);
                         var markerComment = markerValue.comment || "";
                         
-                        // Check if we already have this marker queued
-                        var alreadyQueued = false;
-                        for (var q = 0; q < markersToMove.length; q++) {
-                            if (markersToMove[q].type === "layer" && 
-                                markersToMove[q].layer === layer && 
-                                markersToMove[q].markerIndex === m) {
-                                alreadyQueued = true;
-                                break;
-                            }
-                        }
+                        DEBUG_JSX.log("Found layer marker '" + markerComment + "' at " + markerTime.toFixed(2) + "s on " + layer.name);
                         
-                        if (!alreadyQueued) {
-                            DEBUG_JSX.log("Found layer marker '" + markerComment + "' on layer " + layer.name + " at property first keyframe time");
-                            
-                            markersToMove.push({
-                                type: "layer",
-                                layer: layer,
-                                markerIndex: m,
-                                oldTime: markerTime,
-                                newTime: markerTime + timeOffset,
-                                markerValue: markerValue,
-                                comment: markerComment
-                            });
-                        }
+                        markersToMove.push({
+                            type: "layer",
+                            layer: layer,
+                            markerIndex: m,
+                            oldTime: markerTime,
+                            newTime: markerTime + timeOffset,
+                            markerValue: markerValue,
+                            comment: markerComment
+                        });
                     }
                 }
             }
+        }
+        
+        if (markersToMove.length > 0) {
+            DEBUG_JSX.log("Moving " + markersToMove.length + " markers with keyframes");
         }
         
         // STEP 2: PROCESS USING CACHED SELECTIONS
@@ -6514,7 +6692,7 @@ function nudgeDelayTimelineMode(direction, frames) {
                     if (markerInfo.newTime >= 0) { // Only add if new time is valid
                         var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
                         comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                        DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' from " + markerInfo.oldTime + "s to " + markerInfo.newTime + "s");
+                        DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
                     }
                 } else if (markerInfo.type === "layer") {
                     // Move layer marker
@@ -6522,7 +6700,7 @@ function nudgeDelayTimelineMode(direction, frames) {
                     if (markerInfo.newTime >= 0) { // Only add if new time is valid
                         var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
                         markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                        DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + markerInfo.oldTime + "s to " + markerInfo.newTime + "s");
+                        DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
                     }
                 }
             } catch(markerError) {
@@ -6600,11 +6778,17 @@ function nudgeDelayTimelineMode(direction, frames) {
         // Return success with the CUMULATIVE amount moved (with sign preserved)
         var cumulativeMs = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * 1000);
         var cumulativeFrames = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * frameRate);
-        return "success|" + cumulativeMs + "|" + cumulativeFrames + "|Moved " + movedCount + " keyframes";
+        
+        // Include debug messages in result for debug panel
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|" + cumulativeMs + "|" + cumulativeFrames + "|Moved " + movedCount + " keyframes|" + debugMessages.join("|");
         
     } catch(e) {
         app.endUndoGroup();
-        return "error|Timeline mode failed: " + e.toString();
+        
+        // Include debug messages in error result for debug panel
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|Timeline mode failed: " + e.toString() + "|" + debugMessages.join("|");
     }
 }
 
@@ -7457,9 +7641,9 @@ function calculateSmartDistanceNudge(currentDistance, nudgeDirection, resolution
 // ================================
 
 // Helper function to snap inconsistent staggers to clean multiples of the input value (for keyframes)
-function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction) {
+function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction, isTopToBottom) {
     try {
-        DEBUG_JSX.log("Smart keyframe snapping: checking if staggers need snapping to " + staggerFrames + " frame increments");
+        DEBUG_JSX.log("Smart keyframe snapping: checking if staggers need snapping to " + staggerFrames + " frame increments (isTopToBottom: " + isTopToBottom + ")");
         
         var staggerSeconds = staggerFrames / frameRate; // Convert to seconds
         var tolerance = Math.min(0.005, staggerSeconds * 0.15); // 5ms max or 15% of target stagger, whichever is smaller
@@ -7477,6 +7661,7 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
         for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
             var layerGroup = layerGroups[layerIdx];
             var earliestTime = null;
+            var allKeyframeTimesForDebug = [];
             
             // Find earliest keyframe time in this layer group
             for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
@@ -7486,11 +7671,15 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 
                 for (var k = 0; k < selectedKeys.length; k++) {
                     var keyTime = prop.keyTime(selectedKeys[k]);
+                    allKeyframeTimesForDebug.push((keyTime * 1000).toFixed(1) + "ms");
                     if (earliestTime === null || keyTime < earliestTime) {
                         earliestTime = keyTime;
                     }
                 }
             }
+            
+            // DEBUG: Log all keyframe times for this layer
+            DEBUG_JSX.log("Layer " + layerGroup.layer.index + " keyframes: [" + allKeyframeTimesForDebug.join(", ") + "], earliest: " + (earliestTime * 1000).toFixed(1) + "ms");
             
             if (earliestTime !== null) {
                 layerGroupTimes.push({
@@ -7516,6 +7705,12 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             actualIntervals.push(interval);
         }
         
+        // DEBUG: Add detailed logging to understand interval calculation
+        for (var i = 0; i < layerGroupTimes.length; i++) {
+            var layerGroup = layerGroupTimes[i];
+            DEBUG_JSX.log("Layer " + layerGroup.layerIndex + " representative time: " + (layerGroup.time * 1000).toFixed(1) + "ms");
+        }
+        
         // Build debug string manually (ExtendScript doesn't support Array.map)
         var intervalsStr = "";
         for (var i = 0; i < actualIntervals.length; i++) {
@@ -7532,17 +7727,13 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             else if (actualIntervals[i] < -0.001) hasNegativeIntervals++;
         }
         
-        // Determine current pattern direction
-        var currentDirection;
-        if (hasNegativeIntervals > hasPositiveIntervals) {
-            currentDirection = -1; // Clear negative pattern
-        } else if (hasPositiveIntervals > hasNegativeIntervals) {
-            currentDirection = 1;  // Clear positive pattern
-        } else {
-            // No clear existing direction (all intervals ~0) - use requested direction
-            currentDirection = direction;
-        }
-        DEBUG_JSX.log("Interval analysis: " + hasPositiveIntervals + " positive, " + hasNegativeIntervals + " negative, detected direction: " + currentDirection + " (requested: " + direction + ")");
+        // DIRECTION LOGIC FOR REVERSE STAGGER MODE:
+        // Default direction (bottomToTop): + button = +50ms, - button = -50ms
+        // Reverse direction (topToBottom): + button creates LARGER negative staggers, - button creates SMALLER negative staggers
+        // In reverse mode, + should make staggers MORE negative, - should make them LESS negative
+        var currentDirection = direction; // Don't invert - handle reverse logic in uniform increment instead
+        
+        DEBUG_JSX.log("Simple snapping: direction=" + direction + ", isTopToBottom=" + isTopToBottom + ", final direction=" + currentDirection);
         
         // Check if intervals are already uniform (at any consistent value)
         var isCleanPattern = true;
@@ -7565,121 +7756,594 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             if (isCleanPattern) {
                 DEBUG_JSX.log("Keyframe pattern is already uniform at " + (referenceInterval * 1000).toFixed(1) + "ms intervals");
                 
-                // Check if this uniform interval needs to snap to the target increment
-                var difference = Math.abs(referenceInterval - staggerSeconds);
-                var negDifference = Math.abs(referenceInterval - (-staggerSeconds)); // Also check negative target
-                DEBUG_JSX.log("Target interval: " + (staggerSeconds * 1000).toFixed(1) + "ms, difference: " + (difference * 1000).toFixed(1) + "ms");
-                DEBUG_JSX.log("Negative target: " + (-staggerSeconds * 1000).toFixed(1) + "ms, difference: " + (negDifference * 1000).toFixed(1) + "ms");
+                // UNIFORM STAGGER INCREMENTAL LOGIC
+                // For uniform patterns: current stagger +/- increment = new stagger (same as duration stretching)
+                var currentIntervalSigned = referenceInterval; // Use actual current interval (preserve sign)
+                var currentStaggerMs = currentIntervalSigned * 1000; // Convert to milliseconds
+                var incrementMs = staggerSeconds * 1000; // Target increment in milliseconds
                 
-                // If the interval matches either positive or negative target, it's clean
-                if (difference > tolerance && negDifference > tolerance) {
-                    DEBUG_JSX.log("Uniform interval needs snapping to target increment");
-                    isCleanPattern = false;
-                } else {
-                    // Pattern matches either positive or negative target - it's clean
-                    if (negDifference <= tolerance) {
-                        DEBUG_JSX.log("Uniform interval already matches negative target - no snapping needed");
+                DEBUG_JSX.log("UNIFORM INCREMENT: Current=" + currentStaggerMs.toFixed(1) + "ms, increment=" + incrementMs.toFixed(1) + "ms");
+                
+                // Apply directional increment/decrement logic
+                // FIXED: In reverse mode, + should make staggers MORE negative, - should make them LESS negative
+                var newStaggerMs;
+                
+                if (isTopToBottom) {
+                    // REVERSE MODE: Invert the increment direction
+                    if (direction > 0) {
+                        // + button in reverse mode: make stagger MORE negative
+                        newStaggerMs = currentStaggerMs - incrementMs;
+                        DEBUG_JSX.log("+ button (reverse): " + currentStaggerMs.toFixed(1) + "ms - " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
                     } else {
-                        DEBUG_JSX.log("Uniform interval already matches positive target - no snapping needed");
+                        // - button in reverse mode: make stagger LESS negative
+                        newStaggerMs = currentStaggerMs + incrementMs;
+                        DEBUG_JSX.log("- button (reverse): " + currentStaggerMs.toFixed(1) + "ms + " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
+                    }
+                } else {
+                    // DEFAULT MODE: Normal increment/decrement
+                    if (direction > 0) {
+                        // + button: add increment
+                        newStaggerMs = currentStaggerMs + incrementMs;
+                        DEBUG_JSX.log("+ button (default): " + currentStaggerMs.toFixed(1) + "ms + " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
+                    } else {
+                        // - button: subtract increment
+                        newStaggerMs = currentStaggerMs - incrementMs;
+                        DEBUG_JSX.log("- button (default): " + currentStaggerMs.toFixed(1) + "ms - " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
                     }
                 }
+                
+                DEBUG_JSX.log("🎯 UNIFORM INCREMENT (reverse-aware): isTopToBottom=" + isTopToBottom + ", direction=" + direction + ", newStagger=" + newStaggerMs.toFixed(1) + "ms");
+                
+                // Convert back to seconds for target interval
+                var targetInterval = newStaggerMs / 1000;
+                
+                DEBUG_JSX.log("🎯 UNIFORM INCREMENT: Moving from " + currentStaggerMs.toFixed(1) + "ms to " + newStaggerMs.toFixed(1) + "ms");
+                
+                // CRITICAL FIX: For uniform increments, use simplified positioning logic
+                // Instead of recalculating from baselines, maintain existing timeline positions and adjust intervals
+                var useSimplifiedPositioning = true;
+            } else {
+                // Pattern is inconsistent - use snapping logic for irregular patterns
+                DEBUG_JSX.log("Keyframe pattern is inconsistent - snapping to clean uniform staggers");
+                
+                var targetInterval;
+                
+                // For irregular patterns: Snap to clean increments in the requested direction  
+                if (direction > 0) {
+                    // + button: snap to positive increment
+                    targetInterval = staggerSeconds; // +50ms (at 60fps, 3 frames)
+                } else {
+                    // - button: snap to negative increment  
+                    targetInterval = -staggerSeconds; // -50ms (at 60fps, 3 frames)
+                }
+                
+                // For reverse direction (topToBottom), invert the target
+                // SKIP for uniform increments - they already handle the sign correctly
+                if (isTopToBottom && typeof useSimplifiedPositioning === 'undefined') {
+                    targetInterval = -targetInterval;
+                }
+                
+                DEBUG_JSX.log("🎯 IRREGULAR SNAP: Snapping to " + (targetInterval * 1000).toFixed(1) + "ms intervals");
             }
         }
         
-        if (isCleanPattern) {
-            DEBUG_JSX.log("Keyframe pattern is already clean - no snapping needed");
-            return false;
-        }
-        
-        // Pattern is inconsistent - calculate offsets to snap to uniform staggers
-        DEBUG_JSX.log("Keyframe pattern is inconsistent - snapping to clean uniform staggers");
-        
+        // Now both uniform and irregular patterns have calculated their targetInterval
         var baselineTime = layerGroupTimes[0].time; // Baseline layer group time
         
-        // For uniform patterns (all intervals the same), snap to closest multiple of target increment instead of resetting to base
-        var useMultipleSnapping = false;
-        var targetInterval = staggerSeconds;
+        DEBUG_JSX.log("🎯 KEYFRAME STAGGER: Applying " + (targetInterval * 1000).toFixed(1) + "ms intervals");
         
-        // Check if all intervals are uniform (same value)
-        if (actualIntervals.length > 0) {
-            var firstInterval = actualIntervals[0];
-            var allSame = true;
-            for (var i = 1; i < actualIntervals.length; i++) {
-                if (Math.abs(actualIntervals[i] - firstInterval) > 0.001) {
-                    allSame = false;
-                    break;
-                }
-            }
-            useMultipleSnapping = allSame; // Use multiple snapping for any uniform pattern
-        }
-        
-        if (useMultipleSnapping) {
-            // For 2 layers, snap the current interval to the closest multiple of the target increment
-            var currentIntervalSigned = actualIntervals[0]; // Preserve sign for negative staggers
-            var currentInterval = Math.abs(currentIntervalSigned);
-            var currentMultiple = Math.round(currentInterval / staggerSeconds);
+        // CRITICAL FIX: Use simplified positioning for uniform increments
+        if (typeof useSimplifiedPositioning !== 'undefined' && useSimplifiedPositioning) {
+            DEBUG_JSX.log("🎯 SIMPLIFIED POSITIONING: Using simplified logic for uniform increments");
             
-            // Determine if we currently have a negative stagger
-            var isCurrentlyNegative = currentIntervalSigned < 0;
-            
-            // Snap in the direction requested
-            var targetMultiple;
-            if (direction > 0) {
-                // + direction: snap up to next multiple (or stay if already exact)
-                if (isCurrentlyNegative) {
-                    // From negative, move toward zero first, then positive
-                    targetMultiple = -currentMultiple + 1; // e.g., from -2 to -1
-                    if (targetMultiple >= 0) targetMultiple = 1; // Skip zero, go to +1
-                } else {
-                    targetMultiple = Math.max(currentMultiple, Math.ceil(currentInterval / staggerSeconds));
-                    if (Math.abs(currentInterval - (currentMultiple * staggerSeconds)) < 0.001) {
-                        // Already at exact multiple, move up one
-                        targetMultiple = currentMultiple + 1;
+            // For uniform increments, maintain existing timeline positions and just adjust intervals
+            // Calculate current representative time for each layer
+            var currentRepresentativeTimes = [];
+            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                var layerGroup = layerGroups[layerIdx];
+                var layerEarliestTime = null;
+                
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    var prop = propData.property;
+                    var selectedKeys = propData.selectedKeys;
+                    
+                    for (var k = 0; k < selectedKeys.length; k++) {
+                        var keyTime = prop.keyTime(selectedKeys[k]);
+                        if (layerEarliestTime === null || keyTime < layerEarliestTime) {
+                            layerEarliestTime = keyTime;
+                        }
                     }
                 }
+                currentRepresentativeTimes.push(layerEarliestTime);
+            }
+            
+            // Find the baseline - for reverse mode, always anchor the earliest keyframe
+            var simplifiedBaseline;
+            if (isTopToBottom) {
+                // Reverse mode: find the earliest time as the anchor point for both negative AND positive staggers
+                // This keyframe will stay in place, others move progressively later
+                simplifiedBaseline = currentRepresentativeTimes[0];
+                for (var i = 1; i < currentRepresentativeTimes.length; i++) {
+                    if (currentRepresentativeTimes[i] < simplifiedBaseline) {
+                        simplifiedBaseline = currentRepresentativeTimes[i];
+                    }
+                }
+                DEBUG_JSX.log("🎯 REVERSE ANCHOR: Earliest keyframe at " + (simplifiedBaseline * 1000).toFixed(1) + "ms will stay anchored");
             } else {
-                // - direction: snap down to next negative multiple
-                if (currentMultiple === 0) {
-                    // At 0ms, go to negative stagger
-                    targetMultiple = -1;
-                } else if (isCurrentlyNegative) {
-                    // Already negative, make more negative
-                    targetMultiple = -(currentMultiple + 1); // e.g., from -1 to -2
+                // Default mode: use first layer's time
+                simplifiedBaseline = currentRepresentativeTimes[0];
+            }
+            
+            DEBUG_JSX.log("🎯 SIMPLIFIED: Current baseline time: " + (simplifiedBaseline * 1000).toFixed(1) + "ms");
+            
+            // Calculate offsets for each layer and execute keyframe movements immediately
+            var propertyDataForSelection = [];
+            
+            // Calculate new target times maintaining timeline position but with new intervals
+            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                var layerGroup = layerGroups[layerIdx];
+                // Handle both positive and negative intervals correctly
+                if (targetInterval < 0) {
+                    // FIXED FOR REVERSE MODE: Negative intervals in reverse mode need special handling
+                    if (isTopToBottom) {
+                        // Reverse mode with negative stagger: same logic as positive, just different direction
+                        // For negative stagger in reverse mode: top layers should be EARLIER, bottom layers should be LATER
+                        // The top layer (lowest index) becomes the anchor (earliest time)
+                        
+                        // For 3 layers (indices 0,1,2) with -50ms stagger:
+                        // Layer 0 (top): baseline + 0ms (earliest, anchor)
+                        // Layer 1 (mid): baseline + 50ms  
+                        // Layer 2 (bot): baseline + 100ms (latest)
+                        
+                        var newTargetTime = simplifiedBaseline + (layerIdx * Math.abs(targetInterval));
+                        
+                        // The layer that gets layerIdx = 0 will be at baseline (anchor)
+                        if (layerIdx === 0) {
+                            DEBUG_JSX.log("🎯 NEGATIVE ANCHOR: Layer " + layerIdx + " anchored at " + (newTargetTime * 1000).toFixed(1) + "ms");
+                        } else {
+                            DEBUG_JSX.log("🎯 NEGATIVE STAGGER: Layer " + layerIdx + " at " + (newTargetTime * 1000).toFixed(1) + "ms");
+                        }
+                    } else {
+                        // Default mode: standard negative interval progression (earliest stays anchored)
+                        var newTargetTime = simplifiedBaseline - (layerIdx * Math.abs(targetInterval));
+                    }
                 } else {
-                    // Positive, move toward zero first, then negative
-                    targetMultiple = currentMultiple - 1;
-                    if (targetMultiple === 0) targetMultiple = -1; // Skip zero, go to -1
+                    // Positive interval (forward stagger): different logic for reverse mode
+                    if (isTopToBottom) {
+                        // Reverse mode with positive stagger: mirror the default mode logic but inverted
+                        // In reverse mode: top layers (low index) should be LATER, bottom layers (high index) should be EARLIER
+                        // The bottom layer (highest index) becomes the anchor (earliest time)
+                        
+                        // For 3 layers (indices 0,1,2) with 50ms stagger:
+                        // Layer 0 (top): baseline + 100ms (latest)
+                        // Layer 1 (mid): baseline + 50ms  
+                        // Layer 2 (bot): baseline + 0ms (earliest, anchor)
+                        
+                        var reversedLayerIdx = (layerGroups.length - 1) - layerIdx;
+                        var newTargetTime = simplifiedBaseline + (reversedLayerIdx * targetInterval);
+                        
+                        // The layer that gets reversedLayerIdx = 0 will be at baseline (anchor)
+                        if (reversedLayerIdx === 0) {
+                            DEBUG_JSX.log("🎯 POSITIVE ANCHOR: Layer " + layerIdx + " (reversed=" + reversedLayerIdx + ") anchored at " + (newTargetTime * 1000).toFixed(1) + "ms");
+                        } else {
+                            DEBUG_JSX.log("🎯 POSITIVE STAGGER: Layer " + layerIdx + " (reversed=" + reversedLayerIdx + ") at " + (newTargetTime * 1000).toFixed(1) + "ms");
+                        }
+                    } else {
+                        // Default mode: normal progression
+                        var newTargetTime = simplifiedBaseline + (layerIdx * targetInterval);
+                    }
+                }
+                
+                // Calculate offset needed to move from current representative time to target time
+                var currentRepTime = currentRepresentativeTimes[layerIdx];
+                var offset = newTargetTime - currentRepTime;
+                
+                // Apply the offset to all keyframes in this layer
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    var prop = propData.property;
+                    var selectedKeys = propData.selectedKeys;
+                    
+                    // Collect keyframe data for this property
+                    var keyframesToMove = [];
+                    for (var k = 0; k < selectedKeys.length; k++) {
+                        var keyIndex = selectedKeys[k];
+                        var currentTime = prop.keyTime(keyIndex);
+                        var newTime = Math.max(0, currentTime + offset); // Clamp to 0
+                        
+                        
+                        var keyData = {
+                            property: prop,
+                            oldIndex: keyIndex,
+                            time: currentTime,
+                            newTime: newTime,
+                            value: prop.keyValue(keyIndex),
+                            inInterp: prop.keyInInterpolationType(keyIndex),
+                            outInterp: prop.keyOutInterpolationType(keyIndex),
+                            temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                        };
+                        
+                        // Only collect temporal ease if bezier interpolation
+                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            try {
+                                keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                                keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                            } catch(e) {
+                                // Temporal ease might not be available for some properties
+                            }
+                        }
+                        
+                        // Handle spatial properties if applicable (Position, etc.)
+                        if (prop.isSpatial) {
+                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                        }
+                        
+                        keyframesToMove.push(keyData);
+                    }
+                    
+                    // Store property info for batch recreation
+                    propertyDataForSelection.push({
+                        property: prop,
+                        propName: propData.propertyName || prop.name,
+                        keyframesToMove: keyframesToMove,
+                        layer: layerGroup.layer
+                    });
                 }
             }
             
-            targetInterval = targetMultiple * staggerSeconds;
-            DEBUG_JSX.log("2-layer snapping: current=" + (currentIntervalSigned * 1000).toFixed(1) + "ms (signed), direction=" + direction + ", snapping to " + targetMultiple + "x increment = " + (targetInterval * 1000).toFixed(1) + "ms");
-        }
-        
-        // Calculate the offset each layer needs to achieve uniform stagger
-        for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
-            var layerGroup = layerGroups[layerIdx];
-            var layerGroupTime = layerGroupTimes[layerIdx];
-            var currentLayerTime = layerGroupTime.time;
             
-            // Calculate what this layer's time SHOULD be for uniform stagger
-            // For negative targetInterval, the sign is already correct, don't multiply by currentDirection
-            var uniformTargetTime;
-            if (targetInterval < 0) {
-                // Negative stagger: use targetInterval directly (sign already embedded)
-                uniformTargetTime = baselineTime + (layerIdx * targetInterval); 
-            } else {
-                // Positive stagger: use currentDirection as before
-                uniformTargetTime = baselineTime + (layerIdx * currentDirection * targetInterval);
+            // EXECUTE THE KEYFRAME MOVEMENTS using the same pattern as regular stagger
+            
+            // PHASE 1: Remove old keyframes (SKIP Time Remap properties)
+            for (var i = 0; i < propertyDataForSelection.length; i++) {
+                var propInfo = propertyDataForSelection[i];
+                var prop = propInfo.property;
+                var keyframesToMove = propInfo.keyframesToMove;
+                
+                // Check if this is Time Remap property - SKIP deletion for Time Remap
+                var isTimeRemap = false;
+                try {
+                    isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+                } catch(e) {
+                    // Property name/matchName might not be accessible
+                }
+                
+                if (isTimeRemap) {
+                    continue; // Skip deletion phase for Time Remap
+                }
+                
+                // Remove old keyframes in reverse order to avoid index shifts
+                var indicesToRemove = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    indicesToRemove.push(keyframesToMove[k].oldIndex);
+                }
+                indicesToRemove.sort(function(a, b) { return b - a; }); // Sort descending
+                
+                for (var k = 0; k < indicesToRemove.length; k++) {
+                    prop.removeKey(indicesToRemove[k]);
+                }
             }
             
-            // Calculate the OFFSET needed to get from current time to uniform target
-            var snapOffset = uniformTargetTime - currentLayerTime;
+            // PHASE 2: Create new keyframes with full property preservation
+            for (var i = 0; i < propertyDataForSelection.length; i++) {
+                var propInfo = propertyDataForSelection[i];
+                var prop = propInfo.property;
+                var keyframesToMove = propInfo.keyframesToMove;
+                
+                // Check if this is Time Remap property - use special handling
+                var isTimeRemap = false;
+                try {
+                    isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+                } catch(e) {
+                    // Property name/matchName might not be accessible
+                }
+                
+                if (isTimeRemap) {
+                    // For Time Remap, use setValueAtTime method
+                    for (var k = 0; k < keyframesToMove.length; k++) {
+                        var keyData = keyframesToMove[k];
+                        prop.setValueAtTime(keyData.newTime, keyData.value);
+                    }
+                } else {
+                    
+                    // For regular properties, create new keyframes with full property preservation
+                    for (var k = 0; k < keyframesToMove.length; k++) {
+                        var keyData = keyframesToMove[k];
+                        var newIdx = prop.addKey(keyData.newTime);
+                        
+                        try {
+                            prop.setValueAtKey(newIdx, keyData.value);
+                            prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
+                            
+                            // Restore temporal ease if it exists
+                            if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+                                try {
+                                    prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                                } catch(e) {
+                                    // Some properties might not support temporal ease
+                                }
+                            }
+                            
+                            prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
+                            prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
+                            
+                            // Spatial properties for Position keyframes
+                            if (keyData.spatialContinuous !== undefined) {
+                                prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                            }
+                        } catch(e) {
+                            // Continue if keyframe property setting fails
+                        }
+                    }
+                }
+            }
             
-            DEBUG_JSX.log("Layer " + layerGroup.layer.index + ": current=" + (currentLayerTime * 1000).toFixed(1) + "ms, target=" + (uniformTargetTime * 1000).toFixed(1) + "ms, offset=" + (snapOffset * 1000).toFixed(1) + "ms");
+            // PHASE 3: Restore selection
             
-            // Store the offset for this layer group (will be applied to ALL keyframes in the layer)
+            for (var i = 0; i < propertyDataForSelection.length; i++) {
+                var propInfo = propertyDataForSelection[i];
+                var prop = propInfo.property;
+                var keyframesToMove = propInfo.keyframesToMove;
+                var layer = propInfo.layer;
+                
+                // Clear all selections on this property first
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    try {
+                        prop.setSelectedAtKey(k, false);
+                    } catch(e) {
+                        // Continue if deselection fails
+                    }
+                }
+                
+                // Select keyframes at the new times
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var keyData = keyframesToMove[k];
+                    var targetTime = keyData.newTime;
+                    
+                    // Find keyframe at this time and select it
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                            try {
+                                prop.setSelectedAtKey(j, true);
+                            } catch(e) {
+                                // Continue if selection fails
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            
+            // Return success with actual stagger result
+            return {
+                success: true,
+                staggerMs: targetInterval * 1000,
+                keyframesToMove: [], // Not used in simplified mode
+                layerOffsets: [] // Not used in simplified mode
+            };
+        }
+        
+        // CRITICAL ISSUE: We're calculating offsets based on representative times,
+        // but keyframes have different actual times within each layer
+        // Need to find the actual earliest keyframe across ALL layers as baseline
+        
+        var actualEarliestTime = null;
+        var actualLatestTime = null;
+        
+        // Find the true earliest AND latest keyframe times across all layers
+        for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+            var layerGroup = layerGroups[layerIdx];
+            for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                var propData = layerGroup.keyframes[propIdx];
+                var prop = propData.property;
+                var selectedKeys = propData.selectedKeys;
+                
+                for (var k = 0; k < selectedKeys.length; k++) {
+                    var keyTime = prop.keyTime(selectedKeys[k]);
+                    if (actualEarliestTime === null || keyTime < actualEarliestTime) {
+                        actualEarliestTime = keyTime;
+                    }
+                    if (actualLatestTime === null || keyTime > actualLatestTime) {
+                        actualLatestTime = keyTime;
+                    }
+                }
+            }
+        }
+        
+        DEBUG_JSX.log("🎯 Actual keyframe range: " + (actualEarliestTime * 1000).toFixed(1) + "ms to " + (actualLatestTime * 1000).toFixed(1) + "ms");
+        
+        // Calculate what each layer's representative keyframe should be
+        // to create uniform intervals from the earliest keyframe
+        for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+            var layerGroup = layerGroups[layerIdx];
+            
+            var targetTime;
+            
+            if (targetInterval < 0) {
+                // NEGATIVE STAGGERS: Check if starting from 0ms (representative keyframes at same time)
+                // Calculate representative keyframe times per layer first
+                var representativeKeyframeTimes = [];
+                for (var tempLayerIdx = 0; tempLayerIdx < layerGroups.length; tempLayerIdx++) {
+                    var tempLayerGroup = layerGroups[tempLayerIdx];
+                    var layerEarliestTime = null;
+                    
+                    for (var propIdx = 0; propIdx < tempLayerGroup.keyframes.length; propIdx++) {
+                        var propData = tempLayerGroup.keyframes[propIdx];
+                        var prop = propData.property;
+                        var selectedKeys = propData.selectedKeys;
+                        
+                        for (var k = 0; k < selectedKeys.length; k++) {
+                            var keyTime = prop.keyTime(selectedKeys[k]);
+                            if (layerEarliestTime === null || keyTime < layerEarliestTime) {
+                                layerEarliestTime = keyTime;
+                            }
+                        }
+                    }
+                    representativeKeyframeTimes.push(layerEarliestTime);
+                }
+                
+                // Check if all representative keyframes are at the same time (zero stagger)
+                var allRepresentativeKeyframesAtSameTime = true;
+                var firstRepresentativeTime = representativeKeyframeTimes[0];
+                for (var i = 1; i < representativeKeyframeTimes.length; i++) {
+                    if (Math.abs(representativeKeyframeTimes[i] - firstRepresentativeTime) > 0.001) {
+                        allRepresentativeKeyframesAtSameTime = false;
+                        break;
+                    }
+                }
+                
+                // Build debug string manually since ExtendScript doesn't have map()
+                var representativeTimesDebug = [];
+                for (var i = 0; i < representativeKeyframeTimes.length; i++) {
+                    representativeTimesDebug.push((representativeKeyframeTimes[i] * 1000).toFixed(1) + "ms");
+                }
+                DEBUG_JSX.log("🎯 Representative keyframe times: [" + representativeTimesDebug.join(", ") + "], all same: " + allRepresentativeKeyframesAtSameTime);
+                
+                if (allRepresentativeKeyframesAtSameTime) {
+                    // SPECIAL CASE: Starting from 0ms staggers (representative keyframes at same time)
+                    // Use the shared representative time as baseline and apply negative staggers from there
+                    // layerIdx=0 (bottom) → current time (no change)
+                    // layerIdx=1 → current time + targetInterval (negative, so earlier)
+                    // layerIdx=2 → current time + (2 * targetInterval) (even earlier)
+                    targetTime = firstRepresentativeTime + (layerIdx * targetInterval);
+                    
+                    DEBUG_JSX.log("🎯 Zero-stagger start: layer " + layerGroup.layer.index + " position " + layerIdx + " gets time " + (targetTime * 1000).toFixed(1) + "ms (baseline=" + (firstRepresentativeTime * 1000).toFixed(1) + "ms)");
+                } else {
+                    // REGULAR CASE: Already have existing staggers  
+                    // For negative staggers with existing staggers, maintain timeline position of latest representative keyframe
+                    // while adjusting stagger intervals
+                    
+                    // SPECIAL HANDLING FOR REVERSE DIRECTION WITH INVERTED POSITIVE INTERVALS
+                    // When user clicks + in reverse mode, direction gets inverted to -1, creating negative intervals
+                    // But we want positive progression starting from earliest keyframe
+                    var isReverseModePositiveClick = isTopToBottom && direction > 0; // Original + click in reverse mode
+                    
+                    var baselineTime, baselineLabel;
+                    if (isReverseModePositiveClick) {
+                        // Reverse mode + button: Start from earliest, progress positively with inverted layer indices
+                        baselineTime = representativeKeyframeTimes[0];
+                        for (var i = 1; i < representativeKeyframeTimes.length; i++) {
+                            if (representativeKeyframeTimes[i] < baselineTime) {
+                                baselineTime = representativeKeyframeTimes[i];
+                            }
+                        }
+                        baselineLabel = "earliest_rep";
+                        
+                        // For reverse mode + button: invert the layer progression to go forward in time
+                        // Top layer (layerIdx=0) at baseline, next layer at baseline + positive interval, etc.
+                        var reversedLayerIdx = layerIdx; // Keep same order but make intervals positive
+                        targetTime = baselineTime + (reversedLayerIdx * Math.abs(targetInterval));
+                        
+                        DEBUG_JSX.log("🎯 REVERSE MODE + BUTTON: layer " + layerGroup.layer.index + " position " + layerIdx + " gets time " + (targetTime * 1000).toFixed(1) + "ms (earliest + " + (reversedLayerIdx * Math.abs(targetInterval) * 1000).toFixed(1) + "ms)");
+                    } else if (isTopToBottom) {
+                        // Reverse direction - button: start from earliest representative time
+                        baselineTime = representativeKeyframeTimes[0];
+                        for (var i = 1; i < representativeKeyframeTimes.length; i++) {
+                            if (representativeKeyframeTimes[i] < baselineTime) {
+                                baselineTime = representativeKeyframeTimes[i];
+                            }
+                        }
+                        baselineLabel = "earliest_rep";
+                        DEBUG_JSX.log("🎯 REVERSE DIRECTION: Using earliest representative time as baseline");
+                        
+                        // Standard negative stagger logic
+                        targetTime = baselineTime + (layerIdx * targetInterval);
+                    } else {
+                        // Default direction: use latest representative time  
+                        baselineTime = representativeKeyframeTimes[0];
+                        for (var i = 1; i < representativeKeyframeTimes.length; i++) {
+                            if (representativeKeyframeTimes[i] > baselineTime) {
+                                baselineTime = representativeKeyframeTimes[i];
+                            }
+                        }
+                        baselineLabel = "latest_rep";
+                        
+                        // Standard logic for default direction
+                        targetTime = baselineTime + (layerIdx * targetInterval);
+                    }
+                    
+                    DEBUG_JSX.log("🎯 Existing stagger: layer " + layerGroup.layer.index + " position " + layerIdx + " gets time " + (targetTime * 1000).toFixed(1) + "ms (" + baselineLabel + "=" + (baselineTime * 1000).toFixed(1) + "ms)");
+                }
+            } else {
+                // POSITIVE STAGGERS: Use earliest keyframe as baseline (existing logic)
+                targetTime = actualEarliestTime + (layerIdx * targetInterval);
+                
+                // For reverse direction, we want top-to-bottom activation
+                // So the top layer (layer 1, layerIdx=0) should get the earliest time
+                if (isTopToBottom && targetInterval > 0) {
+                    // This case shouldn't occur with current logic but keep for safety
+                    targetTime = actualEarliestTime + (layerIdx * Math.abs(targetInterval));
+                    DEBUG_JSX.log("🎯 Reverse direction (top-to-bottom): layer " + layerGroup.layer.index + " position " + layerIdx + " gets time " + (targetTime * 1000).toFixed(1) + "ms");
+                }
+            }
+            
+            // Find this layer's actual representative keyframe time (earliest keyframe in this layer)
+            var layerEarliestTime = null;
+            for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                var propData = layerGroup.keyframes[propIdx];
+                var prop = propData.property;
+                var selectedKeys = propData.selectedKeys;
+                
+                for (var k = 0; k < selectedKeys.length; k++) {
+                    var keyTime = prop.keyTime(selectedKeys[k]);
+                    if (layerEarliestTime === null || keyTime < layerEarliestTime) {
+                        layerEarliestTime = keyTime;
+                    }
+                }
+            }
+            
+            // Calculate offset needed to move this layer's earliest keyframe to target position
+            var snapOffset = targetTime - layerEarliestTime;
+            
+            DEBUG_JSX.log("🎯 Layer " + layerGroup.layer.index + ": earliest=" + (layerEarliestTime * 1000).toFixed(1) + "ms → target=" + (targetTime * 1000).toFixed(1) + "ms, offset=" + (snapOffset * 1000).toFixed(1) + "ms");
+            
+            // Store the offset for this layer group
             layerGroup.snapOffset = snapOffset;
+        }
+        
+        // NEGATIVE TIME PROTECTION: Check if any keyframes would go negative and shift everything forward
+        if (targetInterval < 0) {
+            var earliestTargetTime = null;
+            
+            // Find the earliest time any keyframe would end up at
+            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                var layerGroup = layerGroups[layerIdx];
+                var snapOffset = layerGroup.snapOffset;
+                
+                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                    var propData = layerGroup.keyframes[propIdx];
+                    var prop = propData.property;
+                    var selectedKeys = propData.selectedKeys;
+                    
+                    for (var k = 0; k < selectedKeys.length; k++) {
+                        var keyTime = prop.keyTime(selectedKeys[k]);
+                        var newKeyTime = keyTime + snapOffset;
+                        
+                        if (earliestTargetTime === null || newKeyTime < earliestTargetTime) {
+                            earliestTargetTime = newKeyTime;
+                        }
+                    }
+                }
+            }
+            
+            // If any keyframe would go negative, shift all offsets forward
+            if (earliestTargetTime < 0) {
+                var forwardShift = -earliestTargetTime; // Make it positive to shift forward
+                DEBUG_JSX.log("🎯 Preventing negative times: shifting all keyframes forward by " + (forwardShift * 1000).toFixed(1) + "ms");
+                
+                for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
+                    layerGroups[layerIdx].snapOffset += forwardShift;
+                    DEBUG_JSX.log("🎯 Updated Layer " + layerGroups[layerIdx].layer.index + " offset to " + (layerGroups[layerIdx].snapOffset * 1000).toFixed(1) + "ms");
+                }
+            }
         }
         
         // Apply snapping using keyframe recreation (same pattern as uniform staggers)
@@ -7691,7 +8355,7 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             }
         }
         
-        DEBUG_JSX.log("Snapping " + totalKeyframesToSnap + " keyframes using offset-based approach");
+        DEBUG_JSX.log("🎯 Processing " + totalKeyframesToSnap + " keyframes");
         
         // Process each layer group and apply its calculated snap offset (same as uniform staggers)
         var propertyDataForSelection = [];
@@ -7976,8 +8640,10 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
         }
         
         // Return both success status and the actual applied stagger interval in milliseconds
-        var actualStaggerMs = currentDirection * staggerSeconds * 1000;
+        // Use targetInterval which already has the correct sign from our increment logic
+        var actualStaggerMs = targetInterval * 1000;
         DEBUG_JSX.log("Smart snapping applied uniform stagger of " + actualStaggerMs.toFixed(1) + "ms");
+        DEBUG_JSX.log("🎯 SNAP RESULT DEBUG: returning staggerMs = " + actualStaggerMs);
         return {success: true, staggerMs: actualStaggerMs, layerOffsets: layerOffsets};
         
     } catch(e) {
@@ -8122,34 +8788,17 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, directio
             // Determine if we currently have a negative stagger
             var isCurrentlyNegative = currentIntervalSigned < 0;
             
-            // Snap in the direction requested
+            // For irregular staggers, use the user's requested direction, not existing stagger direction
+            // This fixes the issue where irregular negative staggers create negative results for + button
             var targetMultiple;
             if (direction > 0) {
-                // + direction: snap up to next multiple (or stay if already exact)
-                if (isCurrentlyNegative) {
-                    // From negative, move toward zero first, then positive
-                    targetMultiple = -currentMultiple + 1; // e.g., from -2 to -1
-                    if (targetMultiple >= 0) targetMultiple = 1; // Skip zero, go to +1
-                } else {
-                    targetMultiple = Math.max(currentMultiple, Math.ceil(currentInterval / staggerSeconds));
-                    if (Math.abs(currentInterval - (currentMultiple * staggerSeconds)) < 0.001) {
-                        // Already at exact multiple, move up one
-                        targetMultiple = currentMultiple + 1;
-                    }
-                }
+                // + direction: Always create positive stagger for irregular patterns
+                targetMultiple = 1; // Always start with 1x positive increment
+                DEBUG_JSX.log("🎯 IRREGULAR LAYER FIX: + button → forcing positive stagger (targetMultiple = 1)");
             } else {
-                // - direction: snap down to next negative multiple
-                if (currentMultiple === 0) {
-                    // At 0ms, go to negative stagger
-                    targetMultiple = -1;
-                } else if (isCurrentlyNegative) {
-                    // Already negative, make more negative
-                    targetMultiple = -(currentMultiple + 1); // e.g., from -1 to -2
-                } else {
-                    // Positive, move toward zero first, then negative
-                    targetMultiple = currentMultiple - 1;
-                    if (targetMultiple === 0) targetMultiple = -1; // Skip zero, go to -1
-                }
+                // - direction: Always create negative stagger for irregular patterns  
+                targetMultiple = -1; // Always start with 1x negative increment
+                DEBUG_JSX.log("🎯 IRREGULAR LAYER FIX: - button → forcing negative stagger (targetMultiple = -1)");
             }
             
             targetInterval = targetMultiple * staggerSeconds;
@@ -8375,7 +9024,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         // Skip cross-property staggering - only stagger between different layers
         
         // First: Snap inconsistent staggers to clean multiples of input value
-        var snapResult = snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction);
+        // Use original direction (like layers do) - isTopToBottom handled by sorting only
+        DEBUG_JSX.log("Smart snapping direction: " + direction + " (topToBottom handled by layer sorting)");
+        var snapResult = snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate, direction, isTopToBottom);
         
         if (snapResult.success) {
             DEBUG_JSX.log("Snapped keyframes to clean " + staggerFrames + " frame increments");
@@ -8444,28 +9095,34 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                             }
                         }
                         
-                        // Check each marker to see if it was at the same time as a keyframe before stagger
+                        // Sort keyframe times and find the range (same approach as delay system)
+                        originalKeyframeTimes.sort(function(a, b) { return a - b; });
+                        var firstOriginalKeyframeTime = originalKeyframeTimes[0];
+                        var lastOriginalKeyframeTime = originalKeyframeTimes[originalKeyframeTimes.length - 1];
+                        
+                        DEBUG_JSX.log("Original keyframe range for marker sync: " + (firstOriginalKeyframeTime * 1000).toFixed(1) + "ms to " + (lastOriginalKeyframeTime * 1000).toFixed(1) + "ms");
+                        
+                        // Check each marker to see if it was within the keyframe range before stagger
                         for (var m = 1; m <= layer.marker.numKeys; m++) {
                             var markerTime = layer.marker.keyTime(m);
                             
-                            // Check if this marker time matches any original keyframe time
-                            for (var t = 0; t < originalKeyframeTimes.length; t++) {
-                                if (Math.abs(markerTime - originalKeyframeTimes[t]) < 0.001) { // 1ms tolerance
-                                    var markerValue = layer.marker.keyValue(m);
-                                    var markerComment = markerValue.comment || "";
-                                    var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
-                                    
-                                    DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
-                                    
-                                    markersToMove.push({
-                                        markerIndex: m,
-                                        oldTime: markerTime,
-                                        newTime: newMarkerTime,
-                                        markerValue: markerValue,
-                                        comment: markerComment
-                                    });
-                                    break; // Only match each marker once
-                                }
+                            // Check if marker is within the original keyframe range (same as delay system)
+                            var markerInRange = (markerTime >= firstOriginalKeyframeTime && markerTime <= lastOriginalKeyframeTime);
+                            
+                            if (markerInRange) {
+                                var markerValue = layer.marker.keyValue(m);
+                                var markerComment = markerValue.comment || "";
+                                var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
+                                
+                                DEBUG_JSX.log("Found synced marker '" + markerComment + "' within range at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
+                                
+                                markersToMove.push({
+                                    markerIndex: m,
+                                    oldTime: markerTime,
+                                    newTime: newMarkerTime,
+                                    markerValue: markerValue,
+                                    comment: markerComment
+                                });
                             }
                         }
                     }
@@ -8529,6 +9186,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             }
             
             // Smart snapping already created the correct uniform pattern - no additional stagger needed
+            DEBUG_JSX.log("🎯 FINAL RESULT DEBUG: snapResult.staggerMs = " + snapResult.staggerMs);
             var successMessage = "Applied stagger to " + layerGroups.length + " layers|" + snapResult.staggerMs + "ms per layer";
             return "success|" + successMessage;
         }
@@ -8918,28 +9576,34 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                             }
                         }
                         
-                        // Check each marker to see if it was at the same time as a keyframe before stagger
+                        // Sort keyframe times and find the range (same approach as delay system)
+                        originalKeyframeTimes.sort(function(a, b) { return a - b; });
+                        var firstOriginalKeyframeTime = originalKeyframeTimes[0];
+                        var lastOriginalKeyframeTime = originalKeyframeTimes[originalKeyframeTimes.length - 1];
+                        
+                        DEBUG_JSX.log("Original keyframe range for marker sync: " + (firstOriginalKeyframeTime * 1000).toFixed(1) + "ms to " + (lastOriginalKeyframeTime * 1000).toFixed(1) + "ms");
+                        
+                        // Check each marker to see if it was within the keyframe range before stagger
                         for (var m = 1; m <= layer.marker.numKeys; m++) {
                             var markerTime = layer.marker.keyTime(m);
                             
-                            // Check if this marker time matches any original keyframe time
-                            for (var t = 0; t < originalKeyframeTimes.length; t++) {
-                                if (Math.abs(markerTime - originalKeyframeTimes[t]) < 0.001) { // 1ms tolerance
-                                    var markerValue = layer.marker.keyValue(m);
-                                    var markerComment = markerValue.comment || "";
-                                    var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
-                                    
-                                    DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
-                                    
-                                    markersToMove.push({
-                                        markerIndex: m,
-                                        oldTime: markerTime,
-                                        newTime: newMarkerTime,
-                                        markerValue: markerValue,
-                                        comment: markerComment
-                                    });
-                                    break; // Only match each marker once
-                                }
+                            // Check if marker is within the original keyframe range (same as delay system)
+                            var markerInRange = (markerTime >= firstOriginalKeyframeTime && markerTime <= lastOriginalKeyframeTime);
+                            
+                            if (markerInRange) {
+                                var markerValue = layer.marker.keyValue(m);
+                                var markerComment = markerValue.comment || "";
+                                var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
+                                
+                                DEBUG_JSX.log("Found synced marker '" + markerComment + "' within range at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
+                                
+                                markersToMove.push({
+                                    markerIndex: m,
+                                    oldTime: markerTime,
+                                    newTime: newMarkerTime,
+                                    markerValue: markerValue,
+                                    comment: markerComment
+                                });
                             }
                         }
                     }

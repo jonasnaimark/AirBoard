@@ -78,15 +78,15 @@ window.addDebugPanel = () => {
         position: fixed;
         top: 10px;
         right: 10px;
-        width: 250px;
+        width: 280px;
         background: #1a1a1a;
-        border: 1px solid #444;
+        border: 2px solid #f39c12;
         border-radius: 6px;
-        padding: 10px;
+        padding: 8px;
         font-size: 10px;
         color: #ccc;
         z-index: 1000;
-        max-height: 200px;
+        max-height: 150px;
         overflow-y: auto;
         user-select: text;
         -webkit-user-select: text;
@@ -95,23 +95,28 @@ window.addDebugPanel = () => {
     `;
     
     debugPanel.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 5px; user-select: none;">🐛 Debug Panel</div>
+        <div style="font-weight: bold; margin-bottom: 5px; user-select: none; color: #f39c12;">
+            🎯 Stagger Bug Debug
+        </div>
+        <div style="font-size: 8px; color: #888; margin-bottom: 5px; user-select: none;">
+            Showing: IRREGULAR SNAP, SNAP RESULT, FINAL RESULT
+        </div>
         <div id="debug-log" style="
             user-select: text; 
             -webkit-user-select: text; 
             -moz-user-select: text;
             font-family: monospace;
             font-size: 9px;
-            line-height: 1.3;
+            line-height: 1.2;
         "></div>
-        <div style="margin-top: 8px; user-select: none;">
+        <div style="margin-top: 6px; user-select: none;">
             <button onclick="document.getElementById('debug-log').innerHTML = ''" style="
                 background: #444; 
                 border: 1px solid #666; 
                 color: #ccc; 
                 padding: 2px 6px; 
                 border-radius: 3px; 
-                font-size: 9px;
+                font-size: 8px;
                 margin-right: 4px;
                 cursor: pointer;
             ">Clear</button>
@@ -121,7 +126,7 @@ window.addDebugPanel = () => {
                 color: #ccc; 
                 padding: 2px 6px; 
                 border-radius: 3px; 
-                font-size: 9px;
+                font-size: 8px;
                 margin-right: 4px;
                 cursor: pointer;
             ">Copy</button>
@@ -131,7 +136,7 @@ window.addDebugPanel = () => {
                 color: white; 
                 padding: 2px 6px; 
                 border-radius: 3px; 
-                font-size: 9px;
+                font-size: 8px;
                 cursor: pointer;
             ">Close</button>
         </div>
@@ -139,21 +144,47 @@ window.addDebugPanel = () => {
     
     document.body.appendChild(debugPanel);
     
-    // Redirect console.log to debug panel
+    // Redirect console.log to debug panel - FILTERED for stagger debugging
     const originalLog = console.log;
     console.log = (...args) => {
         originalLog(...args);
-        const logDiv = document.getElementById('debug-log');
-        if (logDiv) {
-            logDiv.innerHTML += `<div style="
-                margin: 2px 0; 
-                font-size: 9px; 
-                padding: 1px 0;
-                user-select: text;
-                -webkit-user-select: text;
-                word-wrap: break-word;
-            ">${args.join(' ')}</div>`;
-            logDiv.scrollTop = logDiv.scrollHeight;
+        const message = args.join(' ');
+        
+        // Only show specific stagger debug messages
+        const staggerKeywords = [
+            '🎯 IRREGULAR SNAP:',
+            '🎯 SNAP RESULT DEBUG:',
+            '🎯 FINAL RESULT DEBUG:',
+            '🎯 IRREGULAR LAYER FIX:',
+            '🎯 REVERSE DIRECTION:',
+            'Applied stagger to',
+            'Smart snapping direction:'
+        ];
+        
+        const isStaggerDebug = staggerKeywords.some(keyword => message.includes(keyword));
+        
+        if (isStaggerDebug) {
+            const logDiv = document.getElementById('debug-log');
+            if (logDiv) {
+                // Color-code different message types
+                let color = '#ccc';
+                if (message.includes('🎯 IRREGULAR SNAP:')) color = '#e74c3c';
+                if (message.includes('🎯 SNAP RESULT DEBUG:')) color = '#f39c12';
+                if (message.includes('🎯 FINAL RESULT DEBUG:')) color = '#2ecc71';
+                if (message.includes('🎯 IRREGULAR LAYER FIX:')) color = '#9b59b6';
+                if (message.includes('Applied stagger to')) color = '#3498db';
+                
+                logDiv.innerHTML += `<div style="
+                    margin: 1px 0; 
+                    font-size: 9px; 
+                    padding: 1px 0;
+                    user-select: text;
+                    -webkit-user-select: text;
+                    word-wrap: break-word;
+                    color: ${color};
+                ">${message}</div>`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
         }
     };
 };
@@ -615,8 +646,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         var errorMsg = parts[1] || 'Unknown error';
                         var durationText = document.getElementById('durationText');
                         
-                        if (errorMsg === 'Select > 1 Keyframe') {
-                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                        if (errorMsg === 'Select > 1 Key') {
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Key</span>';
                         } else {
                             durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
                         }
@@ -625,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     // Unexpected result format
                     var durationText = document.getElementById('durationText');
-                    durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                    durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Key</span>';
                     durationText.style.opacity = '1';
                 }
             });
@@ -694,8 +725,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         var errorMsg = parts[1] || 'Unknown error';
                         var durationText = document.getElementById('durationText');
                         
-                        if (errorMsg === 'Select > 1 Keyframe') {
-                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                        if (errorMsg === 'Select > 1 Key') {
+                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Key</span>';
                         } else {
                             durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
                         }
@@ -704,7 +735,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     // Unexpected result format
                     var durationText = document.getElementById('durationText');
-                    durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                    durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Key</span>';
                     durationText.style.opacity = '1';
                 }
             });
@@ -884,7 +915,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     var yDistanceText = document.getElementById('yDistanceText');
                     
                     // Show 0 values for any error
-                    if (errorMsg === 'Select > 1 Keyframe') {
+                    if (errorMsg === 'Select > 1 Key') {
                         // Show 0 values in all rows
                         durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">0ms / 0f</span>';
                         durationText.style.opacity = '1';
@@ -966,27 +997,51 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (isCrossPropertyMode) {
                         // Cross-property mode: show delay info in delay row AND duration info in duration row
                         
+                        // Initialize flags for opacity handling
+                        var durationOpacitySet = false;
+                        var delayOpacitySet = false;
+                        var staggerOpacitySet = false;
+                        var isSingleKeyframe = (durationMs === -999);
+                        
                         // Handle duration display
                         if (durationMs === -1) {
                             durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Multiple</span>';
                         } else if (durationMs === -999) {
-                            // For single keyframe or insufficient keyframes for duration operations
-                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                            // For single keyframe - show default text when reading, not error message
+                            durationText.innerHTML = 'Duration';
+                            durationText.style.opacity = '0.75';
+                            // Skip the opacity override below for this case
+                            durationOpacitySet = true;
                         } else if (durationMs === 0) {
-                            // For keyframes with no meaningful duration (e.g., 1 keyframe per property across different properties)
-                            durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">Select > 1 Keyframe</span>';
+                            // For keyframes with no meaningful duration - show default text (can't stretch across properties)
+                            durationText.innerHTML = 'Duration';
+                            durationText.style.opacity = '0.75';
+                            durationOpacitySet = true;
+                            // Duration operations don't work with 0ms, but delay operations might still be valid
                         } else {
                             durationText.innerHTML = 'Duration: <span style="opacity: 0.75;">' + durationMs + 'ms / ' + durationFrames + 'f</span>';
                         }
-                        durationText.style.opacity = '1';
+                        // Only set opacity to 1 if we haven't already set it to 0.75 for single keyframe
+                        if (!durationOpacitySet) {
+                            durationText.style.opacity = '1';
+                        }
                         
                         // Handle delay display
                         if (delayMs === -1) {
                             delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">Multiple</span>';
+                        } else if (isSingleKeyframe) {
+                            // For true single keyframe scenarios - show default text
+                            delayText.innerHTML = 'Delay';
+                            delayText.style.opacity = '0.75';
+                            delayOpacitySet = true;
                         } else {
+                            // Show actual delay value (works for both single layer cross-property and multi-layer)
                             delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">' + delayMs + 'ms / ' + delayFrames + 'f</span>';
                         }
-                        delayText.style.opacity = '1';
+                        // Only set opacity to 1 if we haven't already set it to 0.75 for single keyframe
+                        if (!delayOpacitySet) {
+                            delayText.style.opacity = '1';
+                        }
                         
                         // Store for delay nudging - commented out as element doesn't exist
                         // document.getElementById('delayValue').value = delayMs;
@@ -996,20 +1051,37 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (staggerTextElement) {
                             console.log('handleReadKeyframes: Updating stagger display with staggerText="' + staggerText + '"');
                             if (staggerText === "Stagger") {
-                                // No stagger - show 0 
-                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
-                                staggerTextElement.style.opacity = '1';
-                                resetCumulativeStagger();
-                                console.log('handleReadKeyframes: Set stagger to 0');
+                                // Check if this is a single-layer cross-property scenario by looking at the full result string
+                                // The result contains debug info like "Found X keyframes across 1 layers"
+                                var isSingleLayerCrossProperty = result.indexOf("across 1 layers") !== -1;
+                                
+                                if (isSingleKeyframe || isSingleLayerCrossProperty) {
+                                    // For single keyframe OR cross-property on single layer - show default text when reading
+                                    staggerTextElement.innerHTML = 'Stagger';
+                                    staggerTextElement.style.opacity = '0.75';
+                                    staggerOpacitySet = true;
+                                    resetCumulativeStagger(true); // Treat as single keyframe scenario
+                                    console.log('handleReadKeyframes: Set stagger to default text (single keyframe: ' + isSingleKeyframe + ', single layer cross-property: ' + isSingleLayerCrossProperty + ')');
+                                } else {
+                                    // Multiple layers with stagger - show 0 
+                                    staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
+                                    staggerTextElement.style.opacity = '1';
+                                    resetCumulativeStagger(false);
+                                    console.log('handleReadKeyframes: Set stagger to 0 (multi-layer scenario)');
+                                }
                             } else if (staggerText === "Multiple") {
                                 // Multiple stagger values - show with prefix
                                 staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Multiple</span>';
-                                staggerTextElement.style.opacity = '1';
+                                if (!staggerOpacitySet) {
+                                    staggerTextElement.style.opacity = '1';
+                                }
                                 console.log('handleReadKeyframes: Set stagger to "Stagger: Multiple"');
                             } else {
                                 // Show stagger value
                                 staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">' + staggerText + '</span>';
-                                staggerTextElement.style.opacity = '1';
+                                if (!staggerOpacitySet) {
+                                    staggerTextElement.style.opacity = '1';
+                                }
                                 console.log('handleReadKeyframes: Set stagger to "Stagger: ' + staggerText + '"');
                             }
                         }
@@ -1030,8 +1102,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         DEBUG.log('Duration display updated');
                         
                         // Reset stagger to default in single-property mode
+                        // Single-property mode is always single layer, so show default text like single keyframe
                         DEBUG.log('About to call resetCumulativeStagger');
-                        resetCumulativeStagger();
+                        resetCumulativeStagger(true); // Show default text since single-property = single layer = can't stagger
                         DEBUG.log('After resetCumulativeStagger');
                     }
                     // Don't override opacity - it's already set in the conditional logic above
@@ -1236,15 +1309,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Get stagger frames from input field
-            var staggerFrames = parseFloat(staggerInputField.value) || 3;
+            // Pre-check: Quick validation that would prevent successful stagger
+            // This helps show immediate feedback instead of waiting for ExtendScript
+            csInterface.evalScript('(function(){ var comp = app.project.activeItem; if (!comp || !(comp instanceof CompItem)) return "no_comp"; var layers = comp.selectedLayers; if (layers.length <= 1) return "single_layer"; return "ok"; })()', function(preCheck) {
+                if (preCheck === 'single_layer') {
+                    console.log('Pre-check: Only one layer selected, showing error message');
+                    var staggerTextElement = document.getElementById('staggerText');
+                    if (staggerTextElement) {
+                        staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
+                        staggerTextElement.style.opacity = '1';
+                    }
+                    return;
+                }
+                
+                // Pre-check passed, continue with normal stagger operation
+                proceedWithStaggerIncrement();
+            });
             
-            // Check if stagger direction is flipped (top to bottom)
-            var staggerActionBtn = document.getElementById('staggerActionBtn');
-            var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
-            console.log('Applying +' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
-            
-            staggerIncrementBtn.disabled = true;
+            function proceedWithStaggerIncrement() {
+                // Get stagger frames from input field
+                var staggerFrames = parseFloat(staggerInputField.value) || 3;
+                
+                // Check if stagger direction is flipped (top to bottom)
+                var staggerActionBtn = document.getElementById('staggerActionBtn');
+                var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
+                console.log('Applying +' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
+                
+                staggerIncrementBtn.disabled = true;
             
             // Call the ExtendScript function with +1 direction, frame count, and layer order flag
             var script = 'applyStagger(1, ' + staggerFrames + ', ' + isTopToBottom + ')';
@@ -1303,12 +1394,28 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                     } else if (status === 'error') {
                         console.log('Stagger error:', parts[1]);
-                        // Don't show errors in stagger display - errors should only be in debug panel
+                        
+                        // Check if this is a single layer scenario and show appropriate message
+                        var errorMsg = parts[1] || '';
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            if (errorMsg.indexOf('No selected keyframes') !== -1 || 
+                                errorMsg.indexOf('single layer') !== -1 ||
+                                errorMsg.indexOf('one layer') !== -1) {
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
+                                staggerTextElement.style.opacity = '1';
+                            } else {
+                                // For other errors, show default stagger text
+                                staggerTextElement.innerHTML = 'Stagger';
+                                staggerTextElement.style.opacity = '0.75';
+                            }
+                        }
                     }
                 } else {
                     console.log('Invalid stagger result:', result);
                 }
             });
+            } // Close proceedWithStaggerIncrement function
         });
     }
     
@@ -1321,15 +1428,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Get stagger frames from input field
-            var staggerFrames = parseFloat(staggerInputField.value) || 3;
+            // Pre-check: Quick validation that would prevent successful stagger
+            csInterface.evalScript('(function(){ var comp = app.project.activeItem; if (!comp || !(comp instanceof CompItem)) return "no_comp"; var layers = comp.selectedLayers; if (layers.length <= 1) return "single_layer"; return "ok"; })()', function(preCheck) {
+                if (preCheck === 'single_layer') {
+                    console.log('Pre-check: Only one layer selected, showing error message');
+                    var staggerTextElement = document.getElementById('staggerText');
+                    if (staggerTextElement) {
+                        staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
+                        staggerTextElement.style.opacity = '1';
+                    }
+                    return;
+                }
+                
+                // Pre-check passed, continue with normal stagger operation
+                proceedWithStaggerDecrement();
+            });
             
-            // Check if stagger direction is flipped (top to bottom)
-            var staggerActionBtn = document.getElementById('staggerActionBtn');
-            var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
-            console.log('Applying -' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
-            
-            staggerDecrementBtn.disabled = true;
+            function proceedWithStaggerDecrement() {
+                // Get stagger frames from input field
+                var staggerFrames = parseFloat(staggerInputField.value) || 3;
+                
+                // Check if stagger direction is flipped (top to bottom)
+                var staggerActionBtn = document.getElementById('staggerActionBtn');
+                var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
+                console.log('Applying -' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
+                
+                staggerDecrementBtn.disabled = true;
             
             // Call the ExtendScript function with -1 direction, frame count, and layer order flag
             var script = 'applyStagger(-1, ' + staggerFrames + ', ' + isTopToBottom + ')';
@@ -1388,12 +1512,28 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                     } else if (status === 'error') {
                         console.log('Stagger error:', parts[1]);
-                        // Don't show errors in stagger display - errors should only be in debug panel
+                        
+                        // Check if this is a single layer scenario and show appropriate message
+                        var errorMsg = parts[1] || '';
+                        var staggerTextElement = document.getElementById('staggerText');
+                        if (staggerTextElement) {
+                            if (errorMsg.indexOf('No selected keyframes') !== -1 || 
+                                errorMsg.indexOf('single layer') !== -1 ||
+                                errorMsg.indexOf('one layer') !== -1) {
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
+                                staggerTextElement.style.opacity = '1';
+                            } else {
+                                // For other errors, show default stagger text
+                                staggerTextElement.innerHTML = 'Stagger';
+                                staggerTextElement.style.opacity = '0.75';
+                            }
+                        }
                     }
                 } else {
                     console.log('Invalid stagger result:', result);
                 }
             });
+            } // Close proceedWithStaggerDecrement function
         });
     }
     
@@ -1549,12 +1689,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to reset cumulative stagger (called when reading keyframes detects no stagger)
-    function resetCumulativeStagger() {
+    function resetCumulativeStagger(isSingleKeyframe) {
         cumulativeStaggerFrames = 0;
         var staggerText = document.getElementById('staggerText');
         if (staggerText) {
-            staggerText.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
-            staggerText.style.opacity = '1';
+            if (isSingleKeyframe) {
+                // For single keyframe - show default text at lower opacity
+                staggerText.innerHTML = 'Stagger';
+                staggerText.style.opacity = '0.75';
+            } else {
+                // Normal case - show 0ms stagger
+                staggerText.innerHTML = 'Stagger: <span style="opacity: 0.75;">0ms / 0f</span>';
+                staggerText.style.opacity = '1';
+            }
         }
     }
     
