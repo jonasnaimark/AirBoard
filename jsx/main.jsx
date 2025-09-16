@@ -8051,10 +8051,39 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 }
                 
                 if (isTimeRemap) {
-                    // For Time Remap, use setValueAtTime method
+                    // For Time Remap, use setValueAtTime method (add new keyframes first)
                     for (var k = 0; k < keyframesToMove.length; k++) {
                         var keyData = keyframesToMove[k];
                         prop.setValueAtTime(keyData.newTime, keyData.value);
+                    }
+                    
+                    // Now carefully remove old keyframes (only those that aren't at new positions)
+                    var oldKeyIndicesToRemove = [];
+                    for (var k = 0; k < keyframesToMove.length; k++) {
+                        var oldTime = keyframesToMove[k].time;
+                        // Find keyframes at old time and check they're not also at new time
+                        for (var j = prop.numKeys; j >= 1; j--) {
+                            var keyTime = prop.keyTime(j);
+                            if (Math.abs(keyTime - oldTime) < 0.001) {
+                                // Make sure this isn't a new keyframe
+                                var isNewKey = false;
+                                for (var n = 0; n < keyframesToMove.length; n++) {
+                                    if (Math.abs(keyTime - keyframesToMove[n].newTime) < 0.001) {
+                                        isNewKey = true;
+                                        break;
+                                    }
+                                }
+                                if (!isNewKey) {
+                                    oldKeyIndicesToRemove.push(j);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Remove old keyframes in descending order
+                    oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                    for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
+                        prop.removeKey(oldKeyIndicesToRemove[k]);
                     }
                 } else {
                     
