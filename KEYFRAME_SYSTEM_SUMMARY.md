@@ -1538,6 +1538,6 @@ This pattern will automatically work with:
 ---
 
 *Last Updated: December 2024*  
-*Version: v4.16.43 - Comprehensive Keyframe Detection Documentation*  
+*Version: v4.16.44 - Layer Marker Synchronization Fix*  
 *Status: All keyframe systems fully implemented and production-ready*  
-*Critical Fixes: Trimmed vs naturally positioned layers, split dimension handling, effect name-based processing, precomp boundary calculation, timeline mode layer movement, global delay functionality restored, Time Remap keyframe processing, Time Remap selection preservation, and comprehensive keyframe detection system documentation*
+*Critical Fixes: Fixed layer marker syncing on subsequent stagger operations, improved marker tracking with actual layer offsets, comprehensive keyframe detection system*

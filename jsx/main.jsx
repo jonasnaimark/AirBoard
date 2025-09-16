@@ -7881,6 +7881,7 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             var propertyDataForSelection = [];
             
             // Calculate new target times maintaining timeline position but with new intervals
+            var layerOffsets = []; // Track actual offsets for marker syncing
             for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
                 var layerGroup = layerGroups[layerIdx];
                 // Handle both positive and negative intervals correctly
@@ -7938,6 +7939,12 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 // Calculate offset needed to move from current representative time to target time
                 var currentRepTime = currentRepresentativeTimes[layerIdx];
                 var offset = newTargetTime - currentRepTime;
+                
+                // Store the actual offset for marker syncing
+                layerOffsets.push({
+                    layerIndex: layerGroup.layer.index,
+                    offsetSeconds: offset
+                });
                 
                 // Apply the offset to all keyframes in this layer
                 for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
@@ -8122,12 +8129,12 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             }
             
             
-            // Return success with actual stagger result
+            // Return success with actual stagger result and layer offsets for marker syncing
             return {
                 success: true,
                 staggerMs: targetInterval * 1000,
                 keyframesToMove: [], // Not used in simplified mode
-                layerOffsets: [] // Not used in simplified mode
+                layerOffsets: layerOffsets // Actual offsets applied to each layer for marker syncing
             };
         }
         
