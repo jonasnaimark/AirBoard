@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.46] - 2025-09-17 🔧 **GLOBAL DELAY DURATION FIX**
+### 🔧 Fixed - SMART COMPOSITION DURATION HANDLING
+- **Never Shrink Compositions**: Global delay operations now never make compositions shorter when moving content backward
+- **Predictable Extension**: When moving content forward, compositions extend by exactly the delay amount (not to furthest content position)
+- **Precomp Intelligence**: All nested precomps (up to 5 levels) follow the same smart duration logic
+- **User-Friendly Behavior**: Avoids "crazy long comp" issue when long background layers extend far beyond main animation content
+
+### 🎯 Technical Improvements
+- **Forward Movement**: Always extends comp by exactly `timeOffset` (e.g., +3 frames = comp gets 3 frames longer)
+- **Backward Movement**: Never changes comp duration, preventing unwanted shrinking
+- **Nested Precomps**: Applied consistent logic to all precomp levels for predictable behavior
+- **Simple & Reliable**: More intuitive duration changes that match user expectations
+
 ## [4.16.42] - 2025-09-12 🔧 **TIME REMAP STAGGER FIX**
 ### 🔧 Fixed
 - **Time Remap Stagger**: Fixed Time Remap keyframes getting deleted during stagger operations

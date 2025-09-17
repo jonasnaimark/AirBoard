@@ -5169,22 +5169,14 @@ function nudgeFromPlayhead(direction, frames) {
         var totalItems = movedKeyframes + movedLayers + movedLabels;
         DEBUG_JSX.log("RESULT: " + movedKeyframes + "k/" + movedLayers + "L/" + movedLabels + "m @" + (timeOffset * 1000).toFixed(0) + "ms");
         
-        // Adjust composition duration bidirectionally
+        // Adjust composition duration: never shrink, always extend by delay amount when moving forward
         if (timeOffset > 0) {
-            // Extending forward: only extend if elements were pushed beyond original duration
-            if (furthestTime > originalDuration) {
-                var extensionNeeded = timeOffset;
-                var newDuration = originalDuration + extensionNeeded;
-                comp.duration = newDuration;
-                DEBUG_JSX.log("Dur: " + originalDuration.toFixed(2) + "s→" + newDuration.toFixed(2) + "s");
-            }
-        } else if (timeOffset < 0) {
-            // Shrinking backward: reduce duration by the amount we moved back
-            var shrinkAmount = Math.abs(timeOffset);
-            var newDuration = Math.max(0.1, originalDuration - shrinkAmount); // Don't go below 0.1s
+            // Extending forward: always extend comp by exactly the delay amount
+            var newDuration = originalDuration + timeOffset;
             comp.duration = newDuration;
-            DEBUG_JSX.log("Dur: " + originalDuration.toFixed(2) + "s→" + newDuration.toFixed(2) + "s");
+            DEBUG_JSX.log("Extended comp by delay amount: " + originalDuration.toFixed(2) + "s→" + newDuration.toFixed(2) + "s");
         }
+        // For backward movement (timeOffset < 0): Never change comp duration - never shrink
         
         // CACHE REFRESH FIX: Force AE to refresh precomp layers when their source durations were extended
         // This fixes the "empty frames at end" visual bug by forcing cache invalidation
@@ -5945,21 +5937,15 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
         var labelsResult = moveLabelsAfterTime(precomp, precompPlayheadTime, timeOffset);
         movedLabels += labelsResult;
         
-        // Adjust precomp duration bidirectionally  
+        // Adjust precomp duration: never shrink, always extend by delay amount when moving forward
         var originalPrecompDuration = precomp.duration;
         if (timeOffset > 0) {
-            // Extending forward: only extend if elements were pushed beyond original duration
-            if (furthestTime > originalPrecompDuration) {
-                var extensionNeeded = timeOffset;
-                var newDuration = originalPrecompDuration + extensionNeeded;
-                precomp.duration = newDuration;
-            }
-        } else if (timeOffset < 0) {
-            // Shrinking backward: reduce duration by the amount we moved back
-            var shrinkAmount = Math.abs(timeOffset);
-            var newDuration = Math.max(0.1, originalPrecompDuration - shrinkAmount); // Don't go below 0.1s
-            precomp.duration = newDuration;
+            // Extending forward: always extend precomp by exactly the delay amount
+            var newPrecompDuration = originalPrecompDuration + timeOffset;
+            precomp.duration = newPrecompDuration;
+            DEBUG_JSX.log("    Extended precomp " + precomp.name + " by delay: " + originalPrecompDuration.toFixed(2) + "s→" + newPrecompDuration.toFixed(2) + "s");
         }
+        // For backward movement (timeOffset < 0): Never change precomp duration - never shrink
         
         // Log summary if anything was moved
         if (movedKeyframes > 0 || movedLayers > 0 || movedLabels > 0) {
