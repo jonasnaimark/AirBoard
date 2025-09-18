@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.16.47] - 2025-01-18 🎯 **SHAPE LAYER GLOBAL DELAY FIX**
+## [4.16.48] - 2025-09-18 🎯 **SHAPE LAYER GLOBAL DELAY FIX**
 ### 🎯 Fixed - CRITICAL SHAPE LAYER PROCESSING
 - **Fixed Size Keyframes**: Size keyframes on Shape layers now properly move with global delay operations
 - **Universal Key ID System**: Replaced custom keyID generation with `getFullPropertyPath()` function for bulletproof uniqueness
