@@ -5,7 +5,7 @@
 
 ## 📥 Get the Plugin
 
-**[⬇️ Download AirBoard v4.16.47](dist/AirBoard-v4.16.47.zxp)**
+**[⬇️ Download AirBoard v4.16.47](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.47.zxp)**
 
 ### Install Steps
 1. Download the `.zxp` file above
