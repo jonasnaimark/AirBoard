@@ -1,0 +1,1086 @@
+/* Dark theme to match After Effects */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #262626;
+    color: #ffffff;
+    font-family: 'Adobe Clean', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 12px;
+    user-select: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.container {
+    padding: 6px 10px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+/* Section container styling - creates visual containers around sections */
+.section-container {
+    background-color: #2a2a2a;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    padding: 12px 10px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, border-color 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.section-container:hover {
+    border-color: rgba(255, 255, 255, 0.20);
+}
+
+.section-container.moving {
+    position: relative;
+    z-index: 10;
+}
+
+
+.section-container:last-child {
+    margin-bottom: 0;
+}
+
+/* Main section styling - consistent for all sections */
+.section {
+    margin: 0;
+    padding: 0;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin: 0 0 10px 0;
+    padding: 0;
+    transition: margin 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
+}
+
+.section-header h2 {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0;
+    padding: 0;
+    border: none;
+    text-transform: none;
+    letter-spacing: 0.5px;
+}
+
+/* Subsection titles within sections */
+.subsection-title {
+    color: #f5f5f5;
+    font-size: 10px;
+    font-weight: 400;
+    margin: 4px 0 10px 0; /* Added 4px to bottom margin (was 6px, now 10px) */
+    padding: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    opacity: 0.85;
+}
+
+/* First subsection title (Shape) - less top margin */
+.subsection-title:first-of-type {
+    margin-top: 2px;
+}
+
+/* Spaced subsection titles (Effects, Shimmer) - extra top margin */
+.subsection-title.spaced {
+    margin-top: 18px; /* 14px extra + 4px additional = 18px total */
+}
+
+/* Add subtle divider line between subsections */
+.subsection-divider {
+    width: calc(100% - 10px);
+    height: 2px;
+    background: linear-gradient(to bottom, 
+        rgba(0, 0, 0, 0.5) 0%, 
+        rgba(0, 0, 0, 0.5) 50%, 
+        rgba(255, 255, 255, 0.1) 50%, 
+        rgba(255, 255, 255, 0.1) 100%);
+    margin: 14px 5px;
+    border: none;
+}
+
+/* Section controls container */
+.section-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* Section control buttons - all same size, bigger */
+.section-btn, .accordion-toggle {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    transition: all 0.3s ease;
+    border-radius: 3px;
+    margin-top: -4px;
+    outline: none;
+}
+
+.section-btn:focus, .accordion-toggle:focus {
+    outline: none;
+}
+
+.section-btn:hover, .accordion-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Section controls always visible but arrows hidden */
+.section-controls {
+    opacity: 1;
+}
+
+/* Move buttons start hidden, show on hover over controls area */
+.section-btn {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.section-controls:hover .section-btn {
+    opacity: 1;
+}
+
+/* Accordion toggle always visible at 35% opacity, 100% on hover over controls area */
+.accordion-toggle {
+    opacity: 0.35;
+    transition: opacity 0.2s ease;
+}
+
+.section-controls:hover .accordion-toggle {
+    opacity: 1;
+}
+
+/* Control arrows for move up/down - slightly smaller */
+.control-arrow {
+    width: 5px;
+    height: 5px;
+    border-right: 1px solid #ffffff;
+    border-bottom: 1px solid #ffffff;
+    transition: transform 0.3s ease;
+    transform-origin: center;
+}
+
+.control-arrow.up {
+    transform: rotate(-135deg); /* Pointing up */
+    margin-top: 4px; /* Move down 4px */
+}
+
+.control-arrow.down {
+    transform: rotate(45deg); /* Pointing down */
+    margin-top: -3px; /* Move up 3px */
+}
+
+/* Accordion arrow - acts as collapse/expand toggle - bigger */
+.accordion-arrow {
+    width: 7px;
+    height: 1px;
+    background-color: #ffffff;
+    position: relative;
+    transition: all 0.3s ease;
+    transform-origin: center;
+}
+
+.accordion-arrow::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 3px;
+    width: 1px;
+    height: 7px;
+    background-color: #ffffff;
+    transition: opacity 0.3s ease;
+}
+
+/* When collapsed, show + (cross) */
+.accordion-toggle.collapsed .accordion-arrow::before {
+    opacity: 1;
+}
+
+/* When expanded, show - (horizontal line only) */
+.accordion-toggle:not(.collapsed) .accordion-arrow::before {
+    opacity: 0;
+}
+
+/* Section content container */
+.section-content {
+    overflow: hidden;
+    transition: max-height 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00), opacity 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
+    max-height: 350px; /* Increased to accommodate Shimmer buttons and all subsections */
+    opacity: 1;
+}
+
+.section-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+/* Adjust header margins when section is collapsed */
+.section.collapsed .section-header {
+    margin-bottom: 0;
+}
+
+/* Shared flex layout for controls */
+.control-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: stretch;
+}
+
+.control-row:last-child {
+    margin-bottom: 0;
+}
+
+.control-row > * {
+    flex: 1;
+    width: calc(50% - 5px);
+}
+
+.control-row .main-button {
+    margin-bottom: 0;
+}
+
+/* Main button styles */
+.main-button {
+    height: 35px;
+    padding: 12px 20px;
+    background-color: #333333;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    margin-bottom: 10px;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+}
+
+.main-button:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+
+.main-button:active {
+    transform: scale(0.98);
+}
+
+/* Responsive text for Create Squircle button */
+.main-button .short-text {
+    display: none;
+}
+
+@media (max-width: 237px) {
+    .main-button .full-text {
+        display: none;
+    }
+    
+    .main-button .short-text {
+        display: inline;
+    }
+}
+
+/* Project Setup specific styles */
+.project-setup-row {
+    justify-content: flex-end;
+}
+
+.quarter-width {
+    flex: 0 0 23%; /* Quarter width with slight adjustment for gaps */
+}
+
+.spacer {
+    flex: 1; /* Takes up remaining space to push buttons right */
+}
+
+/* Resolution display - styled like dropdown */
+.resolution-display {
+    position: relative;
+    height: 36px;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 50% 0 12px; /* Right padding for 50% width buttons */
+    display: flex;
+    align-items: center;
+    user-select: none;
+    pointer-events: none; /* Prevent text selection/interaction */
+}
+
+/* Keyframe Reader labels with reduced opacity */
+#durationText,
+#staggerText,
+#xDistanceText,
+#yDistanceText {
+    opacity: 0.75;
+}
+
+/* Keyframe display - styled like resolution display but without buttons */
+.keyframe-display {
+    position: relative;
+    height: 36px;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    user-select: none;
+}
+
+.resolution-display .number-controls {
+    position: absolute;
+    right: 6px; /* 6px from right edge */
+    top: 50%;
+    transform: translateY(-50%);
+    width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
+    display: flex;
+    gap: 6px; /* Match the container padding spacing */
+    pointer-events: all; /* Allow button clicks */
+    padding: 0;
+}
+
+.resolution-display .number-controls .number-btn {
+    flex: 1; /* Each button takes equal space (25% of total row) */
+    margin: 0;
+    background-color: #2f2f2f;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+
+.resolution-display .number-controls .number-btn:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+
+.resolution-display .number-controls .number-btn:active {
+    transform: scale(0.98);
+}
+
+.resolution-display .number-controls .add-btn {
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+/* Distance controls - 4 buttons for In/Out/−/+ */
+.keyframe-display .distance-controls {
+    position: absolute;
+    right: 6px; /* 6px from right edge */
+    top: 50%;
+    transform: translateY(-50%);
+    width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
+    display: flex;
+    gap: 6px; /* Same gap as other rows */
+    pointer-events: all; /* Allow button clicks */
+    padding: 0;
+}
+
+.keyframe-display .distance-controls .distance-input {
+    flex: 1;
+    margin: 0;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 8px;
+    outline: none;
+    height: 26px;
+    text-align: center;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    position: relative;
+}
+
+/* Hide number input arrows */
+.keyframe-display .distance-controls .distance-input::-webkit-outer-spin-button,
+.keyframe-display .distance-controls .distance-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.keyframe-display .distance-controls .distance-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.keyframe-display .distance-controls .distance-input:hover {
+    border-color: #666666;
+}
+
+.keyframe-display .distance-controls .distance-input:focus {
+    border-color: #4a90e2;
+}
+
+.keyframe-display .distance-controls .distance-input:disabled {
+    background-color: #1a1a1a;
+    color: #666666;
+    border-color: rgba(255, 255, 255, 0.06);
+    cursor: default;
+    opacity: 0.75;
+}
+
+/* Direct tooltip styling for input - higher specificity */
+input.distance-input[data-tooltip]:hover::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+    pointer-events: none;
+    z-index: 1000;
+    transition: opacity 0.2s ease-in-out;
+}
+
+input.distance-input[data-tooltip]:hover::after {
+    content: '';
+    position: absolute;
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 1;
+    pointer-events: none;
+    z-index: 1000;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.keyframe-display .distance-controls .distance-btn {
+    width: calc(25% - 4.5px); /* Each button takes exactly 25% minus gap adjustment (18px / 4 = 4.5px) */
+    margin: 0;
+    background-color: #2f2f2f;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    font-size: 11px; /* Slightly smaller font for 4 buttons */
+    font-weight: 500;
+    height: 26px;
+    border-radius: 4px;
+    outline: none; /* Remove focus outline */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.keyframe-display .distance-controls .distance-btn:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+
+.keyframe-display .distance-controls .distance-btn:active {
+    transform: scale(0.98);
+}
+
+.keyframe-display .distance-controls .distance-btn:focus {
+    outline: none; /* Remove focus outline */
+}
+
+.keyframe-display .distance-controls .distance-btn.nudge-btn {
+    font-size: 13px; /* Slightly bigger for arrow icons */
+}
+
+/* CSS triangles for perfectly aligned directional arrows */
+.triangle {
+    display: inline-block;
+    width: 0;
+    height: 0;
+}
+
+.triangle-right {
+    border-left: 5px solid #cccccc;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+}
+
+.triangle-left {
+    border-right: 5px solid #cccccc;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+}
+
+.triangle-up {
+    border-bottom: 5px solid #cccccc;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    transform: translateY(-1px);
+}
+
+.triangle-down {
+    border-top: 5px solid #cccccc;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    transform: translateY(-1px);
+}
+
+/* Change triangle color on hover */
+.distance-btn:hover .triangle-right {
+    border-left-color: #ffffff;
+}
+
+.distance-btn:hover .triangle-left {
+    border-right-color: #ffffff;
+}
+
+.distance-btn:hover .triangle-up {
+    border-bottom-color: #ffffff;
+}
+
+.distance-btn:hover .triangle-down {
+    border-top-color: #ffffff;
+}
+
+.keyframe-display .distance-controls .distance-btn img {
+    display: block;
+    margin: 0 auto;
+    vertical-align: middle;
+    opacity: 0.72;
+    transition: opacity 0.1s ease, transform 0.3s ease;
+}
+
+/* Stagger button flip animation */
+.keyframe-display .distance-controls .distance-btn.flipped img {
+    transform: scaleX(-1);
+}
+
+.keyframe-display .distance-controls .distance-btn.selected img {
+    opacity: 1;
+}
+
+/* Custom tooltips for stagger controls */
+.distance-input[data-tooltip], .distance-btn[data-tooltip] {
+    position: relative;
+}
+
+/* Ensure input tooltips work properly */
+.keyframe-display .distance-controls .distance-input[data-tooltip] {
+    position: relative;
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]:hover::before,
+.keyframe-display .distance-controls .distance-input[data-tooltip]:hover::after {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]::before,
+.keyframe-display .distance-controls .distance-input[data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]::before {
+    content: attr(data-tooltip);
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.keyframe-display .distance-controls .distance-input[data-tooltip]::after {
+    content: '';
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.distance-input[data-tooltip]:hover::before,
+.distance-input[data-tooltip]:hover::after,
+.distance-btn[data-tooltip]:hover::before,
+.distance-btn[data-tooltip]:hover::after {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.distance-input[data-tooltip]::before,
+.distance-input[data-tooltip]::after,
+.distance-btn[data-tooltip]::before,
+.distance-btn[data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+/* Tooltip text bubble */
+.distance-input[data-tooltip]::before,
+.distance-btn[data-tooltip]::before {
+    content: attr(data-tooltip);
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Tooltip arrow */
+.distance-input[data-tooltip]::after,
+.distance-btn[data-tooltip]::after {
+    content: '';
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.stagger-controls {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: calc(50% - 18px);
+    display: flex;
+    gap: 6px;
+    pointer-events: all;
+    padding: 0;
+}
+
+/* Delay and Duration controls - 3 elements at 1/3 width each */
+#delayDisplay .stagger-controls .stagger-input,
+#durationDisplay .stagger-controls .stagger-input {
+    width: calc(33.33% - 4px);
+}
+
+#delayDisplay .stagger-controls .stagger-btn,
+#durationDisplay .stagger-controls .stagger-btn {
+    width: calc(33.33% - 4px);
+}
+
+.stagger-input {
+    width: calc(25% - 4.5px);
+    margin: 0;
+    background-color: #1a1a1a;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+    cursor: text;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    font-size: 11px;
+    font-weight: 500;
+    height: 26px;
+    border-radius: 4px;
+    outline: none;
+    text-align: center;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    position: relative;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.stagger-input:hover {
+    background-color: #222222;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.stagger-input:focus {
+    background-color: #222222;
+    color: #ffffff;
+    border-color: #4a90e2;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4), 0 0 0 1px rgba(74, 144, 226, 0.3);
+}
+
+/* Hide number input arrows */
+.stagger-input::-webkit-outer-spin-button,
+.stagger-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.stagger-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.stagger-btn {
+    width: calc(25% - 4.5px);
+    margin: 0;
+    background-color: #2f2f2f;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    font-size: 16px;
+    font-weight: 500;
+    height: 26px;
+    border-radius: 4px;
+    outline: none;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 2px;
+}
+
+.stagger-btn:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+}
+
+.stagger-btn:active {
+    transform: scale(0.98);
+}
+
+/* In/Out radio-style selection states - subtle opacity-based selection */
+.keyframe-display .distance-controls .in-out-btn.selected {
+    background-color: rgba(58, 58, 58, 1); /* Medium background for selected state */
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.32); /* Brighter border for selected state */
+    opacity: 1;
+}
+
+.keyframe-display .distance-controls .in-out-btn:not(.selected) {
+    background-color: #2f2f2f; /* Same as nudge buttons */
+    border-color: rgba(255, 255, 255, 0.08); /* Same border opacity as all other buttons */
+    opacity: 1; /* Same as nudge buttons */
+}
+
+.keyframe-display .distance-controls .in-out-btn.selected:hover {
+    background-color: rgba(72, 72, 72, 1); /* Slightly lighter on hover when selected */
+}
+
+/* Dropdown styles */
+.dropdown {
+    height: 36px;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 0 32px 0 12px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23cccccc' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+}
+
+.dropdown:hover {
+    border-color: #666666;
+}
+
+.dropdown:focus {
+    border-color: #4a90e2;
+}
+
+.dropdown option {
+    background-color: #2a2a2a !important;
+    background: #2a2a2a !important;
+    color: #cccccc !important;
+    padding: 12px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    border: none !important;
+    font-family: 'Adobe Clean', 'Segoe UI', sans-serif !important;
+}
+
+.dropdown option:hover {
+    background-color: #3a3a3a !important;
+    background: #3a3a3a !important;
+    color: #ffffff !important;
+}
+
+.dropdown option:checked,
+.dropdown option:focus,
+.dropdown option[selected] {
+    background-color: #4a90e2 !important;
+    background: #4a90e2 !important;
+    color: #ffffff !important;
+}
+
+/* Additional styling for WebKit browsers */
+.dropdown:focus option:checked {
+    background: linear-gradient(#4a90e2, #4a90e2) !important;
+    color: #ffffff !important;
+}
+
+/* For Firefox */
+@-moz-document url-prefix() {
+    .dropdown option {
+        background-color: #2a2a2a;
+        color: #cccccc;
+    }
+    .dropdown option:hover {
+        background-color: #3a3a3a;
+        color: #ffffff;
+    }
+    .dropdown option:checked {
+        background-color: #4a90e2;
+        color: #ffffff;
+    }
+}
+
+/* Removed .resolution-input - now uses .control-row for consistency */
+
+.resolution-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #cccccc;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    padding-left: 12px;
+}
+
+.number-input-container {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.resolution-input-field {
+    width: 100%;
+    height: 36px;
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cccccc;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    padding: 0 55px 0 0px;
+    outline: none;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+}
+
+.resolution-input-field:hover {
+    border-color: #666666;
+}
+
+.resolution-input-field:focus {
+    border-color: #4a90e2;
+}
+
+.resolution-input-field::-webkit-outer-spin-button,
+.resolution-input-field::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.number-controls {
+    position: absolute;
+    right: 9px;
+    top: 49%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.number-btn {
+    width: 28px;
+    height: 26px;
+    background-color: #555555;
+    border: none;
+    border-radius: 4px;
+    color: #cccccc;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+    outline: none;
+}
+
+.number-btn:hover {
+    background-color: #666666;
+    color: #ffffff;
+}
+
+.number-btn:active {
+    background-color: #4a90e2;
+    color: #ffffff;
+}
+
+/* Removed specific section classes - now using unified .section class */
+
+/* Stagger input within distance-controls layout */
+.keyframe-display .distance-controls .stagger-input {
+    flex: 1;
+    margin: 0;
+    background-color: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #cccccc;
+    padding: 6px 8px;
+    font-size: 11px;
+    text-align: center;
+    font-weight: 500;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.keyframe-display .distance-controls .stagger-input:hover {
+    background-color: #222222;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.keyframe-display .distance-controls .stagger-input:focus {
+    background-color: #222222;
+    color: #ffffff;
+    border-color: #4a90e2;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* Hide number input arrows for stagger input in distance-controls */
+.keyframe-display .distance-controls .stagger-input::-webkit-outer-spin-button,
+.keyframe-display .distance-controls .stagger-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.keyframe-display .distance-controls .stagger-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+/* Stagger input tooltip styles - now handled by distance-controls context */
+.keyframe-display .distance-controls .stagger-input[data-tooltip] {
+    position: relative;
+}
+
+.keyframe-display .distance-controls .stagger-input[data-tooltip]:hover::before,
+.keyframe-display .distance-controls .stagger-input[data-tooltip]:hover::after {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::before,
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::after {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    z-index: 1000;
+}
+
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::before {
+    content: attr(data-tooltip);
+    background-color: #1a1a1a;
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.keyframe-display .distance-controls .stagger-input[data-tooltip]::after {
+    content: '';
+    border: 4px solid transparent;
+    border-top-color: #1a1a1a;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #262626;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+}
+
