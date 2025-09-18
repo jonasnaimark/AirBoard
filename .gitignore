@@ -32,3 +32,4 @@ node_modules/
 
 # Development environment backups
 CSXS/manifest.xml.dev-backup
+# Test commit for credential storage
