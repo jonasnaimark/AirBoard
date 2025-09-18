@@ -11,6 +11,7 @@
 1. Download the `.zxp` file above
 2. Install using [ZXP Installer](https://aescripts.com/learn/zxp-installer/)
 3. Access via `Window > Extensions > AirBoard` in After Effects
+4. Restart After Effects if the extension doesn't appear immediately
 
 > Requires After Effects 2020+ | macOS & Windows compatible
 
