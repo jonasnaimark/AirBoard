@@ -11899,9 +11899,9 @@ function addComponentFromPanel(componentType, multiplier) {
 }
 
 // Main function called from the panel
-function createSquircleFromPanel() {
+function createSquircleFromPanel(useCompSize, resolutionMultiplier) {
     try {
-        applySquircle();
+        applySquircle(useCompSize, resolutionMultiplier);
         return "success";
     } catch(e) {
         return "error";
@@ -13030,7 +13030,7 @@ function addNulls(nullType) {
 }
 
 // Apply the complete preset
-function applySquircle() {
+function applySquircle(useCompSize, resolutionMultiplier) {
     // app.beginUndoGroup("Create Squircle");
     
     // Check if we have an active comp
@@ -13132,17 +13132,40 @@ function applySquircle() {
         // Non-fatal if stroke creation fails
     }
     
-    // *** Ensure Create behavior has Unified Corners ON and Unified Radius default 64 ***
+    // *** Set squircle properties based on mode ***
     try {
         var squircleEffect = layer.property("Effects").property("Squircle");
         if (squircleEffect) {
+            // Default to 2x resolution if not provided
+            var multiplier = resolutionMultiplier || 2;
+            
+            // Determine dimensions and radius based on mode
+            var width, height, radius;
+            
+            if (useCompSize === true) {
+                // Shift-click: Use comp dimensions with larger radius scaled by resolution
+                width = comp.width;
+                height = comp.height;
+                // Base radius is 54 at 1x, so 108 at 2x, 216 at 4x, etc.
+                radius = 54 * multiplier;
+            } else {
+                // Regular click: Use default 400x400 with standard radius scaled by resolution
+                width = 400;
+                height = 400;
+                // Base radius is 32 at 1x, so 64 at 2x, 128 at 4x, etc.
+                radius = 32 * multiplier;
+            }
+            
+            // Set the squircle properties
             try { squircleEffect.property("Unified Corners").setValue(1); } catch(e1) {}
-            try { squircleEffect.property("Unified Radius").setValue(64); } catch(e2) {}
-            // Also set individual corners to 64 so visual default matches
-            try { squircleEffect.property("Top Left").setValue(64); } catch(e3) {}
-            try { squircleEffect.property("Top Right").setValue(64); } catch(e4) {}
-            try { squircleEffect.property("Bottom Left").setValue(64); } catch(e5) {}
-            try { squircleEffect.property("Bottom Right").setValue(64); } catch(e6) {}
+            try { squircleEffect.property("Width").setValue(width); } catch(e2) {}
+            try { squircleEffect.property("Height").setValue(height); } catch(e3) {}
+            try { squircleEffect.property("Unified Radius").setValue(radius); } catch(e4) {}
+            // Also set individual corners to match radius so visual default matches
+            try { squircleEffect.property("Top Left").setValue(radius); } catch(e5) {}
+            try { squircleEffect.property("Top Right").setValue(radius); } catch(e6) {}
+            try { squircleEffect.property("Bottom Left").setValue(radius); } catch(e7) {}
+            try { squircleEffect.property("Bottom Right").setValue(radius); } catch(e8) {}
         }
     } catch(e) {
         // non-fatal if effect names differ

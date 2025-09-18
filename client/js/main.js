@@ -1828,9 +1828,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Add Squircle button handler (handles both new and replace based on dropdown)
-    addSquircleButton.addEventListener('click', function() {
+    addSquircleButton.addEventListener('click', function(event) {
         var mode = squircleModeDropdown.value;
-        console.log('Add Squircle clicked with mode:', mode);
+        var isShiftHeld = event.shiftKey;
+        console.log('Add Squircle clicked with mode:', mode, 'shift held:', isShiftHeld);
         
         // Disable button while working
         addSquircleButton.classList.add('loading');
@@ -1840,7 +1841,20 @@ document.addEventListener('DOMContentLoaded', function() {
         csInterface.evalScript(setPathScript);
         
         // Call the appropriate After Effects function based on mode
-        var scriptFunction = (mode === 'replace') ? 'replaceRectangleFromPanel()' : 'createSquircleFromPanel()';
+        var scriptFunction;
+        if (mode === 'replace') {
+            scriptFunction = 'replaceRectangleFromPanel()';
+        } else {
+            // For new squircle, get current resolution multiplier and check if shift is held
+            var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+            console.log('Resolution multiplier for squircle:', resolutionMultiplier);
+            
+            if (isShiftHeld) {
+                scriptFunction = 'createSquircleFromPanel(true, ' + resolutionMultiplier + ')'; // comp-sized with resolution scaling
+            } else {
+                scriptFunction = 'createSquircleFromPanel(false, ' + resolutionMultiplier + ')'; // default size with resolution scaling
+            }
+        }
         
         csInterface.evalScript(scriptFunction, function(result) {
             console.log('Squircle result:', result);

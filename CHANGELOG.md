@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.49] - 2025-09-18 ✨ **SQUIRCLE RESOLUTION SCALING**
+### ✨ New Features
+- **Resolution-Aware Squircle Radius**: Squircle radius now scales automatically with resolution multiplier
+- **Normal Click**: 400x400 squircle with radius = `32 × resolution multiplier` (64px at @2x, 128px at @4x, etc.)
+- **Shift+Click**: Comp-sized squircle with radius = `54 × resolution multiplier` (108px at @2x, 216px at @4x, etc.)
+- **Automatic Detection**: Reads current resolution setting from UI and applies appropriate scaling
+- **Visual Consistency**: Ensures squircles look proportionally correct at all resolution scales
+
+### 🎨 UI/UX Improvements
+- **Enhanced Tooltip**: Updated squircle button tooltip to indicate resolution scaling behavior
+- **Seamless Integration**: Feature automatically adapts to user's current resolution setting
+- **Backward Compatible**: Existing behavior at @2x resolution remains identical
+
+### 🔧 Technical Improvements
+- **Parameter Passing**: Enhanced squircle functions to accept resolution multiplier parameter
+- **Smart Calculation**: Base radius calculations (32px and 54px at @1x) with proper scaling
+- **Consistent Pattern**: Follows same resolution scaling philosophy used throughout AirBoard plugin
+
 ## [4.16.48] - 2025-09-18 🎯 **SHAPE LAYER GLOBAL DELAY FIX**
 ### 🎯 Fixed - CRITICAL SHAPE LAYER PROCESSING
 - **Fixed Size Keyframes**: Size keyframes on Shape layers now properly move with global delay operations
