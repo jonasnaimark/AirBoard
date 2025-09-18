@@ -1,7 +1,7 @@
 # AirBoard Plugin - Claude Code Context
 
 ## 🎯 Project Overview
-**AirBoard After Effects Plugin v4.9.0** - Professional device mockup and gesture animation tools for Adobe After Effects
+**AirBoard After Effects Plugin v4.16.48** - Professional device mockup and gesture animation tools for Adobe After Effects
 
 ## 🚨 CRITICAL: ZXP Build Warning
 
