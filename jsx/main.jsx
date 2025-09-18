@@ -42,6 +42,47 @@ function roundMs(seconds) {
     return Math.round(ms);
 }
 
+// Universal Property Path Generator - Creates unique identifiers for ALL property types
+// This prevents collisions between effect parameters with same names (e.g., multiple "Slider" effects)
+function getFullPropertyPath(prop) {
+    try {
+        var pathParts = [];
+        var currentProp = prop;
+        
+        // Walk up the property hierarchy to build full path
+        while (currentProp && currentProp.name) {
+            pathParts.unshift(currentProp.name);
+            
+            // Stop if we reach the layer level
+            if (currentProp.propertyType === PropertyType.LAYER) {
+                break;
+            }
+            
+            // Move to parent property
+            try {
+                currentProp = currentProp.parentProperty;
+            } catch(e) {
+                // No parent, we're done
+                break;
+            }
+        }
+        
+        // Create unique path like "Effects > Blur & Sharpen > Blur > Blurriness"
+        // or "Transform > Position" or "Effects > Slider Control > Slider"
+        var fullPath = pathParts.join(" > ");
+        
+        // Add matchName for extra uniqueness in case of name collisions
+        if (prop.matchName) {
+            fullPath += " [" + prop.matchName + "]";
+        }
+        
+        return fullPath;
+        
+    } catch(e) {
+        // Fallback to basic name if path generation fails
+        return prop.name || "Unknown Property";
+    }
+}
 
 // User Preferences - Save/Load resolution multiplier
 function saveResolutionPreference(multiplier) {
@@ -1565,7 +1606,9 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                         inInterp: prop.keyInInterpolationType(idx),
                         outInterp: prop.keyOutInterpolationType(idx),
                         temporalContinuous: prop.keyTemporalContinuous(idx),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(idx)
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(idx),
+                        // CRITICAL: Preserve keyframe color labels
+                        label: prop.keyLabel(idx)
                     };
                     
                     // Only store temporal ease for bezier keyframes to preserve linear keyframes
@@ -1736,6 +1779,15 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                                 prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
                             }
+                            
+                            // CRITICAL: Restore keyframe color label
+                            if (data.label !== undefined) {
+                                try {
+                                    prop.setLabelAtKey(newIdx, data.label);
+                                } catch(e) {
+                                    // Label setting might fail on some property types
+                                }
+                            }
                         } catch(e) {
                             console.log("Error setting keyframe properties: " + e.toString());
                         }
@@ -1866,7 +1918,9 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         inInterp: prop.keyInInterpolationType(idx),
                         outInterp: prop.keyOutInterpolationType(idx),
                         temporalContinuous: prop.keyTemporalContinuous(idx),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(idx)
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(idx),
+                        // CRITICAL: Preserve keyframe color labels
+                        label: prop.keyLabel(idx)
                     };
                     
                     // Only store temporal ease for bezier keyframes to preserve linear keyframes
@@ -2013,11 +2067,10 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         // This ensures Time Remap selection is preserved along with other properties
                         DEBUG_JSX.log("🎬 COLLECTING " + processedIndices.length + " Time Remap keyframe selections for layer " + cached.layerName);
                         allProcessedSelections.push({
-                            property: prop,
-                            indices: processedIndices,
-                            propertyName: "Time Remap",
                             layer: cached.layer,
-                            isTimeRemap: true  // Flag for special handling during restoration
+                            propertyName: "Time Remap",
+                            propertyReference: prop,  // Store actual property reference to avoid name conflicts
+                            indices: processedIndices
                         });
                         
                     } catch(timeRemapError) {
@@ -2065,6 +2118,15 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                                 prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
                             }
+                            
+                            // CRITICAL: Restore keyframe color label
+                            if (data.label !== undefined) {
+                                try {
+                                    prop.setLabelAtKey(newIdx, data.label);
+                                } catch(e) {
+                                    // Label setting might fail on some property types
+                                }
+                            }
                         } catch(e) {
                             console.log("Error setting keyframe properties: " + e.toString());
                         }
@@ -2076,10 +2138,10 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                     // COLLECT selections for GLOBAL restoration at the very end (include layer reference)
                     DEBUG_JSX.log("🎬 COLLECTING " + newSelIndices.length + " keyframe selections for property " + prop.name + " on layer " + cached.layerName);
                     allProcessedSelections.push({
-                        property: prop,
-                        indices: newSelIndices,
+                        layer: cached.layer,
                         propertyName: prop.name,
-                        layer: cached.layer  // Store layer reference for fresh property lookup
+                        propertyReference: prop,  // Store actual property reference to avoid name conflicts
+                        indices: newSelIndices
                     });
                 }
         }
@@ -2126,55 +2188,53 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
             return null;
         }
         
-        // Re-acquire fresh references and restore selections
-        var freshSelectionData = [];
+        // Store processed selections for backup restoration
+        var processedSelections = [];
         for (var i = 0; i < allProcessedSelections.length; i++) {
-            var selectionData = allProcessedSelections[i];
-            var originalLayer = selectionData.layer; // Use stored layer reference
-            
-            // Re-acquire fresh property reference from the stored layer
-            var freshProp = findPropertyByName(originalLayer, selectionData.propertyName);
-            if (freshProp) {
-                DEBUG_JSX.log("🎬 Found fresh reference for " + selectionData.propertyName + " on layer " + originalLayer.name);
-                
-                freshSelectionData.push({
-                    property: freshProp,
-                    indices: selectionData.indices,
-                    propertyName: selectionData.propertyName,
-                    layerName: originalLayer.name
-                });
-            } else {
-                DEBUG_JSX.log("🎬 WARNING: Could not find fresh reference for " + selectionData.propertyName + " on layer " + originalLayer.name);
-            }
+            var selData = allProcessedSelections[i];
+            processedSelections.push({
+                layer: selData.layer,
+                propertyName: selData.propertyName,
+                propertyReference: selData.propertyReference,  // Use stored reference directly
+                indices: selData.indices
+            });
         }
         
-        // GLOBAL SELECTION RESTORATION: Select ALL keyframes using fresh references
-        DEBUG_JSX.log("🎬 GLOBAL SELECTION RESTORATION: Processing " + freshSelectionData.length + " fresh properties");
-        for (var i = 0; i < freshSelectionData.length; i++) {
-            var selectionData = freshSelectionData[i];
-            var prop = selectionData.property;
-            var indices = selectionData.indices;
+        // GLOBAL SELECTION RESTORATION using stored property references
+        DEBUG_JSX.log("🎬 GLOBAL SELECTION RESTORATION: Processing " + processedSelections.length + " properties");
+        for (var i = 0; i < processedSelections.length; i++) {
+            var selData = processedSelections[i];
+            DEBUG_JSX.log("Restoring selection " + (i+1) + "/" + processedSelections.length + ": " + selData.propertyName + " on " + selData.layer.name);
+            
+            // Use stored property reference directly (avoids name conflicts with multiple "Slider" properties)
+            var freshProp = selData.propertyReference;
+            if (!freshProp) {
+                DEBUG_JSX.log("  ERROR: No property reference stored for " + selData.propertyName);
+                continue;
+            }
+            
+            DEBUG_JSX.log("  Using stored property reference with " + freshProp.numKeys + " keys, selecting indices: [" + selData.indices.join(", ") + "]");
             
             // CRITICAL: First deselect ALL keyframes on this property
-            DEBUG_JSX.log("🎬 Deselecting all keyframes on " + selectionData.propertyName + " (has " + prop.numKeys + " total keyframes)");
-            for (var k = 1; k <= prop.numKeys; k++) {
+            for (var k = 1; k <= freshProp.numKeys; k++) {
                 try {
-                    prop.setSelectedAtKey(k, false);
+                    freshProp.setSelectedAtKey(k, false);
                 } catch(e) {
                     // Ignore deselection errors
                 }
             }
             
-            // Now select only the keyframes we want
-            DEBUG_JSX.log("🎬 Restoring selection for " + selectionData.propertyName + " on layer " + selectionData.layerName + " - " + indices.length + " keyframes");
-            for (var j = 0; j < indices.length; j++) {
+            // Now select only the keyframes we moved
+            var successfulSelections = 0;
+            for (var j = 0; j < selData.indices.length; j++) {
                 try {
-                    prop.setSelectedAtKey(indices[j], true);
-                    DEBUG_JSX.log("🎬 FRESH Selected keyframe at index " + indices[j] + " on " + selectionData.propertyName);
+                    freshProp.setSelectedAtKey(selData.indices[j], true);
+                    successfulSelections++;
                 } catch(e) {
-                    DEBUG_JSX.log("🎬 FRESH Failed to select keyframe at index " + indices[j] + ": " + e.toString());
+                    DEBUG_JSX.log("  ERROR: Failed to select key " + selData.indices[j] + ": " + e.toString());
                 }
             }
+            DEBUG_JSX.log("  Successfully selected " + successfulSelections + "/" + selData.indices.length + " keyframes");
         }
         
         // NOTE: We intentionally do NOT set prop.selected = true here
@@ -2410,10 +2470,10 @@ function stretchKeyframesForCrossProperty(direction, frames) {
                 
                 // COLLECT selections for GLOBAL restoration at the very end
                 allProcessedSelections.push({
-                    property: prop,
-                    indices: result.newSelIndices,
+                    layer: cached.layer,
                     propertyName: cached.propertyName,
-                    layer: cached.layer  // Store layer reference for fresh property lookup
+                    propertyReference: prop,  // Store actual property reference to avoid name conflicts
+                    indices: result.newSelIndices
                 });
                 
                 // COLLECT all new keyframe times for total span calculation (like readKeyframesSmart does)
@@ -2462,58 +2522,63 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             return null;
         }
         
-        // Re-acquire fresh references and restore selections
-        var freshSelectionData = [];
+        // Store processed selections for backup restoration
+        var processedSelections = [];
         for (var i = 0; i < allProcessedSelections.length; i++) {
-            var selectionData = allProcessedSelections[i];
-            var originalLayer = selectionData.layer; // Use stored layer reference
-            
-            // Re-acquire fresh property reference from the stored layer
-            var freshProp = findPropertyByName(originalLayer, selectionData.propertyName);
-            if (freshProp) {
-                DEBUG_JSX.log("🎬 Found fresh reference for " + selectionData.propertyName + " on layer " + originalLayer.name);
-                
-                freshSelectionData.push({
-                    property: freshProp,
-                    indices: selectionData.indices,
-                    propertyName: selectionData.propertyName,
-                    layerName: originalLayer.name
-                });
-            } else {
-                DEBUG_JSX.log("🎬 WARNING: Could not find fresh reference for " + selectionData.propertyName + " on layer " + originalLayer.name);
-            }
+            var selData = allProcessedSelections[i];
+            processedSelections.push({
+                layer: selData.layer,
+                propertyName: selData.propertyName,
+                propertyReference: selData.propertyReference,  // Use stored reference directly
+                indices: selData.indices
+            });
         }
         
-        // STEP 4: GLOBAL SELECTION RESTORATION
-        DEBUG_JSX.log("🎬 STEP 4: Global selection restoration for " + freshSelectionData.length + " fresh properties");
-        for (var i = 0; i < freshSelectionData.length; i++) {
-            var selectionData = freshSelectionData[i];
-            var prop = selectionData.property;
-            var indices = selectionData.indices;
+        app.endUndoGroup();
+        
+        // Small delay to let After Effects process the undo group before restoring selections
+        try {
+            app.refresh();
+        } catch(e) {
+            // Refresh might not be available, continue anyway
+        }
+        
+        // STEP 4: BACKUP SELECTION RESTORATION using stored property references
+        DEBUG_JSX.log("🎬 BACKUP: Selection restoration for " + processedSelections.length + " properties (immediate selection should have already worked)");
+        for (var i = 0; i < processedSelections.length; i++) {
+            var selData = processedSelections[i];
+            DEBUG_JSX.log("Restoring selection " + (i+1) + "/" + processedSelections.length + ": " + selData.propertyName + " on " + selData.layer.name);
+            
+            // Use stored property reference directly (avoids name conflicts with multiple "Slider" properties)
+            var freshProp = selData.propertyReference;
+            if (!freshProp) {
+                DEBUG_JSX.log("  ERROR: No property reference stored for " + selData.propertyName);
+                continue;
+            }
+            
+            DEBUG_JSX.log("  Using stored property reference with " + freshProp.numKeys + " keys, selecting indices: [" + selData.indices.join(", ") + "]");
             
             // CRITICAL: First deselect ALL keyframes on this property
-            DEBUG_JSX.log("🎬 Deselecting all keyframes on " + selectionData.propertyName + " (has " + prop.numKeys + " total keyframes)");
-            for (var k = 1; k <= prop.numKeys; k++) {
+            for (var k = 1; k <= freshProp.numKeys; k++) {
                 try {
-                    prop.setSelectedAtKey(k, false);
+                    freshProp.setSelectedAtKey(k, false);
                 } catch(e) {
                     // Ignore deselection errors
                 }
             }
             
-            // Now select only the keyframes we want
-            DEBUG_JSX.log("🎬 Restoring selection for " + selectionData.propertyName + " on layer " + selectionData.layerName + " - " + indices.length + " keyframes");
-            for (var j = 0; j < indices.length; j++) {
+            // Now select only the keyframes we moved
+            var successfulSelections = 0;
+            for (var j = 0; j < selData.indices.length; j++) {
                 try {
-                    prop.setSelectedAtKey(indices[j], true);
-                    DEBUG_JSX.log("🎬 FRESH Selected keyframe at index " + indices[j] + " on " + selectionData.propertyName);
+                    freshProp.setSelectedAtKey(selData.indices[j], true);
+                    successfulSelections++;
                 } catch(e) {
-                    DEBUG_JSX.log("🎬 FRESH Failed to select keyframe at index " + indices[j] + ": " + e.toString());
+                    DEBUG_JSX.log("  ERROR: Failed to select key " + selData.indices[j] + ": " + e.toString());
                 }
             }
+            DEBUG_JSX.log("  Successfully selected " + successfulSelections + "/" + selData.indices.length + " keyframes");
         }
-        
-        app.endUndoGroup();
         
         // Calculate total span duration like readKeyframesSmart does for cross-property mode
         var totalDurationMs = 0;
@@ -2558,7 +2623,9 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                 inInterp: prop.keyInInterpolationType(keyIndex),
                 outInterp: prop.keyOutInterpolationType(keyIndex),
                 temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                // CRITICAL: Preserve keyframe color labels
+                label: prop.keyLabel(keyIndex)
             };
             
             // Only collect temporal ease if BOTH sides are bezier
@@ -2645,7 +2712,24 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                 prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
             }
             
-            // COLLECT indices first, DON'T select yet (global selection will handle this)
+            // CRITICAL: Restore keyframe color label
+            if (data.label !== undefined) {
+                try {
+                    prop.setLabelAtKey(newIdx, data.label);
+                } catch(e) {
+                    // Label setting might fail on some property types
+                }
+            }
+            
+            // IMMEDIATE SELECTION: Select the keyframe right after creation (like stagger does)
+            try {
+                prop.setSelectedAtKey(newIdx, true);
+                DEBUG_JSX.log("  Immediately selected duration keyframe " + newIdx);
+            } catch(e) {
+                DEBUG_JSX.log("  Failed to immediately select duration keyframe " + newIdx + ": " + e.toString());
+            }
+            
+            // COLLECT indices for return value
             newSelIndices.push(newIdx);
             // COLLECT times for total span calculation
             newKeyframeTimes.push(data.newTime);
@@ -2683,7 +2767,9 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
                 inInterp: prop.keyInInterpolationType(keyIndex),
                 outInterp: prop.keyOutInterpolationType(keyIndex),
                 temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                // CRITICAL: Preserve keyframe color labels
+                label: prop.keyLabel(keyIndex)
             };
             
             // Only collect temporal ease if BOTH sides are bezier
@@ -2767,6 +2853,15 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                 prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+            }
+            
+            // CRITICAL: Restore keyframe color label
+            if (data.label !== undefined) {
+                try {
+                    prop.setLabelAtKey(newIdx, data.label);
+                } catch(e) {
+                    // Label setting might fail on some property types
+                }
             }
             
             newSelIndices.push(newIdx);
@@ -3118,7 +3213,9 @@ function stretchMultiPropertyDuration(direction) {
                         inInterp: prop.keyInInterpolationType(keyIndex),
                         outInterp: prop.keyOutInterpolationType(keyIndex),
                         temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                        // CRITICAL: Preserve keyframe color labels
+                        label: prop.keyLabel(keyIndex)
                     };
                     
                     // Only collect temporal ease if bezier interpolation
@@ -3197,6 +3294,23 @@ function stretchMultiPropertyDuration(direction) {
                         prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
                     }
                     
+                    // CRITICAL: Restore keyframe color label
+                    if (keyData.label !== undefined) {
+                        try {
+                            prop.setLabelAtKey(newIdx, keyData.label);
+                        } catch(e) {
+                            // Label setting might fail on some property types
+                        }
+                    }
+                    
+                    // IMMEDIATE SELECTION: Select the keyframe right after creation (like stagger does)
+                    try {
+                        prop.setSelectedAtKey(newIdx, true);
+                        DEBUG_JSX.log("  Immediately selected multi-property duration keyframe " + newIdx);
+                    } catch(e) {
+                        DEBUG_JSX.log("  Failed to immediately select multi-property duration keyframe " + newIdx + ": " + e.toString());
+                    }
+                    
                     newSelIndices.push(newIdx);
                     movedCount++;
                 }
@@ -3208,7 +3322,9 @@ function stretchMultiPropertyDuration(direction) {
             });
         }
         
-        // Global selection restoration phase (same as delay nudging)
+        // BACKUP: Global selection restoration phase (immediate selection should have already worked)
+        // NOTE: We now do immediate selection during keyframe creation, so this is just a backup
+        DEBUG_JSX.log("BACKUP: Global selection restoration (immediate selection should have already worked)");
         try {
             for (var i = 0; i < allProcessedProperties.length; i++) {
                 var propData = allProcessedProperties[i];
@@ -3221,7 +3337,7 @@ function stretchMultiPropertyDuration(direction) {
             }
         } catch(selectionError) {
             // Don't fail the entire operation if selection fails
-            DEBUG_JSX.log("Selection restoration error: " + selectionError.toString());
+            DEBUG_JSX.log("BACKUP Selection restoration error: " + selectionError.toString());
         }
         
         app.endUndoGroup();
@@ -3269,6 +3385,7 @@ function nudgeDelayBackward() {
 
 function nudgeDelay(direction) {
     try {
+        DEBUG_JSX.log("🔥 SHIFT-CLICK BASELINE DELAY NUDGE: direction " + direction);
         DEBUG_JSX.log("D" + (direction > 0 ? "+" : "-"));
         
         // Initialize cumulative tracking if undefined
@@ -3378,7 +3495,8 @@ function nudgeDelay(direction) {
                     if (!selKeys || selKeys.length === 0) continue;
                     
                     // Store property with its selected keyframes (make property name unique per layer)
-                    var propName = layer.name + ":" + prop.name;
+                    // Use full property path to avoid collisions between effect parameters
+                    var propName = layer.name + ":" + getFullPropertyPath(prop);
                     if (!propertyMap[propName]) {
                         propertyMap[propName] = {
                             property: prop,
@@ -3389,20 +3507,30 @@ function nudgeDelay(direction) {
                     }
                     
                     // Add all selected keyframes for this property
+                    // Enhanced validation for effect parameters and complex property types
                     for (var k = 0; k < selKeys.length; k++) {
                         var keyIndex = selKeys[k];
                         try {
                             // Validate keyIndex is within bounds
                             if (keyIndex > 0 && keyIndex <= prop.numKeys) {
+                                // Additional validation for effect parameters
                                 var keyTime = prop.keyTime(keyIndex);
-                                propertyMap[propName].keyframes.push({
-                                    index: keyIndex,
-                                    time: keyTime
-                                });
-                                propertyMap[propName].selectedKeys.push(keyIndex);
+                                var keyValue = prop.keyValue(keyIndex);
+                                
+                                // Ensure we can actually access the keyframe data
+                                if (keyTime !== undefined && keyValue !== undefined) {
+                                    propertyMap[propName].keyframes.push({
+                                        index: keyIndex,
+                                        time: keyTime
+                                    });
+                                    propertyMap[propName].selectedKeys.push(keyIndex);
+                                    
+                                    DEBUG_JSX.log("Collected keyframe " + keyIndex + " from " + getFullPropertyPath(prop) + " at " + keyTime + "s");
+                                }
                             }
                         } catch(keyError) {
-                            // Skip invalid keyframes silently
+                            // Enhanced error logging for effect parameter issues
+                            DEBUG_JSX.log("Failed to collect keyframe " + keyIndex + " from " + getFullPropertyPath(prop) + ": " + keyError.toString());
                         }
                     }
                 }
@@ -3629,7 +3757,9 @@ function nudgeDelay(direction) {
                                 inInterp: prop.keyInInterpolationType(keyIndex),
                                 outInterp: prop.keyOutInterpolationType(keyIndex),
                                 temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                                // CRITICAL: Preserve keyframe color labels
+                                label: prop.keyLabel(keyIndex)
                             };
                             
                             // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
@@ -3700,6 +3830,15 @@ function nudgeDelay(direction) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                                 prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            }
+                            
+                            // CRITICAL: Restore keyframe color label
+                            if (data.label !== undefined) {
+                                try {
+                                    prop.setLabelAtKey(newIdx, data.label);
+                                } catch(e) {
+                                    // Label setting might fail on some property types
+                                }
                             }
                             
                             newSelIndices.push(newIdx);
@@ -4099,7 +4238,9 @@ function nudgeDelay(direction) {
                                 inInterp: prop.keyInInterpolationType(keyIndex),
                                 outInterp: prop.keyOutInterpolationType(keyIndex),
                                 temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                                // CRITICAL: Preserve keyframe color labels
+                                label: prop.keyLabel(keyIndex)
                             };
                             
                             // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
@@ -4164,6 +4305,11 @@ function nudgeDelay(direction) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                                 prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            }
+                            
+                            // CRITICAL: Restore keyframe color label
+                            if (data.label !== undefined) {
+                                prop.setLabelAtKey(newIdx, data.label);
                             }
                             
                             newSelIndices.push(newIdx);
@@ -4352,7 +4498,9 @@ function nudgeDelay(direction) {
                             inInterp: prop.keyInInterpolationType(keyIndex),
                             outInterp: prop.keyOutInterpolationType(keyIndex),
                             temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                            // CRITICAL: Preserve keyframe color labels
+                            label: prop.keyLabel(keyIndex)
                         };
                         
                         // Preserve temporal ease for bezier keyframes (same as timeline mode)
@@ -4417,6 +4565,11 @@ function nudgeDelay(direction) {
                         prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
                         prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
                         prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                    }
+                    
+                    // CRITICAL: Restore keyframe color label
+                    if (keyData.label !== undefined) {
+                        prop.setLabelAtKey(newIdx, keyData.label);
                     }
                     
                     // Store new index for later selection
@@ -4802,6 +4955,44 @@ function nudgeDelay(direction) {
         
         var result = "success|" + returnDelayMs + "|" + returnFrames + "|" + isCrossPropertyMode;
         DEBUG_JSX.log("RES:" + returnDelayMs + "ms/" + returnFrames + "f");
+        
+        app.endUndoGroup();
+        
+        // CRITICAL: Selection restoration for baseline mode (same pattern as timeline mode)
+        DEBUG_JSX.log("BASELINE: Starting selection restoration for " + propertyDelays.length + " properties");
+        try {
+            for (var i = 0; i < propertyDelays.length; i++) {
+                var propData = propertyDelays[i];
+                DEBUG_JSX.log("BASELINE: Checking property " + i + ": " + (propData.property || "unknown") + 
+                            ", has newSelIndices: " + (propData.newSelIndices ? propData.newSelIndices.length : "none"));
+                
+                if (propData.newSelIndices && propData.newSelIndices.length > 0) {
+                    var prop = propData.propObject;
+                    DEBUG_JSX.log("BASELINE: Processing property with " + propData.newSelIndices.length + " indices: [" + propData.newSelIndices.join(", ") + "]");
+                    
+                    // First deselect all keyframes on this property
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        prop.setSelectedAtKey(j, false);
+                    }
+                    
+                    // Then select our new keyframes
+                    for (var k = 0; k < propData.newSelIndices.length; k++) {
+                        var idx = propData.newSelIndices[k];
+                        if (idx > 0 && idx <= prop.numKeys) {
+                            prop.setSelectedAtKey(idx, true);
+                            DEBUG_JSX.log("BASELINE: ✅ Restored selection for keyframe " + idx + " on " + getFullPropertyPath(prop));
+                        } else {
+                            DEBUG_JSX.log("BASELINE: ❌ Invalid keyframe index " + idx + " (prop has " + prop.numKeys + " keys)");
+                        }
+                    }
+                } else {
+                    DEBUG_JSX.log("BASELINE: ⚠️ Property " + (propData.property || "unknown") + " has no newSelIndices to restore");
+                }
+            }
+            DEBUG_JSX.log("BASELINE: Selection restoration completed successfully");
+        } catch(selectionError) {
+            DEBUG_JSX.log("BASELINE: Selection restoration error: " + selectionError.toString());
+        }
         
         // Include debug messages in result for debug panel
         var debugMessages = DEBUG_JSX.getMessages();
@@ -5430,6 +5621,12 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                             DEBUG_JSX.log("  Effect: " + parentEffect.name + " → " + prop.name + " (" + prop.numKeys + " keys)");
                         }
                         
+                        // Add specific logging for Size properties
+                        if (prop.name === "Size" && prop.numKeys > 0) {
+                            var fullPath = getFullPropertyPath(prop);
+                            DEBUG_JSX.log("  🎯 FOUND Size property: " + fullPath + " (" + prop.numKeys + " keys)");
+                        }
+                        
                     } catch(accessError) {
                         DEBUG_JSX.log("  SKIPPING property (access error): " + prop.name + " - " + accessError.toString());
                         continue;
@@ -5468,13 +5665,8 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     for (var j = 1; j <= prop.numKeys; j++) {
                         var keyTime = prop.keyTime(j);
                         if (keyTime >= cutoffTime) {
-                            // Create unique key ID for tracking (include effect index to avoid identical effect conflicts)
-                            var uniquePropertyId = prop.matchName || prop.name;
-                            if (parentEffect) {
-                                // Use effect name directly to distinguish between different effect instances
-                                // This is more reliable than trying to find effect indices
-                                uniquePropertyId = parentEffect.matchName + "_" + parentEffect.name + "_" + uniquePropertyId;
-                            }
+                            // Create unique key ID for tracking
+                            var uniquePropertyId = getFullPropertyPath(prop);
                             var keyId = layer.index + "_" + uniquePropertyId + "_" + j + "_" + keyTime.toFixed(3);
                             
                             // Special debugging for Tint effects to diagnose duplicate issue
@@ -5530,8 +5722,19 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                 inInterp: prop.keyInInterpolationType(keyInfo.index),
                                 outInterp: prop.keyOutInterpolationType(keyInfo.index),
                                 temporalContinuous: prop.keyTemporalContinuous(keyInfo.index),
-                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyInfo.index)
+                                temporalAutoBezier: prop.keyTemporalAutoBezier(keyInfo.index),
+                                // CRITICAL: Preserve keyframe color labels
+                                label: prop.keyLabel(keyInfo.index)
                             };
+                            
+                            // Debug logging for ALL keyframe label collection (not just Slider)
+                            if (data.label !== undefined && data.label !== 0) {
+                                var propDescription = prop.name;
+                                if (parentEffect) {
+                                    propDescription = parentEffect.name + "→" + prop.name;
+                                }
+                                DEBUG_JSX.log("    → Collected LABEL " + data.label + " from " + propDescription + "[" + keyInfo.index + "]");
+                            }
                             
                             // Only collect temporal ease if it's a bezier keyframe
                             if (data.inInterp === KeyframeInterpolationType.BEZIER || 
@@ -5565,6 +5768,10 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     
                     // Only proceed if we successfully read keyframe data
                     if (keyframeData.length > 0) {
+                        // Special logging for Size properties
+                        if (prop.name === "Size") {
+                            DEBUG_JSX.log("  🎯 MOVING " + keyframeData.length + " Size keyframes on " + layer.name);
+                        }
                         // Remove old keyframes in reverse order to avoid index shifts
                         var indices = [];
                         for (var k = 0; k < keyframeData.length; k++) {
@@ -5615,6 +5822,26 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                     }
                                 }
                                 
+                                // CRITICAL: Restore keyframe color label
+                                if (data.label !== undefined && data.label !== 0) {
+                                    try {
+                                        // Correct method name is setLabelAtKey (not setKeyLabel)
+                                        prop.setLabelAtKey(newIndex, data.label);
+                                        var propDescription = prop.name;
+                                        if (parentEffect) {
+                                            propDescription = parentEffect.name + "→" + prop.name;
+                                        }
+                                        DEBUG_JSX.log("    ✓ Restored LABEL " + data.label + " to " + propDescription + "[" + newIndex + "]");
+                                    } catch(e) {
+                                        // Label setting might fail on some property types
+                                        var propDescription = prop.name;
+                                        if (parentEffect) {
+                                            propDescription = parentEffect.name + "→" + prop.name;
+                                        }
+                                        DEBUG_JSX.log("    ✗ Failed to restore LABEL to " + propDescription + ": " + e.toString());
+                                    }
+                                }
+                                
                                 // IMMEDIATELY deselect the keyframe to prevent selection flicker
                                 try {
                                     prop.setSelectedAtKey(newIndex, false);
@@ -5654,21 +5881,25 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
         // Process ALL property groups on the layer
         // 1. Transform properties
         if (layer.transform) {
+            DEBUG_JSX.log("🔍 LABEL DEBUG: Processing transform properties for " + layer.name);
             processPropertyGroup(layer.transform);
         }
         
         // 2. Effects
         if (layer.effect && layer.effect.numProperties > 0) {
+            DEBUG_JSX.log("🔍 LABEL DEBUG: Processing effects for " + layer.name);
             processPropertyGroup(layer.effect);
         }
         
         // 2.5. Shape layer Contents (CRITICAL for shape layers!)
         try {
             if (layer.content && layer.content.numProperties > 0) {
+                DEBUG_JSX.log("🔍 Processing Shape layer contents for " + layer.name + " (" + layer.content.numProperties + " groups)");
                 processPropertyGroup(layer.content);
             }
         } catch(e) {
             // Not a shape layer or contents not accessible
+            DEBUG_JSX.log("Not a shape layer or contents not accessible for " + layer.name + ": " + e.toString());
         }
         
         // 3. Masks
@@ -5993,7 +6224,8 @@ function nudgeDelayWithFrames(direction, frames) {
         return nudgeDelayWithCustomIncrement(direction, framesToMs);
         
     } catch(e) {
-        return "error|Failed to nudge delay with frames: " + e.toString();
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|Failed to nudge delay with frames: " + e.toString() + "|" + debugMessages.join("|");
     }
 }
 
@@ -6367,6 +6599,9 @@ function nudgeDelayTimelineMode(direction, frames) {
         var movedCount = 0;
         var processedSelections = [];
         
+        // MOVE MARKERS FIRST (before keyframe operations to avoid selection interference)
+        DEBUG_JSX.log("STEP 2A: Moving markers BEFORE keyframe operations to avoid selection interference");
+        
         // Collect ALL selected keyframe times for range-based marker syncing
         var allSelectedKeyframeTimes = [];
         for (var i = 0; i < cachedSelections.length; i++) {
@@ -6457,8 +6692,35 @@ function nudgeDelayTimelineMode(direction, frames) {
             }
         }
         
+        // MOVE MARKERS NOW (before keyframe operations)
         if (markersToMove.length > 0) {
-            DEBUG_JSX.log("Moving " + markersToMove.length + " markers with keyframes");
+            DEBUG_JSX.log("Moving " + markersToMove.length + " markers BEFORE keyframe operations");
+            
+            for (var i = markersToMove.length - 1; i >= 0; i--) {
+                var markerInfo = markersToMove[i];
+                
+                try {
+                    if (markerInfo.type === "comp") {
+                        // Move composition marker
+                        comp.markerProperty.removeKey(markerInfo.markerIndex);
+                        if (markerInfo.newTime >= 0) { // Only add if new time is valid
+                            var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
+                            comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                            DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
+                        }
+                    } else if (markerInfo.type === "layer") {
+                        // Move layer marker
+                        markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
+                        if (markerInfo.newTime >= 0) { // Only add if new time is valid
+                            var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
+                            markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
+                            DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
+                        }
+                    }
+                } catch(markerError) {
+                    DEBUG_JSX.log("Failed to move marker: " + markerError.toString());
+                }
+            }
         }
         
         // STEP 2: PROCESS USING CACHED SELECTIONS
@@ -6486,7 +6748,9 @@ function nudgeDelayTimelineMode(direction, frames) {
                         inInterp: prop.keyInInterpolationType(keyIndex),
                         outInterp: prop.keyOutInterpolationType(keyIndex),
                         temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                        // CRITICAL: Preserve keyframe color labels
+                        label: prop.keyLabel(keyIndex)
                     };
                     
                     // Preserve temporal ease for bezier keyframes
@@ -6653,51 +6917,57 @@ function nudgeDelayTimelineMode(direction, frames) {
                         }
                     }
                     
+                    // CRITICAL: Restore keyframe color label
+                    if (data.label !== undefined && data.label !== 0) {
+                        try {
+                            prop.setLabelAtKey(newIdx, data.label);
+                        } catch(e) {
+                            // Label setting might fail on some property types
+                        }
+                    }
+                    
+                    // IMMEDIATE SELECTION: Select the keyframe right after creation (like stagger does)
+                    try {
+                        prop.setSelectedAtKey(newIdx, true);
+                        DEBUG_JSX.log("  Immediately selected keyframe " + newIdx + " on " + cached.propertyName);
+                    } catch(e) {
+                        DEBUG_JSX.log("  Failed to immediately select keyframe " + newIdx + ": " + e.toString());
+                    }
+                    
                     newIndices.push(newIdx);
                     movedCount++;
                     DEBUG_JSX.log("Moved keyframe from " + data.oldTime + "s to " + data.newTime + "s");
                 }
             }
             
-            // Store selections for restoration
+            // Store selections for restoration with CORRECT new indices AND property reference
+            // CRITICAL: Store the actual property reference to avoid name conflicts
             processedSelections.push({
                 layer: cached.layer,
                 propertyName: cached.propertyName,
-                indices: newIndices
+                propertyReference: prop,  // Store actual property reference
+                indices: newIndices  // These should be the NEW indices after recreation
             });
+            DEBUG_JSX.log("Stored selection data for " + cached.propertyName + " with NEW indices: [" + newIndices.join(", ") + "] and property reference");
         }
         
-        // Move markers that were at the same time as the earliest keyframe
-        for (var i = markersToMove.length - 1; i >= 0; i--) {
-            var markerInfo = markersToMove[i];
-            
-            try {
-                if (markerInfo.type === "comp") {
-                    // Move composition marker
-                    comp.markerProperty.removeKey(markerInfo.markerIndex);
-                    if (markerInfo.newTime >= 0) { // Only add if new time is valid
-                        var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
-                        comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                        DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
-                    }
-                } else if (markerInfo.type === "layer") {
-                    // Move layer marker
-                    markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
-                    if (markerInfo.newTime >= 0) { // Only add if new time is valid
-                        var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
-                        markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                        DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
-                    }
-                }
-            } catch(markerError) {
-                DEBUG_JSX.log("Failed to move marker: " + markerError.toString());
-            }
-        }
+        // Markers were already moved before keyframe operations to avoid selection interference
         
         app.endUndoGroup();
         
+        // Small delay to let After Effects process the undo group before restoring selections
+        // This prevents timing issues with selection restoration
+        try {
+            // Use app.refresh() to ensure UI updates are processed
+            app.refresh();
+        } catch(e) {
+            // Refresh might not be available, continue anyway
+        }
+        
         // STEP 3 & 4: RESTORE SELECTION WITH FRESH REFERENCES (only if we had selected keyframes originally)
+        // NOTE: We now do immediate selection during keyframe creation, so this is a backup
         if (hasSelectedKeyframes) {
+            DEBUG_JSX.log("BACKUP: Starting selection restoration for " + processedSelections.length + " properties (immediate selection should have already worked)");
             // Helper function to find property by name (including Time Remap)
             function findPropertyByName(layer, targetName) {
                 // Check for Time Remap first (it's at the layer level)
@@ -6728,13 +6998,19 @@ function nudgeDelayTimelineMode(direction, frames) {
                 return searchGroup(layer);
             }
             
-            // Restore selections on fresh property references
+            // Restore selections using stored property references (avoid name conflicts)
             for (var i = 0; i < processedSelections.length; i++) {
                 var selData = processedSelections[i];
+                DEBUG_JSX.log("Restoring selection " + (i+1) + "/" + processedSelections.length + ": " + selData.propertyName + " on " + selData.layer.name);
                 
-                // Get fresh property reference
-                var freshProp = findPropertyByName(selData.layer, selData.propertyName);
-                if (!freshProp) continue;
+                // Use stored property reference directly (avoids name conflicts with multiple "Slider" properties)
+                var freshProp = selData.propertyReference;
+                if (!freshProp) {
+                    DEBUG_JSX.log("  ERROR: No property reference stored for " + selData.propertyName);
+                    continue;
+                }
+                
+                DEBUG_JSX.log("  Using stored property reference with " + freshProp.numKeys + " keys, selecting indices: [" + selData.indices.join(", ") + "]");
                 
                 // CRITICAL: First deselect ALL keyframes on this property
                 for (var k = 1; k <= freshProp.numKeys; k++) {
@@ -6746,14 +7022,18 @@ function nudgeDelayTimelineMode(direction, frames) {
                 }
                 
                 // Now select only the keyframes we moved
+                var successfulSelections = 0;
                 for (var j = 0; j < selData.indices.length; j++) {
                     try {
                         freshProp.setSelectedAtKey(selData.indices[j], true);
+                        successfulSelections++;
                     } catch(e) {
-                        // Ignore selection errors
+                        DEBUG_JSX.log("  ERROR: Failed to select key " + selData.indices[j] + ": " + e.toString());
                     }
                 }
+                DEBUG_JSX.log("  Successfully selected " + successfulSelections + "/" + selData.indices.length + " keyframes");
             }
+            DEBUG_JSX.log("Selection restoration completed");
         }
         // If we moved all keyframes (no selection), don't restore any selection
         
@@ -6805,7 +7085,7 @@ function nudgeDelayWithCustomIncrement(direction, incrementMs) {
             return calculateDelaySnapWithIncrement(currentDelayMs, dir, incrementMs);
         };
         
-        // Call the existing nudgeDelay function which will use our custom snapping
+        // Call the existing nudgeDelay function which has baseline selection restoration
         var result = nudgeDelay(direction);
         
         // Restore the original function and reset custom increment
@@ -7955,8 +8235,13 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                             inInterp: prop.keyInInterpolationType(keyIndex),
                             outInterp: prop.keyOutInterpolationType(keyIndex),
                             temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                            // CRITICAL: Preserve keyframe color labels
+                            label: prop.keyLabel(keyIndex)
                         };
+                        
+                        // Debug keyframe color collection
+                        DEBUG_JSX.log("  Collecting keyframe " + keyIndex + " with color label: " + keyData.label);
                         
                         // Only collect temporal ease if bezier interpolation
                         if (keyData.inInterp === KeyframeInterpolationType.BEZIER || keyData.outInterp === KeyframeInterpolationType.BEZIER) {
@@ -8099,6 +8384,22 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                                 prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
                                 prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                            }
+                            
+                            // CRITICAL: Restore keyframe color label (0 = no color, >0 = colored)
+                            if (keyData.label !== undefined) {
+                                try {
+                                    prop.setLabelAtKey(newIdx, keyData.label);
+                                    if (keyData.label === 0) {
+                                        DEBUG_JSX.log("    Restored no color label (0) on keyframe " + newIdx);
+                                    } else {
+                                        DEBUG_JSX.log("    Restored color label " + keyData.label + " on keyframe " + newIdx);
+                                    }
+                                } catch(e) {
+                                    DEBUG_JSX.log("    WARNING: Failed to restore color label " + keyData.label + " on keyframe " + newIdx + ": " + e.toString());
+                                }
+                            } else {
+                                DEBUG_JSX.log("    No color label to restore (keyData.label is undefined)");
                             }
                         } catch(e) {
                             // Continue if keyframe property setting fails
@@ -8416,7 +8717,9 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                         inInterp: prop.keyInInterpolationType(keyIndex),
                         outInterp: prop.keyOutInterpolationType(keyIndex),
                         temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                        // CRITICAL: Preserve keyframe color labels
+                        label: prop.keyLabel(keyIndex)
                     };
                     
                     // Only collect temporal ease if bezier interpolation (same as uniform staggers)
@@ -8598,6 +8901,20 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                         prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                         prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
                         prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                    }
+                    
+                    // CRITICAL: Restore keyframe color label
+                    if (data.label !== undefined) {
+                        try {
+                            prop.setLabelAtKey(newIdx, data.label);
+                            if (data.label === 0) {
+                                DEBUG_JSX.log("    Restored no color label (0) on keyframe " + newIdx);
+                            } else {
+                                DEBUG_JSX.log("    Restored color label " + data.label + " on keyframe " + newIdx);
+                            }
+                        } catch(e) {
+                            DEBUG_JSX.log("    WARNING: Failed to restore color label " + data.label + " on keyframe " + newIdx + ": " + e.toString());
+                        }
                     }
                     
                     newSelIndices.push(newIdx);
@@ -8865,7 +9182,10 @@ function applyStagger(direction, staggerFrames, isTopToBottom) {
             isTopToBottom = false;
         }
         
-        DEBUG_JSX.log("applyStagger called - direction: " + direction + ", frames: " + staggerFrames + ", topToBottom: " + isTopToBottom);
+        DEBUG_JSX.log("🚀 MAIN applyStagger called - direction: " + direction + ", frames: " + staggerFrames + ", topToBottom: " + isTopToBottom);
+        
+        // Force show this debug immediately
+        $.writeln("🚀 AIRBOARD DEBUG: applyStagger function called with direction=" + direction + ", frames=" + staggerFrames);
         app.beginUndoGroup("Apply Stagger " + (direction > 0 ? "Forward" : "Backward"));
         
         var comp = app.project.activeItem;
@@ -8908,11 +9228,582 @@ function applyStagger(direction, staggerFrames, isTopToBottom) {
     }
 }
 
+// UNIVERSAL PROPERTY SORTING SYSTEM
+// Works on any property type without manual targeting - no more brittle hardcoded patterns!
+function sortPropertiesUniversally(propA, propB, isTopToBottom, allKeyframes) {
+    try {
+        DEBUG_JSX.log("Universal sort: comparing '" + propA + "' vs '" + propB + "'");
+        
+        // PHASE 1: Extract property hierarchy information dynamically
+        var propAInfo = analyzePropertyHierarchy(propA, allKeyframes);
+        var propBInfo = analyzePropertyHierarchy(propB, allKeyframes);
+        
+        DEBUG_JSX.log("  A: " + JSON.stringify(propAInfo));
+        DEBUG_JSX.log("  B: " + JSON.stringify(propBInfo));
+        
+        // PHASE 2: Sort by property group hierarchy first
+        if (propAInfo.group !== propBInfo.group) {
+            var groupOrder = getPropertyGroupOrder();
+            var aGroupIndex = -1;
+            var bGroupIndex = -1;
+            
+            // Manual indexOf since ExtendScript doesn't have Array.indexOf
+            for (var i = 0; i < groupOrder.length; i++) {
+                if (groupOrder[i] === propAInfo.group) aGroupIndex = i;
+                if (groupOrder[i] === propBInfo.group) bGroupIndex = i;
+            }
+            
+            // If one group is not in our known list, put it after known groups
+            if (aGroupIndex === -1) aGroupIndex = groupOrder.length;
+            if (bGroupIndex === -1) bGroupIndex = groupOrder.length;
+            
+            DEBUG_JSX.log("  Group sort: " + propAInfo.group + " (idx=" + aGroupIndex + ") vs " + propBInfo.group + " (idx=" + bGroupIndex + ")");
+            return isTopToBottom ? (bGroupIndex - aGroupIndex) : (aGroupIndex - bGroupIndex);
+        }
+        
+        // PHASE 3: If same group, sort by numerical sequences
+        if (propAInfo.hasNumber && propBInfo.hasNumber) {
+            DEBUG_JSX.log("  Number sort: " + propAInfo.number + " vs " + propBInfo.number);
+            return isTopToBottom ? (propBInfo.number - propAInfo.number) : (propAInfo.number - propBInfo.number);
+        }
+        
+        // PHASE 4: If same group but no numbers, sort by property indices within their actual property groups
+        if (propAInfo.group === propBInfo.group) {
+            var aIndex = getPropertyIndexInGroup(propA, allKeyframes);
+            var bIndex = getPropertyIndexInGroup(propB, allKeyframes);
+            
+            if (aIndex !== -1 && bIndex !== -1) {
+                DEBUG_JSX.log("  Index sort: " + propA + " (idx=" + aIndex + ") vs " + propB + " (idx=" + bIndex + ")");
+                return isTopToBottom ? (bIndex - aIndex) : (aIndex - bIndex);
+            }
+        }
+        
+        // PHASE 5: Fallback to alphabetical sorting
+        DEBUG_JSX.log("  Alphabetical sort: " + propA + " vs " + propB);
+        return isTopToBottom ? propB.localeCompare(propA) : propA.localeCompare(propB);
+        
+    } catch(e) {
+        DEBUG_JSX.log("Universal sort error: " + e.toString() + ", falling back to alphabetical");
+        return isTopToBottom ? propB.localeCompare(propA) : propA.localeCompare(propB);
+    }
+}
+
+// Analyze a property name to extract hierarchy and structural information
+function analyzePropertyHierarchy(propertyName, allKeyframes) {
+    var info = {
+        group: "Unknown",
+        hasNumber: false,
+        number: 0,
+        originalName: propertyName
+    };
+    
+    // Extract numerical sequences - prioritize Rectangle numbers over Path numbers
+    // Look for "Rectangle X" pattern first, then fall back to any number
+    var rectangleMatch = propertyName.match(/Rectangle (\d+)/);
+    if (rectangleMatch) {
+        info.hasNumber = true;
+        info.number = parseInt(rectangleMatch[1]);
+    } else {
+        // Fall back to any number in the property name
+        var numberMatch = propertyName.match(/(\d+)/);
+        if (numberMatch) {
+            info.hasNumber = true;
+            info.number = parseInt(numberMatch[1]);
+        }
+    }
+    
+    // Determine property group by analyzing the full property path
+    if (propertyName.indexOf("Transform >") !== -1) {
+        info.group = "Transform";
+    } else if (propertyName.indexOf("Effects >") !== -1) {
+        info.group = "Effects";
+    } else if (propertyName.indexOf("Masks >") !== -1) {
+        info.group = "Masks";  
+    } else if (propertyName === "Time Remap" || propertyName.indexOf("Time Remap") !== -1) {
+        info.group = "Special";
+    } else if (propertyName.indexOf("Contents >") !== -1 || propertyName.indexOf("Rectangle") !== -1 || 
+               propertyName.indexOf("Ellipse") !== -1 || propertyName.indexOf("Star") !== -1 ||
+               propertyName.indexOf("Polystar") !== -1 || propertyName.indexOf("Path") !== -1) {
+        info.group = "Shape";
+    } else if (propertyName.indexOf("Text >") !== -1) {
+        info.group = "Text";
+    } else if (propertyName.indexOf("Audio Levels") !== -1) {
+        info.group = "Special";
+    } else {
+        // For unknown properties, try to infer from the property structure
+        info.group = "Other";
+    }
+    
+    return info;
+}
+
+// Define the standard After Effects property group hierarchy
+function getPropertyGroupOrder() {
+    // This represents the typical top-to-bottom order in After Effects timeline
+    return [
+        "Transform",    // Transform properties (Position, Scale, etc.)
+        "Shape",        // Shape layer contents (Rectangle 1, Rectangle 2, etc.)
+        "Text",         // Text layer properties
+        "Effects",      // Effects and their parameters
+        "Masks",        // Mask properties
+        "Special",      // Time Remap, Audio Levels, etc.
+        "Other"         // Unknown property types
+    ];
+}
+
+// Get the actual property index within its group by examining the keyframe data
+function getPropertyIndexInGroup(propertyName, allKeyframes) {
+    try {
+        // Find a keyframe with this property name to get the actual property reference
+        for (var i = 0; i < allKeyframes.length; i++) {
+            var keyframe = allKeyframes[i];
+            if (keyframe.propertyName === propertyName && keyframe.property) {
+                // Try to get the property index within its parent group
+                try {
+                    var prop = keyframe.property;
+                    var parent = prop.parentProperty;
+                    
+                    if (parent) {
+                        // Find this property's index within its parent
+                        for (var j = 1; j <= parent.numProperties; j++) {
+                            var siblingProp = parent.property(j);
+                            if (siblingProp === prop) {
+                                return j; // Return 1-based index
+                            }
+                        }
+                    }
+                    
+                    // If no parent, try to use propertyIndex directly
+                    if (prop.propertyIndex !== undefined) {
+                        return prop.propertyIndex;
+                    }
+                } catch(e) {
+                    // Property reference might be stale
+                }
+                break;
+            }
+        }
+    } catch(e) {
+        // Fallback gracefully
+    }
+    
+    return -1; // Could not determine index
+}
+
+
+// Same-layer keyframe staggering - for when multiple keyframes are selected on a single layer
+// Uses the same robust keyframe recreation as delay nudging system
+function applySameLayerKeyframeStagger(layerGroup, direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
+    try {
+        // Clear debug messages for this operation
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("🎯 Same-Layer Stagger: " + staggerFrames + " frames (" + staggerMs + "ms) on layer " + layerGroup.layer.name);
+        DEBUG_JSX.log("Stagger direction: " + direction + " (positive=forward, negative=backward)");
+        
+        // Collect all keyframes from all properties on this layer
+        var allKeyframes = [];
+        var seenKeyframes = {}; // Track duplicates
+        
+        for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+            var propData = layerGroup.keyframes[propIdx];
+            var prop = propData.property;
+            
+            for (var k = 0; k < propData.selectedKeys.length; k++) {
+                var keyIndex = propData.selectedKeys[k];
+                try {
+                    var keyTime = prop.keyTime(keyIndex);
+                    
+                    // CRITICAL: Create unique identifier to prevent duplicate Time Remap processing
+                    var uniquePropPath = getFullPropertyPath(prop);
+                    var keyframeId = uniquePropPath + "_idx" + keyIndex + "_time" + keyTime.toFixed(6);
+                    
+                    // Skip if we've already seen this exact keyframe
+                    if (seenKeyframes[keyframeId]) {
+                        DEBUG_JSX.log("DUPLICATE SKIP: Already collected keyframe " + keyIndex + " at " + keyTime + "s from " + uniquePropPath);
+                        continue;
+                    }
+                    
+                    seenKeyframes[keyframeId] = true;
+                    allKeyframes.push({
+                        property: prop,
+                        propertyName: propData.propertyName,
+                        index: keyIndex,
+                        time: keyTime
+                    });
+                    DEBUG_JSX.log("Collected keyframe " + keyIndex + " at " + keyTime + "s from " + propData.propertyName);
+                } catch(keyError) {
+                    DEBUG_JSX.log("Failed to collect keyframe " + keyIndex + " from " + propData.propertyName + ": " + keyError.toString());
+                }
+            }
+        }
+        
+        if (allKeyframes.length === 0) {
+            return "error|No keyframes to stagger on layer";
+        }
+        
+        DEBUG_JSX.log("Collected " + allKeyframes.length + " unique keyframes after deduplication");
+        
+        // Group keyframes by property FIRST, then stagger properties (not individual keyframes)
+        var propertiesByOrder = {};
+        var propertyOrder = [];
+        
+        for (var i = 0; i < allKeyframes.length; i++) {
+            var keyframe = allKeyframes[i];
+            // CRITICAL FIX: Use unique property path instead of just propertyName
+            // This distinguishes between "Contents > Rectangle 1 > Size" and "Contents > Rectangle 2 > Size"
+            var uniquePropPath = getFullPropertyPath(keyframe.property);
+            
+            if (!propertiesByOrder[uniquePropPath]) {
+                propertiesByOrder[uniquePropPath] = [];
+                propertyOrder.push(uniquePropPath);
+            }
+            propertiesByOrder[uniquePropPath].push(keyframe);
+            
+            DEBUG_JSX.log("Grouped keyframe under unique path: " + uniquePropPath);
+        }
+        
+        // SIMPLE VISUAL ORDER SORTING - Just use the order keyframes were encountered
+        // This reflects the actual visual order in the timeline
+        // For bottom-to-top stagger, reverse the natural encounter order
+        if (!isTopToBottom) {
+            propertyOrder.reverse();
+            DEBUG_JSX.log("Reversed property order for bottom-to-top stagger");
+        }
+        DEBUG_JSX.log("Using simple visual order (keyframe encounter order) for stagger");
+        
+        DEBUG_JSX.log("Found " + propertyOrder.length + " properties to stagger: " + propertyOrder.join(", "));
+        DEBUG_JSX.log("Stagger order: " + (isTopToBottom ? "top-to-bottom" : "bottom-to-top"));
+        
+        // Apply stagger offsets using EXACT same approach as delay nudging
+        // Note: Undo group already created by main applyStagger function
+        
+        var staggerOffsetSeconds = staggerMs / 1000.0;
+        DEBUG_JSX.log("Stagger offset per property: " + staggerOffsetSeconds + "s (" + staggerMs + "ms / " + staggerFrames + " frames)");
+        
+        // Create stagger time lookup - stagger PROPERTIES, not individual keyframes
+        var staggerTimes = {};
+        for (var propIndex = 0; propIndex < propertyOrder.length; propIndex++) {
+            var uniquePropPath = propertyOrder[propIndex];
+            var keyframes = propertiesByOrder[uniquePropPath];
+            
+            // Calculate stagger offset for this PROPERTY
+            var propertyTimeOffset;
+            if (direction > 0) {
+                // Positive direction: first property gets 0 offset, later properties get more
+                propertyTimeOffset = propIndex * staggerOffsetSeconds;
+            } else {
+                // Negative direction: first property stays in place (0 offset), 
+                // later properties get negative offset (move backward)
+                propertyTimeOffset = -propIndex * staggerOffsetSeconds;
+            }
+            
+            // Apply the SAME offset to ALL keyframes in this property
+            for (var k = 0; k < keyframes.length; k++) {
+                var keyframe = keyframes[k];
+                var newTime = Math.max(0, keyframe.time + propertyTimeOffset);
+                
+                // Create unique key for this specific keyframe using full property path
+                var keyframeKey = uniquePropPath + "_idx" + keyframe.index;
+                staggerTimes[keyframeKey] = newTime;
+                
+                DEBUG_JSX.log("Property " + propIndex + " (" + uniquePropPath + ") keyframe " + keyframe.index + ": " + keyframe.time + "s → " + newTime + "s (offset: " + (propertyTimeOffset >= 0 ? "+" : "") + propertyTimeOffset + "s)");
+            }
+        }
+        
+        // Group keyframes by property (EXACT same as delay nudging)
+        var propertyMap = {};
+        for (var i = 0; i < allKeyframes.length; i++) {
+            var keyframe = allKeyframes[i];
+            var uniquePropKey = layerGroup.layer.name + ":" + getFullPropertyPath(keyframe.property); // Use unique property path
+            
+            if (!propertyMap[uniquePropKey]) {
+                propertyMap[uniquePropKey] = {
+                    property: keyframe.property,
+                    keyframes: [],
+                    selectedKeys: []
+                };
+            }
+            
+            propertyMap[uniquePropKey].keyframes.push({
+                index: keyframe.index,
+                time: keyframe.time
+            });
+            propertyMap[uniquePropKey].selectedKeys.push(keyframe.index);
+        }
+        
+        // Process each property using EXACT delay nudging pattern
+        var allProcessedProperties = [];
+        
+        for (var uniquePropKey in propertyMap) {
+            var propData = propertyMap[uniquePropKey];
+            var prop = propData.property;
+            
+            DEBUG_JSX.log("Processing property: " + uniquePropKey + " with " + propData.selectedKeys.length + " keyframes");
+            
+            // Collect all keyframe data FIRST (same as delay nudging)
+            var keyframesToMove = [];
+            for (var k = 0; k < propData.selectedKeys.length; k++) {
+                var keyIndex = propData.selectedKeys[k];
+                
+                // Find the stagger time for this specific keyframe
+                // CRITICAL: Must match the key format used when storing stagger times
+                var originalPropPath = getFullPropertyPath(prop);
+                var keyframeKey = originalPropPath + "_idx" + keyIndex;
+                var newTime = staggerTimes[keyframeKey];
+                
+                if (newTime === undefined) {
+                    DEBUG_JSX.log("❌ STAGGER TIME LOOKUP FAILED:");
+                    DEBUG_JSX.log("  Looking for key: " + keyframeKey);
+                    DEBUG_JSX.log("  Available keys: " + Object.keys(staggerTimes).join(", "));
+                    newTime = prop.keyTime(keyIndex); // Fallback to original time
+                } else {
+                    DEBUG_JSX.log("✅ Found stagger time: " + keyframeKey + " → " + newTime + "s");
+                }
+                
+                try {
+                    var keyData = {
+                        oldIndex: keyIndex,
+                        time: prop.keyTime(keyIndex),
+                        newTime: newTime,
+                        value: prop.keyValue(keyIndex),
+                        inInterp: prop.keyInInterpolationType(keyIndex),
+                        outInterp: prop.keyOutInterpolationType(keyIndex),
+                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                        label: prop.keyLabel(keyIndex)
+                    };
+                    
+                    // CRITICAL: Preserve temporal ease (same as delay nudging)
+                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
+                        keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        } catch(e) {
+                            // Temporal ease might not be available
+                        }
+                    }
+                    
+                    // CRITICAL: Preserve spatial properties (same as delay nudging)
+                    // Only access spatial properties if prop.isSpatial is true AND the access doesn't fail
+                    if (prop.isSpatial) {
+                        try {
+                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                            DEBUG_JSX.log("Successfully collected spatial properties for " + getFullPropertyPath(prop));
+                        } catch(spatialError) {
+                            // Spatial properties might not be available even when isSpatial is true
+                            DEBUG_JSX.log("Spatial property access failed for " + getFullPropertyPath(prop) + ": " + spatialError.toString());
+                        }
+                    }
+                    
+                    keyframesToMove.push(keyData);
+                    
+                } catch(e) {
+                    DEBUG_JSX.log("Failed to collect keyframe " + keyIndex + " from " + getFullPropertyPath(prop) + ": " + e.toString());
+                    // Don't re-throw - continue processing other keyframes
+                    continue;
+                }
+            }
+            
+            // CRITICAL: Check if this is Time Remap for special handling
+            var isTimeRemap = false;
+            try {
+                isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
+            } catch(e) {
+                // Continue with normal handling
+            }
+            
+            var newSelIndices = [];
+            
+            if (isTimeRemap) {
+                // TIME REMAP: Special handling to avoid deletion
+                DEBUG_JSX.log("TIME REMAP DETECTED: Using special handling for " + keyframesToMove.length + " keyframes");
+                
+                // Verify keyframes exist at expected times
+                var actualKeyframesToMove = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var data = keyframesToMove[k];
+                    var foundAtOldTime = false;
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - data.time) < 0.001) {
+                            foundAtOldTime = true;
+                            break;
+                        }
+                    }
+                    if (foundAtOldTime) {
+                        actualKeyframesToMove.push(data);
+                        DEBUG_JSX.log("Verified Time Remap keyframe at " + data.time + "s");
+                    } else {
+                        DEBUG_JSX.log("⚠️ Time Remap keyframe at " + data.time + "s not found, skipping");
+                    }
+                }
+                
+                // Add new keyframes first using setValueAtTime
+                for (var k = 0; k < actualKeyframesToMove.length; k++) {
+                    var data = actualKeyframesToMove[k];
+                    try {
+                        prop.setValueAtTime(data.newTime, data.value);
+                        DEBUG_JSX.log("Added Time Remap keyframe at " + data.newTime + "s");
+                    } catch(e) {
+                        DEBUG_JSX.log("⚠️ Failed to add Time Remap keyframe: " + e.toString());
+                    }
+                }
+                
+                // Remove old keyframes carefully
+                var oldKeyIndicesToRemove = [];
+                for (var k = 0; k < actualKeyframesToMove.length; k++) {
+                    var oldTime = actualKeyframesToMove[k].time;
+                    for (var j = prop.numKeys; j >= 1; j--) {
+                        var keyTime = prop.keyTime(j);
+                        if (Math.abs(keyTime - oldTime) < 0.001) {
+                            // Make sure this isn't a new keyframe we just created
+                            var isNewKey = false;
+                            for (var n = 0; n < actualKeyframesToMove.length; n++) {
+                                if (Math.abs(keyTime - actualKeyframesToMove[n].newTime) < 0.001) {
+                                    isNewKey = true;
+                                    break;
+                                }
+                            }
+                            if (!isNewKey) {
+                                oldKeyIndicesToRemove.push(j);
+                                DEBUG_JSX.log("Marked old Time Remap keyframe at index " + j + " for removal");
+                            }
+                        }
+                    }
+                }
+                
+                // Remove in descending order
+                oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
+                    try {
+                        prop.removeKey(oldKeyIndicesToRemove[k]);
+                        DEBUG_JSX.log("Removed old Time Remap keyframe at index " + oldKeyIndicesToRemove[k]);
+                    } catch(e) {
+                        DEBUG_JSX.log("⚠️ Failed to remove old Time Remap keyframe: " + e.toString());
+                    }
+                }
+                
+                // Find new indices for selection
+                for (var k = 0; k < actualKeyframesToMove.length; k++) {
+                    var targetTime = actualKeyframesToMove[k].newTime;
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                            newSelIndices.push(j);
+                            DEBUG_JSX.log("Found new Time Remap keyframe at index " + j + " for selection");
+                            break;
+                        }
+                    }
+                }
+                
+            } else {
+                // NORMAL PROPERTIES: Standard keyframe recreation
+                DEBUG_JSX.log("NORMAL PROPERTY: Using standard keyframe recreation for " + keyframesToMove.length + " keyframes");
+                
+                // Remove old keyframes in reverse order
+                var indices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    indices.push(keyframesToMove[k].oldIndex);
+                }
+                indices.sort(function(a, b) { return b - a; }); // Descending order
+                
+                DEBUG_JSX.log("Removing " + indices.length + " keyframes in reverse order: " + indices.join(", "));
+                for (var k = 0; k < indices.length; k++) {
+                    prop.removeKey(indices[k]);
+                }
+                
+                // Recreate keyframes with new times
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var keyData = keyframesToMove[k];
+                    var newIdx = prop.addKey(keyData.newTime);
+                    
+                    // Restore all properties
+                    prop.setValueAtKey(newIdx, keyData.value);
+                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
+                    
+                    if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
+                        } catch(e) {
+                            // Some properties might not support temporal ease
+                        }
+                    }
+                    
+                    prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
+                    prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
+                    
+                    // CRITICAL: Restore spatial properties
+                    if (keyData.spatialContinuous !== undefined) {
+                        prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
+                        prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
+                        prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                    }
+                    
+                    // CRITICAL: Restore keyframe color label
+                    if (keyData.label !== undefined) {
+                        prop.setLabelAtKey(newIdx, keyData.label);
+                    }
+                    
+                    newSelIndices.push(newIdx);
+                    DEBUG_JSX.log("Recreated keyframe at index " + newIdx + " with time " + keyData.newTime + "s");
+                }
+            }
+            
+            allProcessedProperties.push({
+                property: prop,
+                propertyName: uniquePropKey,
+                newSelIndices: newSelIndices
+            });
+        }
+        
+        // Selection restoration (same pattern as delay nudging)
+        DEBUG_JSX.log("SAME-LAYER STAGGER: Starting selection restoration for " + allProcessedProperties.length + " properties");
+        try {
+            for (var p = 0; p < allProcessedProperties.length; p++) {
+                var propData = allProcessedProperties[p];
+                var prop = propData.property;
+                
+                // Deselect all keyframes first
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    prop.setSelectedAtKey(j, false);
+                }
+                
+                // Select new keyframes
+                for (var k = 0; k < propData.newSelIndices.length; k++) {
+                    var idx = propData.newSelIndices[k];
+                    if (idx > 0 && idx <= prop.numKeys) {
+                        prop.setSelectedAtKey(idx, true);
+                        DEBUG_JSX.log("SAME-LAYER STAGGER: Restored selection for keyframe " + idx + " on " + propData.propertyName);
+                    }
+                }
+            }
+            DEBUG_JSX.log("SAME-LAYER STAGGER: Selection restoration completed successfully");
+        } catch(selectionError) {
+            DEBUG_JSX.log("SAME-LAYER STAGGER: Selection restoration error: " + selectionError.toString());
+        }
+        
+        // Include debug messages in result for debug panel
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|Applied same-layer stagger " + Math.round(staggerMs) + "ms/" + Math.round(staggerFrames) + "f to " + allKeyframes.length + " keyframes|" + debugMessages.join("|");
+        
+    } catch(e) {
+        DEBUG_JSX.error("Same-layer keyframe stagger failed", e);
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|Same-layer keyframe stagger failed: " + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
 // Apply stagger to selected keyframes (grouped by layer)
 function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
     try {
+        DEBUG_JSX.log("🎬 applyStaggerToKeyframes called with direction: " + direction + ", stagger: " + staggerFrames + " frames");
+        
         var comp = app.project.activeItem;
         var selectedLayers = comp.selectedLayers;
+        
+        DEBUG_JSX.log("Found " + selectedLayers.length + " selected layers");
         
         if (selectedLayers.length === 0) {
             return "error|No layers selected";
@@ -8926,49 +9817,55 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             var layer = selectedLayers[layerIdx];
             var layerKeyframes = [];
             
-            // Recursively search for selected keyframes in this layer
-            function collectKeyframes(propGroup, propPath) {
-                for (var i = 1; i <= propGroup.numProperties; i++) {
-                    var prop = propGroup.property(i);
-                    
-                    // Check if this property has selected keyframes
-                    if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
-                        var selectedKeys = [];
-                        for (var k = 1; k <= prop.numKeys; k++) {
-                            if (prop.keySelected(k)) {
-                                selectedKeys.push(k);
-                            }
-                        }
-                        
-                        if (selectedKeys.length > 0) {
-                            layerKeyframes.push({
-                                property: prop,
-                                propertyName: propPath + prop.name,
-                                selectedKeys: selectedKeys
-                            });
-                            hasSelectedKeyframes = true;
+            DEBUG_JSX.log("Checking layer " + layer.index + ": " + layer.name);
+            
+            // Use the same robust keyframe collection as delay nudging system
+            var selectedProps = layer.selectedProperties;
+            DEBUG_JSX.log("Layer has " + selectedProps.length + " selected properties");
+            
+            for (var j = 0; j < selectedProps.length; j++) {
+                var prop = selectedProps[j];
+                
+                // Same validation as delay nudging
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+                
+                var selKeys = prop.selectedKeys;
+                if (!selKeys || selKeys.length === 0) continue;
+                
+                DEBUG_JSX.log("Found " + selKeys.length + " selected keyframes on " + getFullPropertyPath(prop));
+                
+                layerKeyframes.push({
+                    property: prop,
+                    propertyName: getFullPropertyPath(prop),
+                    selectedKeys: selKeys
+                });
+                hasSelectedKeyframes = true;
+            }
+            
+            // IMPORTANT: Check Time Remap separately (same as delay nudging)
+            try {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    var selectedTimeRemapKeys = [];
+                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                        if (layer.timeRemap.keySelected(k)) {
+                            selectedTimeRemapKeys.push(k);
                         }
                     }
                     
-                    // Recursively search property groups
-                    if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
-                               prop.propertyType === PropertyType.NAMED_GROUP)) {
-                        collectKeyframes(prop, propPath + prop.name + " > ");
+                    if (selectedTimeRemapKeys.length > 0) {
+                        DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index);
+                        layerKeyframes.push({
+                            property: layer.timeRemap,
+                            propertyName: "Time Remap",
+                            selectedKeys: selectedTimeRemapKeys,
+                            isTimeRemap: true // Flag for special handling
+                        });
+                        hasSelectedKeyframes = true;
                     }
                 }
-            }
-            
-            // Search transform properties
-            collectKeyframes(layer.transform, "Transform > ");
-            
-            // Search effects
-            if (layer.effect && layer.effect.numProperties > 0) {
-                collectKeyframes(layer.effect, "Effects > ");
-            }
-            
-            // Search mask properties
-            if (layer.mask && layer.mask.numProperties > 0) {
-                collectKeyframes(layer.mask, "Masks > ");
+            } catch(e) {
+                DEBUG_JSX.log("Time Remap check failed: " + e.toString());
             }
             
             // Search audio levels (if audio layer)
@@ -9028,8 +9925,12 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             }
         }
         
+        DEBUG_JSX.log("hasSelectedKeyframes: " + hasSelectedKeyframes);
+        
         if (!hasSelectedKeyframes) {
-            return "error|No selected keyframes found";
+            DEBUG_JSX.log("No selected keyframes found - returning error");
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No selected keyframes found|" + debugMessages.join("|");
         }
         
         // Sort layers by index
@@ -9041,6 +9942,15 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         } else {
             layerGroups.sort(function(a, b) { return b.layerIndex - a.layerIndex; });
             DEBUG_JSX.log("Sorting keyframe layers bottom to top (index descending)");
+        }
+        
+        DEBUG_JSX.log("Found " + layerGroups.length + " layer groups with selected keyframes");
+        
+        // NEW: Handle same-layer staggering when only one layer has selected keyframes
+        if (layerGroups.length === 1) {
+            DEBUG_JSX.log("Single layer detected - applying same-layer keyframe staggering");
+            DEBUG_JSX.log("Layer: " + layerGroups[0].layer.name + " has " + layerGroups[0].keyframes.length + " properties with keyframes");
+            return applySameLayerKeyframeStagger(layerGroups[0], direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
         }
         
         // Skip cross-property staggering - only stagger between different layers
@@ -9128,8 +10038,12 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                         for (var m = 1; m <= layer.marker.numKeys; m++) {
                             var markerTime = layer.marker.keyTime(m);
                             
-                            // Check if marker is within the original keyframe range (same as delay system)
-                            var markerInRange = (markerTime >= firstOriginalKeyframeTime && markerTime <= lastOriginalKeyframeTime);
+                            // Check if marker is within the original keyframe range (with tolerance for floating-point precision)
+                            var tolerance = 0.001; // 1ms tolerance to include first and last frames
+                            var markerInRange = (markerTime >= (firstOriginalKeyframeTime - tolerance) && 
+                                               markerTime <= (lastOriginalKeyframeTime + tolerance));
+                            
+                            DEBUG_JSX.log("Marker at " + (markerTime * 1000).toFixed(1) + "ms: range " + (firstOriginalKeyframeTime * 1000).toFixed(1) + "ms - " + (lastOriginalKeyframeTime * 1000).toFixed(1) + "ms, inRange: " + markerInRange);
                             
                             if (markerInRange) {
                                 var markerValue = layer.marker.keyValue(m);
@@ -9411,7 +10325,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                             inInterp: prop.keyInInterpolationType(keyIndex),
                             outInterp: prop.keyOutInterpolationType(keyIndex),
                             temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex)
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                            // CRITICAL: Preserve keyframe color labels
+                            label: prop.keyLabel(keyIndex)
                         };
                         
                         // CRITICAL FIX: Preserve temporal ease for bezier keyframes (same as timeline mode)
@@ -9609,8 +10525,12 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                         for (var m = 1; m <= layer.marker.numKeys; m++) {
                             var markerTime = layer.marker.keyTime(m);
                             
-                            // Check if marker is within the original keyframe range (same as delay system)
-                            var markerInRange = (markerTime >= firstOriginalKeyframeTime && markerTime <= lastOriginalKeyframeTime);
+                            // Check if marker is within the original keyframe range (with tolerance for floating-point precision)
+                            var tolerance = 0.001; // 1ms tolerance to include first and last frames
+                            var markerInRange = (markerTime >= (firstOriginalKeyframeTime - tolerance) && 
+                                               markerTime <= (lastOriginalKeyframeTime + tolerance));
+                            
+                            DEBUG_JSX.log("Marker at " + (markerTime * 1000).toFixed(1) + "ms: range " + (firstOriginalKeyframeTime * 1000).toFixed(1) + "ms - " + (lastOriginalKeyframeTime * 1000).toFixed(1) + "ms, inRange: " + markerInRange);
                             
                             if (markerInRange) {
                                 var markerValue = layer.marker.keyValue(m);

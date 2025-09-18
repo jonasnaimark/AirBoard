@@ -1309,22 +1309,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Pre-check: Quick validation that would prevent successful stagger
-            // This helps show immediate feedback instead of waiting for ExtendScript
-            csInterface.evalScript('(function(){ var comp = app.project.activeItem; if (!comp || !(comp instanceof CompItem)) return "no_comp"; var layers = comp.selectedLayers; if (layers.length <= 1) return "single_layer"; return "ok"; })()', function(preCheck) {
-                if (preCheck === 'single_layer') {
-                    console.log('Pre-check: Only one layer selected, showing error message');
-                    var staggerTextElement = document.getElementById('staggerText');
-                    if (staggerTextElement) {
-                        staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
-                        staggerTextElement.style.opacity = '1';
-                    }
-                    return;
-                }
-                
-                // Pre-check passed, continue with normal stagger operation
-                proceedWithStaggerIncrement();
-            });
+            // Skip pre-check - let ExtendScript handle single layer vs multi-layer scenarios
+            // This allows same-layer staggering to work
+            proceedWithStaggerIncrement();
             
             function proceedWithStaggerIncrement() {
                 // Get stagger frames from input field
@@ -1428,21 +1415,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Pre-check: Quick validation that would prevent successful stagger
-            csInterface.evalScript('(function(){ var comp = app.project.activeItem; if (!comp || !(comp instanceof CompItem)) return "no_comp"; var layers = comp.selectedLayers; if (layers.length <= 1) return "single_layer"; return "ok"; })()', function(preCheck) {
-                if (preCheck === 'single_layer') {
-                    console.log('Pre-check: Only one layer selected, showing error message');
-                    var staggerTextElement = document.getElementById('staggerText');
-                    if (staggerTextElement) {
-                        staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
-                        staggerTextElement.style.opacity = '1';
-                    }
-                    return;
-                }
-                
-                // Pre-check passed, continue with normal stagger operation
-                proceedWithStaggerDecrement();
-            });
+            // Skip pre-check - let ExtendScript handle single layer vs multi-layer scenarios
+            // This allows same-layer staggering to work
+            proceedWithStaggerDecrement();
             
             function proceedWithStaggerDecrement() {
                 // Get stagger frames from input field

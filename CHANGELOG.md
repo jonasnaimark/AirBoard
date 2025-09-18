@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.47] - 2025-01-18 🎯 **SHAPE LAYER GLOBAL DELAY FIX**
+### 🎯 Fixed - CRITICAL SHAPE LAYER PROCESSING
+- **Fixed Size Keyframes**: Size keyframes on Shape layers now properly move with global delay operations
+- **Universal Key ID System**: Replaced custom keyID generation with `getFullPropertyPath()` function for bulletproof uniqueness
+- **Multiple Shape Groups**: All Size properties across different shape groups (Rectangle 1, Rectangle 2, Ellipse 1, etc.) now process correctly
+- **Duplicate Detection Fix**: Eliminated false duplicate detection that was skipping keyframes after the first shape group
+- **Enhanced Debug Logging**: Added comprehensive logging for Shape layer content processing and Size property detection
+
+### 🔧 Technical Improvements - UNIVERSAL PROPERTY IDENTIFICATION
+- **Root Cause Resolution**: Multiple Size properties were generating identical keyIDs causing duplicate detection system to skip processing
+- **Universal Solution**: `getFullPropertyPath()` creates unique identifiers for ALL property types including Shape contents, Effects, Transform, etc.
+- **Future-Proof Pattern**: Solution works for any scenario with multiple properties of same type in different groups
+- **Enhanced Documentation**: Added Challenge 10 to KEYFRAME_SYSTEM_SUMMARY.md documenting Shape layer property unique identification
+
+### 🎯 User Impact
+- **Before**: Only first Size property processed → Remaining Size keyframes not moved by global delay
+- **After**: All Size properties get unique identifiers → All Size keyframes moved correctly
+- **Reliability**: Global delay now works consistently with complex Shape layers containing multiple animated shape groups
+
 ## [4.16.46] - 2025-09-17 🔧 **GLOBAL DELAY DURATION FIX**
 ### 🔧 Fixed - SMART COMPOSITION DURATION HANDLING
 - **Never Shrink Compositions**: Global delay operations now never make compositions shorter when moving content backward
