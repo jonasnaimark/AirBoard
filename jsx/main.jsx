@@ -6922,13 +6922,9 @@ function nudgeDelayTimelineMode(direction, frames) {
                         }
                     }
                     
-                    // IMMEDIATE SELECTION: Select the keyframe right after creation (like stagger does)
-                    try {
-                        prop.setSelectedAtKey(newIdx, true);
-                        DEBUG_JSX.log("  Immediately selected keyframe " + newIdx + " on " + cached.propertyName);
-                    } catch(e) {
-                        DEBUG_JSX.log("  Failed to immediately select keyframe " + newIdx + ": " + e.toString());
-                    }
+                    // PERFORMANCE OPTIMIZATION: Skip immediate selection - will be handled in final restoration
+                    // This eliminates redundant selection operations for large keyframe sets
+                    DEBUG_JSX.log("  PERF: Skipping immediate selection for keyframe " + newIdx + " - will select at end");
                     
                     newIndices.push(newIdx);
                     movedCount++;
