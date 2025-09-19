@@ -3853,23 +3853,11 @@ function nudgeDelay(direction) {
                         });
                     }
                     
-                    // Select all new keyframes at the end (same as baseline mode)
-                    for (var i = 0; i < timelinePropertyData.length; i++) {
-                        var propInfo = timelinePropertyData[i];
-                        var prop = propInfo.property;
-                        
-                        // First deselect all keyframes on this property
-                        for (var j = 1; j <= prop.numKeys; j++) {
-                            prop.setSelectedAtKey(j, false);
-                        }
-                        
-                        // Then select our new keyframes
-                        for (var k = 0; k < propInfo.newSelIndices.length; k++) {
-                            var idx = propInfo.newSelIndices[k];
-                            prop.setSelectedAtKey(idx, true);
-                            debugInfo.push("FORCED: Selecting keyframe at index " + idx + " on " + propInfo.propName);
-                        }
-                    }
+                    // PERFORMANCE OPTIMIZATION: Skip redundant selection cycle here
+                    // Selection will be handled once at the end after marker processing
+                    // This eliminates double deselect/select operations that slow down large keyframe sets
+                    DEBUG_JSX.log("PERF: Skipping first selection cycle - will restore after marker sync");
+                    debugInfo.push("PERF: Optimized selection - skipping first cycle");
                     
                     var newTimelinePositionMs = newTimelineTime * 1000;
                     var newTimelinePositionFrames = Math.round(newTimelineTime * frameRate);
@@ -4144,27 +4132,35 @@ function nudgeDelay(direction) {
                     }
                     
                     // CRITICAL: Restore keyframe selection after marker operations
+                    // This is now the ONLY selection restoration point for performance optimization
                     try {
-                        DEBUG_JSX.log("Restoring keyframe selection for " + keyframeSelectionInfo.length + " properties");
+                        var markersWereProcessed = (markersToMove.length > 0);
+                        DEBUG_JSX.log("PERF: Final selection restoration - properties: " + keyframeSelectionInfo.length + ", markers processed: " + markersWereProcessed);
+                        
+                        var totalKeyframesSelected = 0;
+                        var totalKeyframesDeselected = 0;
                         
                         for (var i = 0; i < keyframeSelectionInfo.length; i++) {
                             var selInfo = keyframeSelectionInfo[i];
                             var prop = selInfo.property;
                             
-                            // First deselect all keyframes
+                            // First deselect all keyframes (performance critical: only done once now)
                             for (var j = 1; j <= prop.numKeys; j++) {
                                 prop.setSelectedAtKey(j, false);
+                                totalKeyframesDeselected++;
                             }
                             
-                            // Then select our keyframes
+                            // Then select our target keyframes
                             for (var k = 0; k < selInfo.newSelIndices.length; k++) {
                                 var idx = selInfo.newSelIndices[k];
                                 prop.setSelectedAtKey(idx, true);
-                                DEBUG_JSX.log("Reselected keyframe at index " + idx);
+                                totalKeyframesSelected++;
+                                DEBUG_JSX.log("Selected keyframe at index " + idx);
                             }
                         }
                         
-                        debugInfo.push("Keyframe selection restored");
+                        DEBUG_JSX.log("PERF: Selection complete - deselected: " + totalKeyframesDeselected + ", selected: " + totalKeyframesSelected);
+                        debugInfo.push("Selection optimized - single cycle: " + totalKeyframesSelected + " keyframes");
                         
                     } catch(selectionRestoreError) {
                         DEBUG_JSX.log("Selection restore error: " + selectionRestoreError.toString());
