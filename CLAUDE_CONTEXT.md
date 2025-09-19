@@ -132,7 +132,6 @@ AirBoard/
 
 # 7. Commit all changes INCLUDING the ZXP file
 git add -A
-git add -f dist/AirBoard-vX.X.X.zxp  # Force add despite .gitignore
 git commit -m "vX.X.X: Feature description with ZXP
 
 ✨ Features: [detailed list]
@@ -158,11 +157,10 @@ git push origin main
 ```
 
 ### ⚠️ CRITICAL GOTCHAS LEARNED FROM v4.16.49
-1. **ZXP Files are .gitignored**: Must use `git add -f dist/*.zxp` to force add
-2. **README.md versions**: Must update BOTH badge and download link
-3. **build-latest.sh versions**: Hardcoded in multiple places, must update all
-4. **Complete GitHub Push**: ZXP file + README + source code must all be pushed together
-5. **Dev Mode Restoration**: Must restore dev settings after successful push
+1. **README.md versions**: Must update BOTH badge and download link
+2. **build-latest.sh versions**: Hardcoded in multiple places, must update all
+3. **Complete GitHub Push**: ZXP file + README + source code must all be pushed together
+4. **Dev Mode Restoration**: Must restore dev settings after successful push
 
 ### 🚨 Production Build Checklist
 **NEVER mark production build complete without:**
@@ -173,7 +171,6 @@ git push origin main
 ✅ README.md download link updated  
 ✅ build-latest.sh version updated (all 3 places)  
 ✅ ZXP file built successfully  
-✅ ZXP file force-added to git (overrides .gitignore)  
 ✅ All changes committed with detailed message  
 ✅ Changes pushed to GitHub main branch  
 ✅ Dev mode settings restored in manifest.xml  

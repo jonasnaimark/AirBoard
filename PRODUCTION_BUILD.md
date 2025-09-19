@@ -107,11 +107,8 @@ Signed successfully
 
 #### 2.2 Stage ALL Changes (INCLUDING the ZXP file!)
 ```bash
-git add -A                                    # Stage all modified files
-git add -f dist/AirBoard-v4.16.50.zxp       # FORCE add ZXP (overrides .gitignore!)
+git add -A                                    # Stage all modified files (including ZXP)
 ```
-
-**⚠️ CRITICAL**: The ZXP file is .gitignored, so `git add -A` alone WON'T include it! You MUST use `git add -f` to force add the ZXP file.
 
 #### 2.3 Commit with Detailed Message
 ```bash
@@ -185,7 +182,6 @@ git push origin main
 ### Build and Git Process:
 - [ ] ZXP file built successfully (./build-latest.sh completed)
 - [ ] All changes staged (git add -A)
-- [ ] ZXP file force-added (git add -f dist/*.zxp)
 - [ ] Commit created with detailed feature description
 - [ ] Changes pushed to GitHub main branch
 
@@ -235,27 +231,22 @@ git push origin main
 
 **These issues caused an incomplete GitHub release. DO NOT repeat them!**
 
-### Issue #1: ZXP Files are .gitignored
-**Problem**: `.gitignore` contains `dist/*.zxp` so ZXP files aren't pushed to GitHub  
-**Solution**: ALWAYS use `git add -f dist/AirBoard-vX.X.X.zxp` to force add  
-**Result if missed**: GitHub shows new version but ZXP file missing → broken download links
-
-### Issue #2: README.md Version References Not Updated
-**Problem**: GitHub page still shows old version badge and download link  
+### Issue #1: README.md Version References Not Updated
+**Problem**: GitHub page shows old version badge and download link  
 **Solution**: Update BOTH the version badge AND download link in README.md  
 **Result if missed**: GitHub page looks outdated, confuses users
 
-### Issue #3: build-latest.sh Has Hardcoded Versions  
+### Issue #2: build-latest.sh Has Hardcoded Versions  
 **Problem**: Build script has version in 3 different places that must all be updated  
 **Solution**: Update ALL 3 version references: manifest update, ZXP filename, verification check  
 **Result if missed**: ZXP built with wrong version number
 
-### Issue #4: Incomplete Push to GitHub
+### Issue #3: Incomplete Push to GitHub
 **Problem**: Push source code changes but forget ZXP file and README  
 **Solution**: Follow complete checklist, verify all files pushed together  
 **Result if missed**: GitHub repository incomplete, download links broken
 
-### Issue #5: Dev Mode Not Restored
+### Issue #4: Dev Mode Not Restored
 **Problem**: Leave manifest.xml in production mode, breaks dev environment  
 **Solution**: ALWAYS restore dev mode settings after successful push  
 **Result if missed**: Can't continue development, plugin broken in After Effects
@@ -266,7 +257,7 @@ git push origin main
 
 ### If ZXP File Missing from GitHub:
 ```bash
-git add -f dist/AirBoard-vX.X.X.zxp
+git add dist/AirBoard-vX.X.X.zxp
 git commit -m "Add missing v4.16.X ZXP file to repository"
 git push origin main
 ```
@@ -284,7 +275,7 @@ git push origin main
 # Update all 3 version references in build-latest.sh
 # Rebuild ZXP with correct version
 ./build-latest.sh
-git add -f dist/AirBoard-vX.X.X.zxp build-latest.sh
+git add dist/AirBoard-vX.X.X.zxp build-latest.sh
 git commit -m "Fix build script version and rebuild ZXP" 
 git push origin main
 ```
@@ -340,7 +331,7 @@ Old versions are automatically moved to `dist/_Archive/` when you manually organ
 3. ✅ Update README.md badge and download link to v4.16.50
 4. ✅ Update build-latest.sh in all 3 places to v4.16.50
 5. ✅ Run ./build-latest.sh (verify ZXP created)
-6. ✅ git add -A && git add -f dist/AirBoard-v4.16.50.zxp
+6. ✅ git add -A (now includes ZXP files automatically)
 7. ✅ Commit with detailed message
 8. ✅ git push origin main  
 9. ✅ Restore dev mode in manifest.xml

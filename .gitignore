@@ -9,7 +9,6 @@ Thumbs.db
 *.swo
 
 # Build files
-dist/*.zxp
 dist/_Archive/
 build/certificate.p12
 *.log
