@@ -1,47 +1,84 @@
-# Production Build Instructions
+# AirBoard Production Build Guide
+
+**⚠️ UPDATED AFTER v4.16.49 - Complete process with all lessons learned**
 
 ## Overview
-This document outlines the complete process for creating a new production release of AirBoard when requested.
+This document outlines the **complete** process for creating a production release of AirBoard. This was updated after v4.16.49 where several critical steps were initially missed, causing an incomplete GitHub release.
 
-## When to Create a Production Build
+## 🎯 When to Create a Production Build
 Only create a production build when explicitly requested by the user with phrases like:
 - "make a new zxp"
-- "create a new version"
+- "create a new version" 
 - "push to github"
-- "build and release"
+- "let's push a new production build"
+- **NEVER build automatically** - always ask user first
 
-## Complete Production Build Process
+## 📋 COMPLETE Production Build Process
 
-### 1. Update Version Numbers
-Increment the version number (e.g., from 4.16.27 to 4.16.28) in the following files:
+**⚠️ CRITICAL: Miss ANY step and the GitHub release will be incomplete!**
 
-#### a. Source Manifest (`CSXS/manifest.xml`)
+### Phase 1: Prepare ALL Files (Do NOT skip any!)
+
+#### 1.1 Update Version in manifest.xml (AND convert to production mode)
 ```xml
-ExtensionBundleVersion="4.16.28"
+<!-- STEP 1: Increment version number -->
+<!-- FROM: ExtensionBundleVersion="4.16.49" -->
+<!--   TO: ExtensionBundleVersion="4.16.50" -->
+
+<!-- STEP 2: Convert ALL dev references to production -->
+<!-- FROM: ExtensionBundleId="com.airboard.panel.dev" -->
+<!--   TO: ExtensionBundleId="com.airboard.panel" -->
+
+<!-- FROM: ExtensionBundleName="AirBoard Dev" -->
+<!--   TO: ExtensionBundleName="AirBoard" -->
+
+<!-- FROM: <Extension Id="com.airboard.panel.dev" Version="1.0.0" /> -->
+<!--   TO: <Extension Id="com.airboard.panel" Version="1.0.0" /> -->
+
+<!-- FROM: <Extension Id="com.airboard.panel.dev"> -->
+<!--   TO: <Extension Id="com.airboard.panel"> -->
+
+<!-- FROM: <Menu>AirBoard Dev</Menu> -->
+<!--   TO: <Menu>AirBoard</Menu> -->
 ```
-Keep the `.dev` ID and "AirBoard Dev" name - these are for development.
 
-#### b. Build Script (`build-latest.sh`)
-Update TWO locations:
-```bash
-# Line ~41
-sed -i '' 's/ExtensionBundleVersion="[^"]*"/ExtensionBundleVersion="4.16.28"/g' temp-package/CSXS/manifest.xml
-
-# Line ~47
-../ZXPSignCmd -sign . ../dist/AirBoard-v4.16.28.zxp ../new-cert.p12 mypassword
-
-# Line ~56
-if [ -f "dist/AirBoard-v4.16.28.zxp" ]; then
-    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.16.28.zxp"
-    ls -la dist/AirBoard-v4.16.28.zxp
-```
-
-#### c. README.md
-Update TWO locations:
+#### 1.2 Update CHANGELOG.md (REQUIRED!)
 ```markdown
-[![Version](https://img.shields.io/badge/version-4.16.28-blue.svg)](https://github.com/jonasnaimark/AirBoard/releases/tag/v4.16.28)
+## [4.16.50] - 2025-MM-DD ✨ **FEATURE NAME**
+### ✨ New Features
+- **Feature description**: What was added and why it helps users
 
-**[⬇️ Download AirBoard v4.16.28](dist/AirBoard-v4.16.28.zxp)**
+### 🎨 UI/UX Improvements
+- **Interface changes**: Any UI/UX improvements made
+
+### 🔧 Technical Improvements  
+- **Implementation details**: Technical changes made
+
+## [4.16.49] - 2025-09-18 ✨ **SQUIRCLE RESOLUTION SCALING**
+[Previous entries remain...]
+```
+
+#### 1.3 Update README.md (BOTH badge AND download link!)
+```markdown
+# FIND line ~4 - Version badge:
+[![Version](https://img.shields.io/badge/version-4.16.50-blue.svg)](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.50.zxp)
+
+# FIND line ~8 - Download link:  
+**[⬇️ Download AirBoard v4.16.50](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.50.zxp)**
+```
+
+#### 1.4 Update build-latest.sh (ALL 3 locations!)
+```bash
+# Line ~41 - Manifest version update:
+sed -i '' 's/ExtensionBundleVersion="[^"]*"/ExtensionBundleVersion="4.16.50"/g' temp-package/CSXS/manifest.xml
+
+# Line ~47 - ZXP build command:
+../ZXPSignCmd -sign . ../dist/AirBoard-v4.16.50.zxp ../new-cert.p12 mypassword
+
+# Line ~56-58 - Verification check:
+if [ -f "dist/AirBoard-v4.16.50.zxp" ]; then
+    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.16.50.zxp"
+    ls -la dist/AirBoard-v4.16.50.zxp
 ```
 
 #### d. Documentation (if applicable)
@@ -50,45 +87,48 @@ Update `KEYFRAME_SYSTEM_SUMMARY.md` footer:
 *Version: v4.16.28 - [Brief description of changes]*
 ```
 
-### 2. Build the ZXP Package
-Run the build script:
+---
+
+### Phase 2: Build and Git Operations
+
+#### 2.1 Build Production ZXP
 ```bash
 ./build-latest.sh
 ```
 
-This script automatically:
-- Creates a temp directory with all plugin files
-- Removes `[DEV MODE]` markers from HTML
-- Removes debug panel code from production
-- Changes manifest IDs from `.dev` to production
-- Changes "AirBoard Dev" to "AirBoard"
-- Updates version number in the package
-- Signs the ZXP with certificate
-- Creates the final ZXP in `dist/` folder
-
-Expected output:
+**MUST see this output:**
 ```
 Creating production ZXP (removing DEV MODE markers)...
 🧹 Removing [DEV MODE] markers for production...
 ✅ Production files cleaned
 Signed successfully
-✅ SUCCESS: ZXP created at dist/AirBoard-v4.16.28.zxp
+✅ SUCCESS: ZXP created at dist/AirBoard-v4.16.50.zxp
 ```
 
-### 3. Commit Changes
-Stage all modified files:
+#### 2.2 Stage ALL Changes (INCLUDING the ZXP file!)
 ```bash
-git add -A
+git add -A                                    # Stage all modified files
+git add -f dist/AirBoard-v4.16.50.zxp       # FORCE add ZXP (overrides .gitignore!)
 ```
 
-Create a descriptive commit message:
+**⚠️ CRITICAL**: The ZXP file is .gitignored, so `git add -A` alone WON'T include it! You MUST use `git add -f` to force add the ZXP file.
+
+#### 2.3 Commit with Detailed Message
 ```bash
 git commit -m "$(cat <<'EOF'
-[Brief description of main changes]
+v4.16.50: Feature description with ZXP
 
-- [Specific fix or feature 1]
-- [Specific fix or feature 2]
-- Version 4.16.28
+✨ New Features:
+- Feature 1: Detailed description of what was added
+- Feature 2: How it benefits users
+
+🎨 UI/UX Improvements:
+- Interface improvement 1
+- User experience enhancement 2
+
+🔧 Technical:
+- Implementation detail 1
+- Code improvement 2
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
@@ -97,21 +137,70 @@ EOF
 )"
 ```
 
-### 4. Push to GitHub
+#### 2.4 Push to GitHub
 ```bash
 git push origin main
 ```
 
-This triggers the safety backup script which:
-- Creates a backup at `/Users/jonas_naimark/Documents/airboard-backups/`
-- Then pushes to GitHub
+---
 
-### 5. Verify the Release
-After pushing, verify:
-- [ ] ZXP file exists in `dist/` folder
-- [ ] README shows correct version number and download link
-- [ ] GitHub repository has the latest commit
-- [ ] Download link in README works (after push completes)
+### Phase 3: Restore Development Environment
+
+#### 3.1 Convert manifest.xml BACK to Dev Mode
+```xml
+<!-- REVERT ALL production changes back to dev: -->
+
+<!-- FROM: ExtensionBundleId="com.airboard.panel" -->
+<!--   TO: ExtensionBundleId="com.airboard.panel.dev" -->
+
+<!-- FROM: ExtensionBundleName="AirBoard" -->
+<!--   TO: ExtensionBundleName="AirBoard Dev" -->
+
+<!-- FROM: <Extension Id="com.airboard.panel" Version="1.0.0" /> -->
+<!--   TO: <Extension Id="com.airboard.panel.dev" Version="1.0.0" /> -->
+
+<!-- FROM: <Extension Id="com.airboard.panel"> -->
+<!--   TO: <Extension Id="com.airboard.panel.dev"> -->
+
+<!-- FROM: <Menu>AirBoard</Menu> -->
+<!--   TO: <Menu>AirBoard Dev</Menu> -->
+```
+
+**Keep the incremented version number, only change the dev/production settings!**
+
+---
+
+## ✅ COMPLETE Production Build Verification Checklist
+
+**Before marking build complete, verify ALL of these:**
+
+### Files Updated Correctly:
+- [ ] manifest.xml version incremented (e.g., 4.16.49 → 4.16.50)
+- [ ] manifest.xml converted to production mode (no .dev, no "Dev")
+- [ ] CHANGELOG.md has new version entry with detailed changes
+- [ ] README.md version badge shows new version
+- [ ] README.md download link points to new ZXP file
+- [ ] build-latest.sh updated in all 3 places
+
+### Build and Git Process:
+- [ ] ZXP file built successfully (./build-latest.sh completed)
+- [ ] All changes staged (git add -A)
+- [ ] ZXP file force-added (git add -f dist/*.zxp)
+- [ ] Commit created with detailed feature description
+- [ ] Changes pushed to GitHub main branch
+
+### GitHub Verification:
+- [ ] GitHub page shows correct version number in README
+- [ ] Version badge links to correct ZXP file
+- [ ] Download link works and downloads new ZXP
+- [ ] ZXP file is visible in GitHub dist/ folder
+- [ ] Source code includes all new features
+
+### Development Environment Restored:
+- [ ] manifest.xml converted back to dev mode
+- [ ] "AirBoard Dev" appears in After Effects Extensions menu
+- [ ] Dev extension loads correctly
+- [ ] Ready for continued development
 
 ## Version Numbering Convention
 - **Major version** (4.x.x): Significant feature additions or architecture changes
@@ -140,12 +229,72 @@ After pushing, verify:
 - Don't skip version number updates
 - Don't modify production IDs in source files (keep `.dev` in source)
 
+---
+
+## ⚠️ CRITICAL ISSUES LEARNED FROM v4.16.49
+
+**These issues caused an incomplete GitHub release. DO NOT repeat them!**
+
+### Issue #1: ZXP Files are .gitignored
+**Problem**: `.gitignore` contains `dist/*.zxp` so ZXP files aren't pushed to GitHub  
+**Solution**: ALWAYS use `git add -f dist/AirBoard-vX.X.X.zxp` to force add  
+**Result if missed**: GitHub shows new version but ZXP file missing → broken download links
+
+### Issue #2: README.md Version References Not Updated
+**Problem**: GitHub page still shows old version badge and download link  
+**Solution**: Update BOTH the version badge AND download link in README.md  
+**Result if missed**: GitHub page looks outdated, confuses users
+
+### Issue #3: build-latest.sh Has Hardcoded Versions  
+**Problem**: Build script has version in 3 different places that must all be updated  
+**Solution**: Update ALL 3 version references: manifest update, ZXP filename, verification check  
+**Result if missed**: ZXP built with wrong version number
+
+### Issue #4: Incomplete Push to GitHub
+**Problem**: Push source code changes but forget ZXP file and README  
+**Solution**: Follow complete checklist, verify all files pushed together  
+**Result if missed**: GitHub repository incomplete, download links broken
+
+### Issue #5: Dev Mode Not Restored
+**Problem**: Leave manifest.xml in production mode, breaks dev environment  
+**Solution**: ALWAYS restore dev mode settings after successful push  
+**Result if missed**: Can't continue development, plugin broken in After Effects
+
+---
+
+## 🚨 Emergency Fixes
+
+### If ZXP File Missing from GitHub:
+```bash
+git add -f dist/AirBoard-vX.X.X.zxp
+git commit -m "Add missing v4.16.X ZXP file to repository"
+git push origin main
+```
+
+### If README Shows Wrong Version:
+```bash
+# Update README.md badge and download link
+git add README.md  
+git commit -m "Update README.md version links to vX.X.X"
+git push origin main
+```
+
+### If Build Script Has Wrong Version:
+```bash
+# Update all 3 version references in build-latest.sh
+# Rebuild ZXP with correct version
+./build-latest.sh
+git add -f dist/AirBoard-vX.X.X.zxp build-latest.sh
+git commit -m "Fix build script version and rebuild ZXP" 
+git push origin main
+```
+
 ## Common Issues and Solutions
 
 ### Certificate Issues
 If signing fails with certificate error:
 - Certificate file: `new-cert.p12`
-- Password: `mypassword`
+- Password: `mypassword` 
 - Certificate must be in plugin root directory
 
 ### Version Conflicts
@@ -154,7 +303,7 @@ If version numbers get out of sync:
 2. Update all files to match the next version
 3. Rebuild the ZXP
 
-### Build Script Errors
+### Build Script Errors  
 If `build-latest.sh` fails:
 - Check file permissions: `chmod +x build-latest.sh`
 - Verify ZXPSignCmd exists and is executable
@@ -184,5 +333,20 @@ Old versions are automatically moved to `dist/_Archive/` when you manually organ
 
 ---
 
-*Last Updated: September 2024*
-*This document ensures consistent and complete production builds*
+**Example: When user says "make a new zxp and push to github" →**
+
+1. ✅ Update version 4.16.49 → 4.16.50 in manifest.xml + convert to production mode
+2. ✅ Update CHANGELOG.md with v4.16.50 entry  
+3. ✅ Update README.md badge and download link to v4.16.50
+4. ✅ Update build-latest.sh in all 3 places to v4.16.50
+5. ✅ Run ./build-latest.sh (verify ZXP created)
+6. ✅ git add -A && git add -f dist/AirBoard-v4.16.50.zxp
+7. ✅ Commit with detailed message
+8. ✅ git push origin main  
+9. ✅ Restore dev mode in manifest.xml
+10. ✅ Verify GitHub shows v4.16.50 and ZXP downloads work
+
+---
+
+*Last Updated: December 2024 - After v4.16.49 lessons learned*  
+*This document was completely revised to prevent incomplete GitHub releases*

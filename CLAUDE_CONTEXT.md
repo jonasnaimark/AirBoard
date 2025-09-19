@@ -95,31 +95,88 @@ AirBoard/
 3. **ExtendScript**: Follow proven scaling pattern from above
 4. **Template**: Add to AirBoard Templates.aep if needed
 
-### Version Management & Main Branch Push
+### 🎯 COMPLETE PRODUCTION BUILD PROCESS
+
+**CRITICAL: Follow this EXACT sequence when user requests production build**
+
+#### Phase 1: Prepare Production Files
 ```bash
-# CRITICAL: Always do ALL steps before pushing to main
-# 1. Update CSXS/manifest.xml: ExtensionBundleVersion="X.X.X"
-# 2. Update CHANGELOG.md with new version entry and detailed changes
-# 3. Build ZXP (ONLY when user explicitly requests it!)
-./ZXPSignCmd -sign temp-package dist/AirBoard_vX.X.X.zxp new-cert.p12 mypassword
-# 4. Commit with version number
-git commit -m "vX.X.X: Description with ZXP association"
-# 5. Push to main
-git push origin main
+# 1. Update version in manifest.xml (increment from current)
+# FROM: ExtensionBundleVersion="4.16.48" 
+# TO:   ExtensionBundleVersion="4.16.49"
+
+# 2. Convert manifest.xml to production mode:
+# FROM: ExtensionBundleId="com.airboard.panel.dev"
+# TO:   ExtensionBundleId="com.airboard.panel"
+# FROM: ExtensionBundleName="AirBoard Dev"  
+# TO:   ExtensionBundleName="AirBoard"
+# FROM: <Menu>AirBoard Dev</Menu>
+# TO:   <Menu>AirBoard</Menu>
+
+# 3. Update CHANGELOG.md with new version entry and detailed changes
+
+# 4. Update README.md version references:
+# - Version badge: [![Version](https://img.shields.io/badge/version-X.X.X-blue.svg)]
+# - Download link: **[⬇️ Download AirBoard vX.X.X](github.com/.../AirBoard-vX.X.X.zxp)**
+
+# 5. Update build-latest.sh version numbers (all instances):
+# - ExtensionBundleVersion="X.X.X" 
+# - ../dist/AirBoard-vX.X.X.zxp
+# - "dist/AirBoard-vX.X.X.zxp" (verification)
 ```
 
-### ⚠️ ZXP Build Policy
-**NEVER build ZXP files automatically!**
-- **ALWAYS ask the user first** before building any ZXP files
-- ZXP builds should only happen when explicitly requested by the user
-- Do not proactively create ZXP files during development or git operations
+#### Phase 2: Build and Commit
+```bash
+# 6. Build production ZXP
+./build-latest.sh
 
-### 🚨 Main Branch Push Requirements
-**NEVER push to main without:**
-- Version increment in manifest.xml
-- CHANGELOG.md entry for new version  
-- Associated ZXP file build (but only when user requests it)
-- Version number in commit message
+# 7. Commit all changes INCLUDING the ZXP file
+git add -A
+git add -f dist/AirBoard-vX.X.X.zxp  # Force add despite .gitignore
+git commit -m "vX.X.X: Feature description with ZXP
+
+✨ Features: [detailed list]
+🎨 UI/UX: [improvements]  
+🔧 Technical: [changes]
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+#### Phase 3: Push and Restore Dev Mode
+```bash
+# 8. Push to GitHub (includes ZXP file)
+git push origin main
+
+# 9. RESTORE dev mode settings in manifest.xml:
+# FROM: ExtensionBundleId="com.airboard.panel"
+# TO:   ExtensionBundleId="com.airboard.panel.dev"
+# FROM: ExtensionBundleName="AirBoard"
+# TO:   ExtensionBundleName="AirBoard Dev"  
+# FROM: <Menu>AirBoard</Menu>
+# TO:   <Menu>AirBoard Dev</Menu>
+```
+
+### ⚠️ CRITICAL GOTCHAS LEARNED FROM v4.16.49
+1. **ZXP Files are .gitignored**: Must use `git add -f dist/*.zxp` to force add
+2. **README.md versions**: Must update BOTH badge and download link
+3. **build-latest.sh versions**: Hardcoded in multiple places, must update all
+4. **Complete GitHub Push**: ZXP file + README + source code must all be pushed together
+5. **Dev Mode Restoration**: Must restore dev settings after successful push
+
+### 🚨 Production Build Checklist
+**NEVER mark production build complete without:**
+✅ Version incremented in manifest.xml  
+✅ Production mode set in manifest.xml  
+✅ CHANGELOG.md entry for new version  
+✅ README.md version badge updated  
+✅ README.md download link updated  
+✅ build-latest.sh version updated (all 3 places)  
+✅ ZXP file built successfully  
+✅ ZXP file force-added to git (overrides .gitignore)  
+✅ All changes committed with detailed message  
+✅ Changes pushed to GitHub main branch  
+✅ Dev mode settings restored in manifest.xml  
 
 ## 📚 Essential Documentation Files
 - **DEVELOPMENT_GUIDE.md**: Complete technical patterns, scaling logic, and **component addition guide**
