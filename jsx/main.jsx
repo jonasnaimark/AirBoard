@@ -10086,32 +10086,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 DEBUG_JSX.log("Marker sync failed after smart snapping: " + markerSyncError.toString());
             }
             
-            // CRITICAL: Restore keyframe selection after marker operations (same as delay nudging)
-            try {
-                DEBUG_JSX.log("Restoring keyframe selection after smart snapping marker sync for " + keyframeSelectionInfo.length + " properties");
-                
-                for (var i = 0; i < keyframeSelectionInfo.length; i++) {
-                    var selInfo = keyframeSelectionInfo[i];
-                    var prop = selInfo.property;
-                    
-                    // First deselect all keyframes
-                    for (var j = 1; j <= prop.numKeys; j++) {
-                        prop.setSelectedAtKey(j, false);
-                    }
-                    
-                    // Then select our keyframes
-                    for (var k = 0; k < selInfo.newSelIndices.length; k++) {
-                        var idx = selInfo.newSelIndices[k];
-                        prop.setSelectedAtKey(idx, true);
-                        DEBUG_JSX.log("Reselected keyframe at index " + idx + " on " + selInfo.propertyName);
-                    }
-                }
-                
-                DEBUG_JSX.log("Keyframe selection restored after smart snapping marker sync");
-                
-            } catch(selectionRestoreError) {
-                DEBUG_JSX.log("Selection restore failed after smart snapping marker sync: " + selectionRestoreError.toString());
-            }
+            // PERFORMANCE OPTIMIZATION: Skip intermediate selection restoration
+            // Final selection will be handled after all marker operations complete
+            DEBUG_JSX.log("PERF: Skipping intermediate selection restore after smart snapping - final restore will handle it");
             
             // Smart snapping already created the correct uniform pattern - no additional stagger needed
             DEBUG_JSX.log("🎯 FINAL RESULT DEBUG: snapResult.staggerMs = " + snapResult.staggerMs);
@@ -10427,32 +10404,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             processedLayers++;
         }
         
-        // Final pass: Select all the new keyframes after all adjustments are complete (same as delay nudging)
-        try {
-            DEBUG_JSX.log("Final keyframe selection pass for " + layerGroups.length + " layer groups");
-            for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
-                var layerGroup = layerGroups[layerIdx];
-                
-                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
-                    var propData = layerGroup.keyframes[propIdx];
-                    
-                    if (propData.newSelIndices) {
-                        var prop = propData.property;
-                        for (var k = 0; k < propData.newSelIndices.length; k++) {
-                            try {
-                                prop.setSelectedAtKey(propData.newSelIndices[k], true);
-                            } catch(finalSelError) {
-                                DEBUG_JSX.log("Final selection failed for keyframe " + propData.newSelIndices[k] + ": " + finalSelError.toString());
-                            }
-                        }
-                        DEBUG_JSX.log("Selected " + propData.newSelIndices.length + " keyframes on " + propData.propertyName);
-                    }
-                }
-            }
-            DEBUG_JSX.log("Completed final keyframe selection pass");
-        } catch(finalPassError) {
-            DEBUG_JSX.log("Final keyframe selection pass failed: " + finalPassError.toString());
-        }
+        // PERFORMANCE OPTIMIZATION: Skip redundant final selection pass
+        // Selection will be handled once at the end after marker processing
+        DEBUG_JSX.log("PERF: Skipping redundant final keyframe selection - will select after marker sync");
         
         // MARKER SYNCING: Move layer markers that are synchronized with keyframes after cumulative stagger
         if (layersWithActualMovement > 0) {
