@@ -1274,12 +1274,40 @@ function readKeyframesDuration() {
             return results;
         }
         
-        // Calculate position distances from transform properties
-        var positionResults = searchForPositionKeyframes(layer.transform);
-        xDistance = positionResults.x;
-        yDistance = positionResults.y;
-        hasXDistance = positionResults.hasX;
-        hasYDistance = positionResults.hasY;
+        // Calculate position distances using robust selectedProperties approach (same as cross-property mode)
+        var xDistance = 0, yDistance = 0, hasXDistance = false, hasYDistance = false;
+        
+        // Check all selected properties for position keyframes (not just transform)
+        var selectedProps = layer.selectedProperties;
+        for (var j = 0; j < selectedProps.length; j++) {
+            var prop = selectedProps[j];
+            
+            if (prop && isPositionProperty(prop)) {
+                // Get selected keyframes for this position property
+                var selectedKeys = [];
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        selectedKeys.push(k);
+                    }
+                }
+                
+                if (selectedKeys.length >= 2) {
+                    DEBUG_JSX.log("Found position property " + prop.name + " with " + selectedKeys.length + " selected keyframes");
+                    var distance = calculatePositionDistance(prop, selectedKeys);
+                    DEBUG_JSX.log("Position distance calculated: x=" + distance.x + ", y=" + distance.y + ", hasX=" + distance.hasX + ", hasY=" + distance.hasY);
+                    
+                    if (distance.hasX) {
+                        xDistance += distance.x;
+                        hasXDistance = true;
+                    }
+                    if (distance.hasY) {
+                        yDistance += distance.y;
+                        hasYDistance = true;
+                    }
+                    break; // Use first position property found (same as cross-property mode)
+                }
+            }
+        }
         
         return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|" + property.propertyIndex + "|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0");
         
