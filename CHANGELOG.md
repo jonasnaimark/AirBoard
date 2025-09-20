@@ -10,9 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
-## [4.16.50] - 2025-09-20 🚀 **STAGGER PERFORMANCE OPTIMIZATION**
-### 🚀 Major Performance Improvement
+## [4.16.50] - 2025-09-20 🚀 **CROSS-PROPERTY ENHANCEMENTS & STAGGER OPTIMIZATION**
+### ✨ Major Improvements
 - **60% Faster Stagger Operations**: Applied same performance optimization that improved delay nudging
+- **Fixed Cross-Property Duration Reading**: Now shows total time span across ALL selected keyframes instead of individual properties
+- **Enhanced Position Distance Detection**: Works on Shape layer properties, not just Transform Position
+
+### 🔧 Technical Improvements  
+- **Robust Property Detection**: Universal selectedProperties API usage for future-proof keyframe detection
+- **Improved Duration Calculation**: Total span calculation for frame-based stretch operations
+- **Universal Coverage**: Position distance works for Transform, Shape Contents, Effects, and any position-type properties
 - **Eliminated Extra Selection Steps**: Fixed select/deselect/reselect cycles that caused visual flicker
 - **Marker Processing Reordered**: Markers now move BEFORE keyframe operations (same as delay nudging)
 - **Single Selection Pass**: Only one selection operation at end instead of multiple cycles
