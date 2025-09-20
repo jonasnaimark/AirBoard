@@ -450,114 +450,55 @@ function readKeyframesSmart() {
                 }
             }
             
-            // Calculate durations for each property in cross-property mode
-            var propertyDurations = [];
+            // Calculate total duration span across ALL selected keyframes
             var resultDurationMs = 0, resultDurationFrames = 0;
+            var earliestTime = Infinity;
+            var latestTime = -Infinity;
             
-            // First, calculate duration for each property
+            DEBUG_JSX.log("Calculating total duration span across all selected keyframes");
+            
+            // Find the earliest and latest times across ALL selected keyframes on ALL properties
             for (var k = 0; k < propertyTimes.length; k++) {
                 var propInfo = propertyTimes[k];
                 var prop = propInfo.property;
                 
-                // Collect ALL selected keyframes for this property
-                var allSelectedKeys = [];
+                // Get all selected keyframe times for this property
+                var selectedTimes = [];
                 for (var j = 1; j <= prop.numKeys; j++) {
                     if (prop.keySelected(j)) {
-                        allSelectedKeys.push(j);
+                        selectedTimes.push(prop.keyTime(j));
                     }
                 }
                 
-                if (allSelectedKeys.length >= 2) {
-                    // Calculate duration by finding time span of selected keyframes
-                    var times = [];
-                    for (var j = 0; j < allSelectedKeys.length; j++) {
-                        times.push(prop.keyTime(allSelectedKeys[j]));
+                if (selectedTimes.length > 0) {
+                    // Sort times to get first and last for this property
+                    selectedTimes.sort(function(a, b) { return a - b; });
+                    var propFirstTime = selectedTimes[0];
+                    var propLastTime = selectedTimes[selectedTimes.length - 1];
+                    
+                    DEBUG_JSX.log("Property " + propInfo.name + ": first=" + (propFirstTime * 1000).toFixed(3) + "ms, last=" + (propLastTime * 1000).toFixed(3) + "ms");
+                    
+                    // Update global earliest and latest across all properties
+                    if (propFirstTime < earliestTime) {
+                        earliestTime = propFirstTime;
                     }
-                    times.sort(function(a, b) { return a - b; });
-                    var durationSeconds = times[times.length - 1] - times[0];
-                    var durationMs = roundMs(durationSeconds);
-                    propertyDurations.push(durationMs);
-                    DEBUG_JSX.log("Property " + propInfo.name + " duration: " + durationMs + "ms");
+                    if (propLastTime > latestTime) {
+                        latestTime = propLastTime;
+                    }
                 }
             }
             
-            // Check if all properties have the same duration
-            if (propertyDurations.length > 0) {
-                var allSameDuration = true;
-                var firstDuration = propertyDurations[0];
-                for (var k = 1; k < propertyDurations.length; k++) {
-                    if (Math.abs(propertyDurations[k] - firstDuration) > 1) { // 1ms tolerance
-                        allSameDuration = false;
-                        break;
-                    }
-                }
-                
-                if (allSameDuration) {
-                    resultDurationMs = firstDuration;
-                    resultDurationFrames = Math.round((resultDurationMs / 1000) * frameRate);
-                    DEBUG_JSX.log("All properties have same duration: " + resultDurationMs + "ms");
-                } else {
-                    // Calculate total duration span from first to last keyframe across all properties
-                    var earliestTime = Infinity;
-                    var latestTime = -Infinity;
-                    
-                    // Group propertyTimes by property to find first and last keyframes for each property
-                    var propertyGroups = {};
-                    for (var k = 0; k < propertyTimes.length; k++) {
-                        var propInfo = propertyTimes[k];
-                        var propKey = propInfo.name + "_" + propInfo.layer.index; // Unique key per property per layer
-                        
-                        if (!propertyGroups[propKey]) {
-                            propertyGroups[propKey] = {
-                                property: propInfo.property,
-                                times: []
-                            };
-                        }
-                        propertyGroups[propKey].times.push(propInfo.time);
-                    }
-                    
-                    // For each property group, find the earliest and latest selected keyframe times
-                    for (var propKey in propertyGroups) {
-                        var group = propertyGroups[propKey];
-                        var prop = group.property;
-                        var selectedTimes = [];
-                        
-                        // Get all selected keyframe times for this property
-                        for (var j = 1; j <= prop.numKeys; j++) {
-                            if (prop.keySelected(j)) {
-                                selectedTimes.push(prop.keyTime(j));
-                            }
-                        }
-                        
-                        if (selectedTimes.length > 0) {
-                            // Sort times to get first and last
-                            selectedTimes.sort(function(a, b) { return a - b; });
-                            var propFirstTime = selectedTimes[0];
-                            var propLastTime = selectedTimes[selectedTimes.length - 1];
-                            
-                            // Update global earliest and latest
-                            if (propFirstTime < earliestTime) {
-                                earliestTime = propFirstTime;
-                            }
-                            if (propLastTime > latestTime) {
-                                latestTime = propLastTime;
-                            }
-                        }
-                    }
-                    
-                    // Check if we found valid times
-                    if (earliestTime !== Infinity && latestTime !== -Infinity) {
-                        var totalSpanSeconds = latestTime - earliestTime;
-                        resultDurationMs = roundMs(totalSpanSeconds);
-                        resultDurationFrames = Math.round(totalSpanSeconds * frameRate);
-                        DEBUG_JSX.log("Properties have different durations, total span: " + resultDurationMs + "ms (from " + (earliestTime * 1000) + "ms to " + (latestTime * 1000) + "ms)");
-                    } else {
-                        // Fallback if we couldn't find valid times
-                        resultDurationMs = -1;
-                        resultDurationFrames = -1;
-                        DEBUG_JSX.log("Could not calculate total span, using Multiple");
-                    }
-                }
+            // Calculate total duration from first to last keyframe across all properties
+            if (earliestTime !== Infinity && latestTime !== -Infinity) {
+                var totalSpanSeconds = latestTime - earliestTime;
+                resultDurationMs = roundMs(totalSpanSeconds);
+                resultDurationFrames = Math.round(totalSpanSeconds * frameRate);
+                DEBUG_JSX.log("Total duration span: " + resultDurationMs + "ms (from " + (earliestTime * 1000).toFixed(3) + "ms to " + (latestTime * 1000).toFixed(3) + "ms)");
+            } else {
+                // Fallback if we couldn't find valid times
+                resultDurationMs = -1;
+                resultDurationFrames = -1;
+                DEBUG_JSX.log("Could not calculate total span, using -1");
             }
             
             // Calculate position distances from the propertyTimes array
@@ -1212,68 +1153,40 @@ function readKeyframesDuration() {
             return null;
         }
         
-        // Function to recursively search for selected keyframes in a property group
-        function searchPropertyGroup(propGroup) {
-            for (var i = 1; i <= propGroup.numProperties; i++) {
-                var prop = propGroup.property(i);
-                
-                // Check if this property has selected keyframes
-                var result = findSelectedKeyframes(prop);
-                if (result) {
-                    return result;
-                }
-                
-                // If it's a property group, search recursively
-                if (prop.propertyType === PropertyType.INDEXED_GROUP || 
-                    prop.propertyType === PropertyType.NAMED_GROUP) {
-                    var groupResult = searchPropertyGroup(prop);
-                    if (groupResult) {
-                        return groupResult;
-                    }
-                }
+        // ROBUST APPROACH: Use selectedProperties API to find ANY selected property with keyframes
+        // This automatically works for Transform, Effects, Contents, Masks, Text, Audio, or any future property types
+        var keyframeData = null;
+        var selectedProps = layer.selectedProperties;
+        
+        DEBUG_JSX.log("Checking " + selectedProps.length + " selected properties for keyframes");
+        
+        for (var j = 0; j < selectedProps.length; j++) {
+            var prop = selectedProps[j];
+            
+            // Skip invalid properties
+            if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+            if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+            
+            // Check for selected keyframes
+            var result = findSelectedKeyframes(prop);
+            if (result) {
+                keyframeData = result;
+                DEBUG_JSX.log("Found selected keyframes on: " + prop.name);
+                break; // Use first property with selected keyframes
             }
-            return null;
         }
         
-        // Search through all layer properties for selected keyframes
-        var keyframeData = null;
-        
-        // Check transform properties first
-        keyframeData = searchPropertyGroup(layer.transform);
-        
-        // If no selected keyframes in transform, check special layer properties
+        // Fallback: Also check Time Remap explicitly (sometimes not in selectedProperties)
         if (!keyframeData) {
-            // Check Time Remap property specifically
             try {
-                if (layer.timeRemapEnabled && layer.timeRemap) {
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
                     keyframeData = findSelectedKeyframes(layer.timeRemap);
+                    if (keyframeData) {
+                        DEBUG_JSX.log("Found selected keyframes on Time Remap (fallback check)");
+                    }
                 }
             } catch(e) {
                 // Time remap might not be available
-            }
-        }
-        
-        // Check effects
-        if (!keyframeData && layer.effect && layer.effect.numProperties > 0) {
-            keyframeData = searchPropertyGroup(layer.effect);
-        }
-        
-        // Check mask properties
-        if (!keyframeData) {
-            if (layer.mask && layer.mask.numProperties > 0) {
-                keyframeData = searchPropertyGroup(layer.mask);
-            }
-        }
-        
-        // Check other layer properties like audio levels, layer styles, etc.
-        if (!keyframeData) {
-            try {
-                // Check audio levels if it's an audio layer
-                if (layer.hasAudio && layer.audioLevels) {
-                    keyframeData = findSelectedKeyframes(layer.audioLevels);
-                }
-            } catch(e) {
-                // Audio levels might not be available
             }
         }
         
@@ -1847,6 +1760,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
         var totalDuration = 0;
         var processedAny = false;
         var allProcessedSelections = []; // Collect ALL selections for final restoration
+        var allProcessedKeyframeTimes = []; // Track all keyframe times for total span calculation
         
         DEBUG_JSX.log("🎬 Found " + selectedLayers.length + " selected layers");
         
@@ -2063,6 +1977,11 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                             }
                         }
                         
+                        // Track all Time Remap keyframe times for total span calculation
+                        for (var t = 0; t < newKeyTimes.length; t++) {
+                            allProcessedKeyframeTimes.push(newKeyTimes[t]);
+                        }
+                        
                         // COLLECT selections for GLOBAL restoration instead of selecting immediately
                         // This ensures Time Remap selection is preserved along with other properties
                         DEBUG_JSX.log("🎬 COLLECTING " + processedIndices.length + " Time Remap keyframe selections for layer " + cached.layerName);
@@ -2096,6 +2015,9 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         // Apply to new duration, maintaining start position
                         var newTime = firstTime + relativePosition * newDuration;
                         var newIdx = prop.addKey(newTime);
+                        
+                        // Track keyframe time for total span calculation
+                        allProcessedKeyframeTimes.push(newTime);
                         
                         try {
                             prop.setValueAtKey(newIdx, data.value);
@@ -2241,15 +2163,31 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
         // because that can cause After Effects to auto-select ALL keyframes on the property
         // We've already selected the specific keyframes we want above
         
-        // Return success with new duration
-        var newDurationMs = roundMs(totalDuration);
-        var newDurationFrames = Math.round(totalDuration * frameRate);
+        // Calculate total span duration from all processed keyframes (like cross-property mode does)
+        var finalDurationMs = 0;
+        var finalDurationFrames = 0;
         
-        DEBUG_JSX.log("🎬 Frame-based duration stretch completed: " + newDurationMs + "ms / " + newDurationFrames + "f");
+        if (allProcessedKeyframeTimes.length > 0) {
+            // Find earliest and latest times across all processed keyframes
+            var earliestTime = Math.min.apply(Math, allProcessedKeyframeTimes);
+            var latestTime = Math.max.apply(Math, allProcessedKeyframeTimes);
+            var totalSpanSeconds = latestTime - earliestTime;
+            
+            finalDurationMs = roundMs(totalSpanSeconds);
+            finalDurationFrames = Math.round(totalSpanSeconds * frameRate);
+            
+            DEBUG_JSX.log("🎬 Total span calculation: " + allProcessedKeyframeTimes.length + " keyframes from " + (earliestTime * 1000).toFixed(1) + "ms to " + (latestTime * 1000).toFixed(1) + "ms = " + finalDurationMs + "ms span");
+        } else {
+            // Fallback to old approach if no keyframe times were tracked
+            finalDurationMs = roundMs(totalDuration);
+            finalDurationFrames = Math.round(totalDuration * frameRate);
+        }
+        
+        DEBUG_JSX.log("🎬 Frame-based duration stretch completed: " + finalDurationMs + "ms / " + finalDurationFrames + "f");
         
         // Include debug messages in result
         var debugMessages = DEBUG_JSX.getMessages();
-        return "success|" + newDurationMs + "|" + newDurationFrames + "|" + debugMessages.join("|");
+        return "success|" + finalDurationMs + "|" + finalDurationFrames + "|" + debugMessages.join("|");
         
     } catch(e) {
         app.endUndoGroup();
@@ -9383,409 +9321,6 @@ function getPropertyIndexInGroup(propertyName, allKeyframes) {
 }
 
 
-// Same-layer keyframe staggering - for when multiple keyframes are selected on a single layer
-// Uses the same robust keyframe recreation as delay nudging system
-function applySameLayerKeyframeStagger(layerGroup, direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
-    try {
-        // Clear debug messages for this operation
-        DEBUG_JSX.clear();
-        DEBUG_JSX.log("🎯 Same-Layer Stagger: " + staggerFrames + " frames (" + staggerMs + "ms) on layer " + layerGroup.layer.name);
-        DEBUG_JSX.log("Stagger direction: " + direction + " (positive=forward, negative=backward)");
-        
-        // Collect all keyframes from all properties on this layer
-        var allKeyframes = [];
-        var seenKeyframes = {}; // Track duplicates
-        
-        for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
-            var propData = layerGroup.keyframes[propIdx];
-            var prop = propData.property;
-            
-            for (var k = 0; k < propData.selectedKeys.length; k++) {
-                var keyIndex = propData.selectedKeys[k];
-                try {
-                    var keyTime = prop.keyTime(keyIndex);
-                    
-                    // CRITICAL: Create unique identifier to prevent duplicate Time Remap processing
-                    var uniquePropPath = getFullPropertyPath(prop);
-                    var keyframeId = uniquePropPath + "_idx" + keyIndex + "_time" + keyTime.toFixed(6);
-                    
-                    // Skip if we've already seen this exact keyframe
-                    if (seenKeyframes[keyframeId]) {
-                        DEBUG_JSX.log("DUPLICATE SKIP: Already collected keyframe " + keyIndex + " at " + keyTime + "s from " + uniquePropPath);
-                        continue;
-                    }
-                    
-                    seenKeyframes[keyframeId] = true;
-                    allKeyframes.push({
-                        property: prop,
-                        propertyName: propData.propertyName,
-                        index: keyIndex,
-                        time: keyTime
-                    });
-                    DEBUG_JSX.log("Collected keyframe " + keyIndex + " at " + keyTime + "s from " + propData.propertyName);
-                } catch(keyError) {
-                    DEBUG_JSX.log("Failed to collect keyframe " + keyIndex + " from " + propData.propertyName + ": " + keyError.toString());
-                }
-            }
-        }
-        
-        if (allKeyframes.length === 0) {
-            return "error|No keyframes to stagger on layer";
-        }
-        
-        DEBUG_JSX.log("Collected " + allKeyframes.length + " unique keyframes after deduplication");
-        
-        // Group keyframes by property FIRST, then stagger properties (not individual keyframes)
-        var propertiesByOrder = {};
-        var propertyOrder = [];
-        
-        for (var i = 0; i < allKeyframes.length; i++) {
-            var keyframe = allKeyframes[i];
-            // CRITICAL FIX: Use unique property path instead of just propertyName
-            // This distinguishes between "Contents > Rectangle 1 > Size" and "Contents > Rectangle 2 > Size"
-            var uniquePropPath = getFullPropertyPath(keyframe.property);
-            
-            if (!propertiesByOrder[uniquePropPath]) {
-                propertiesByOrder[uniquePropPath] = [];
-                propertyOrder.push(uniquePropPath);
-            }
-            propertiesByOrder[uniquePropPath].push(keyframe);
-            
-            DEBUG_JSX.log("Grouped keyframe under unique path: " + uniquePropPath);
-        }
-        
-        // SIMPLE VISUAL ORDER SORTING - Just use the order keyframes were encountered
-        // This reflects the actual visual order in the timeline
-        // For bottom-to-top stagger, reverse the natural encounter order
-        if (!isTopToBottom) {
-            propertyOrder.reverse();
-            DEBUG_JSX.log("Reversed property order for bottom-to-top stagger");
-        }
-        DEBUG_JSX.log("Using simple visual order (keyframe encounter order) for stagger");
-        
-        DEBUG_JSX.log("Found " + propertyOrder.length + " properties to stagger: " + propertyOrder.join(", "));
-        DEBUG_JSX.log("Stagger order: " + (isTopToBottom ? "top-to-bottom" : "bottom-to-top"));
-        
-        // Apply stagger offsets using EXACT same approach as delay nudging
-        // Note: Undo group already created by main applyStagger function
-        
-        var staggerOffsetSeconds = staggerMs / 1000.0;
-        DEBUG_JSX.log("Stagger offset per property: " + staggerOffsetSeconds + "s (" + staggerMs + "ms / " + staggerFrames + " frames)");
-        
-        // Create stagger time lookup - stagger PROPERTIES, not individual keyframes
-        var staggerTimes = {};
-        for (var propIndex = 0; propIndex < propertyOrder.length; propIndex++) {
-            var uniquePropPath = propertyOrder[propIndex];
-            var keyframes = propertiesByOrder[uniquePropPath];
-            
-            // Calculate stagger offset for this PROPERTY
-            var propertyTimeOffset;
-            if (direction > 0) {
-                // Positive direction: first property gets 0 offset, later properties get more
-                propertyTimeOffset = propIndex * staggerOffsetSeconds;
-            } else {
-                // Negative direction: first property stays in place (0 offset), 
-                // later properties get negative offset (move backward)
-                propertyTimeOffset = -propIndex * staggerOffsetSeconds;
-            }
-            
-            // Apply the SAME offset to ALL keyframes in this property
-            for (var k = 0; k < keyframes.length; k++) {
-                var keyframe = keyframes[k];
-                var newTime = Math.max(0, keyframe.time + propertyTimeOffset);
-                
-                // Create unique key for this specific keyframe using full property path
-                var keyframeKey = uniquePropPath + "_idx" + keyframe.index;
-                staggerTimes[keyframeKey] = newTime;
-                
-                DEBUG_JSX.log("Property " + propIndex + " (" + uniquePropPath + ") keyframe " + keyframe.index + ": " + keyframe.time + "s → " + newTime + "s (offset: " + (propertyTimeOffset >= 0 ? "+" : "") + propertyTimeOffset + "s)");
-            }
-        }
-        
-        // Group keyframes by property (EXACT same as delay nudging)
-        var propertyMap = {};
-        for (var i = 0; i < allKeyframes.length; i++) {
-            var keyframe = allKeyframes[i];
-            var uniquePropKey = layerGroup.layer.name + ":" + getFullPropertyPath(keyframe.property); // Use unique property path
-            
-            if (!propertyMap[uniquePropKey]) {
-                propertyMap[uniquePropKey] = {
-                    property: keyframe.property,
-                    keyframes: [],
-                    selectedKeys: []
-                };
-            }
-            
-            propertyMap[uniquePropKey].keyframes.push({
-                index: keyframe.index,
-                time: keyframe.time
-            });
-            propertyMap[uniquePropKey].selectedKeys.push(keyframe.index);
-        }
-        
-        // Process each property using EXACT delay nudging pattern
-        var allProcessedProperties = [];
-        
-        for (var uniquePropKey in propertyMap) {
-            var propData = propertyMap[uniquePropKey];
-            var prop = propData.property;
-            
-            DEBUG_JSX.log("Processing property: " + uniquePropKey + " with " + propData.selectedKeys.length + " keyframes");
-            
-            // Collect all keyframe data FIRST (same as delay nudging)
-            var keyframesToMove = [];
-            for (var k = 0; k < propData.selectedKeys.length; k++) {
-                var keyIndex = propData.selectedKeys[k];
-                
-                // Find the stagger time for this specific keyframe
-                // CRITICAL: Must match the key format used when storing stagger times
-                var originalPropPath = getFullPropertyPath(prop);
-                var keyframeKey = originalPropPath + "_idx" + keyIndex;
-                var newTime = staggerTimes[keyframeKey];
-                
-                if (newTime === undefined) {
-                    DEBUG_JSX.log("❌ STAGGER TIME LOOKUP FAILED:");
-                    DEBUG_JSX.log("  Looking for key: " + keyframeKey);
-                    DEBUG_JSX.log("  Available keys: " + Object.keys(staggerTimes).join(", "));
-                    newTime = prop.keyTime(keyIndex); // Fallback to original time
-                } else {
-                    DEBUG_JSX.log("✅ Found stagger time: " + keyframeKey + " → " + newTime + "s");
-                }
-                
-                try {
-                    var keyData = {
-                        oldIndex: keyIndex,
-                        time: prop.keyTime(keyIndex),
-                        newTime: newTime,
-                        value: prop.keyValue(keyIndex),
-                        inInterp: prop.keyInInterpolationType(keyIndex),
-                        outInterp: prop.keyOutInterpolationType(keyIndex),
-                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
-                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
-                        label: prop.keyLabel(keyIndex)
-                    };
-                    
-                    // CRITICAL: Preserve temporal ease (same as delay nudging)
-                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER || 
-                        keyData.outInterp === KeyframeInterpolationType.BEZIER) {
-                        try {
-                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
-                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
-                        } catch(e) {
-                            // Temporal ease might not be available
-                        }
-                    }
-                    
-                    // CRITICAL: Preserve spatial properties (same as delay nudging)
-                    // Only access spatial properties if prop.isSpatial is true AND the access doesn't fail
-                    if (prop.isSpatial) {
-                        try {
-                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
-                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
-                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
-                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
-                            DEBUG_JSX.log("Successfully collected spatial properties for " + getFullPropertyPath(prop));
-                        } catch(spatialError) {
-                            // Spatial properties might not be available even when isSpatial is true
-                            DEBUG_JSX.log("Spatial property access failed for " + getFullPropertyPath(prop) + ": " + spatialError.toString());
-                        }
-                    }
-                    
-                    keyframesToMove.push(keyData);
-                    
-                } catch(e) {
-                    DEBUG_JSX.log("Failed to collect keyframe " + keyIndex + " from " + getFullPropertyPath(prop) + ": " + e.toString());
-                    // Don't re-throw - continue processing other keyframes
-                    continue;
-                }
-            }
-            
-            // CRITICAL: Check if this is Time Remap for special handling
-            var isTimeRemap = false;
-            try {
-                isTimeRemap = (prop.name === "Time Remap" || prop.matchName === "ADBE Time Remapping");
-            } catch(e) {
-                // Continue with normal handling
-            }
-            
-            var newSelIndices = [];
-            
-            if (isTimeRemap) {
-                // TIME REMAP: Special handling to avoid deletion
-                DEBUG_JSX.log("TIME REMAP DETECTED: Using special handling for " + keyframesToMove.length + " keyframes");
-                
-                // Verify keyframes exist at expected times
-                var actualKeyframesToMove = [];
-                for (var k = 0; k < keyframesToMove.length; k++) {
-                    var data = keyframesToMove[k];
-                    var foundAtOldTime = false;
-                    for (var j = 1; j <= prop.numKeys; j++) {
-                        if (Math.abs(prop.keyTime(j) - data.time) < 0.001) {
-                            foundAtOldTime = true;
-                            break;
-                        }
-                    }
-                    if (foundAtOldTime) {
-                        actualKeyframesToMove.push(data);
-                        DEBUG_JSX.log("Verified Time Remap keyframe at " + data.time + "s");
-                    } else {
-                        DEBUG_JSX.log("⚠️ Time Remap keyframe at " + data.time + "s not found, skipping");
-                    }
-                }
-                
-                // Add new keyframes first using setValueAtTime
-                for (var k = 0; k < actualKeyframesToMove.length; k++) {
-                    var data = actualKeyframesToMove[k];
-                    try {
-                        prop.setValueAtTime(data.newTime, data.value);
-                        DEBUG_JSX.log("Added Time Remap keyframe at " + data.newTime + "s");
-                    } catch(e) {
-                        DEBUG_JSX.log("⚠️ Failed to add Time Remap keyframe: " + e.toString());
-                    }
-                }
-                
-                // Remove old keyframes carefully
-                var oldKeyIndicesToRemove = [];
-                for (var k = 0; k < actualKeyframesToMove.length; k++) {
-                    var oldTime = actualKeyframesToMove[k].time;
-                    for (var j = prop.numKeys; j >= 1; j--) {
-                        var keyTime = prop.keyTime(j);
-                        if (Math.abs(keyTime - oldTime) < 0.001) {
-                            // Make sure this isn't a new keyframe we just created
-                            var isNewKey = false;
-                            for (var n = 0; n < actualKeyframesToMove.length; n++) {
-                                if (Math.abs(keyTime - actualKeyframesToMove[n].newTime) < 0.001) {
-                                    isNewKey = true;
-                                    break;
-                                }
-                            }
-                            if (!isNewKey) {
-                                oldKeyIndicesToRemove.push(j);
-                                DEBUG_JSX.log("Marked old Time Remap keyframe at index " + j + " for removal");
-                            }
-                        }
-                    }
-                }
-                
-                // Remove in descending order
-                oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
-                for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
-                    try {
-                        prop.removeKey(oldKeyIndicesToRemove[k]);
-                        DEBUG_JSX.log("Removed old Time Remap keyframe at index " + oldKeyIndicesToRemove[k]);
-                    } catch(e) {
-                        DEBUG_JSX.log("⚠️ Failed to remove old Time Remap keyframe: " + e.toString());
-                    }
-                }
-                
-                // Find new indices for selection
-                for (var k = 0; k < actualKeyframesToMove.length; k++) {
-                    var targetTime = actualKeyframesToMove[k].newTime;
-                    for (var j = 1; j <= prop.numKeys; j++) {
-                        if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
-                            newSelIndices.push(j);
-                            DEBUG_JSX.log("Found new Time Remap keyframe at index " + j + " for selection");
-                            break;
-                        }
-                    }
-                }
-                
-            } else {
-                // NORMAL PROPERTIES: Standard keyframe recreation
-                DEBUG_JSX.log("NORMAL PROPERTY: Using standard keyframe recreation for " + keyframesToMove.length + " keyframes");
-                
-                // Remove old keyframes in reverse order
-                var indices = [];
-                for (var k = 0; k < keyframesToMove.length; k++) {
-                    indices.push(keyframesToMove[k].oldIndex);
-                }
-                indices.sort(function(a, b) { return b - a; }); // Descending order
-                
-                DEBUG_JSX.log("Removing " + indices.length + " keyframes in reverse order: " + indices.join(", "));
-                for (var k = 0; k < indices.length; k++) {
-                    prop.removeKey(indices[k]);
-                }
-                
-                // Recreate keyframes with new times
-                for (var k = 0; k < keyframesToMove.length; k++) {
-                    var keyData = keyframesToMove[k];
-                    var newIdx = prop.addKey(keyData.newTime);
-                    
-                    // Restore all properties
-                    prop.setValueAtKey(newIdx, keyData.value);
-                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
-                    
-                    if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
-                        try {
-                            prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
-                        } catch(e) {
-                            // Some properties might not support temporal ease
-                        }
-                    }
-                    
-                    prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
-                    prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
-                    
-                    // CRITICAL: Restore spatial properties
-                    if (keyData.spatialContinuous !== undefined) {
-                        prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
-                        prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
-                        prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
-                    }
-                    
-                    // CRITICAL: Restore keyframe color label
-                    if (keyData.label !== undefined) {
-                        prop.setLabelAtKey(newIdx, keyData.label);
-                    }
-                    
-                    newSelIndices.push(newIdx);
-                    DEBUG_JSX.log("Recreated keyframe at index " + newIdx + " with time " + keyData.newTime + "s");
-                }
-            }
-            
-            allProcessedProperties.push({
-                property: prop,
-                propertyName: uniquePropKey,
-                newSelIndices: newSelIndices
-            });
-        }
-        
-        // Selection restoration (same pattern as delay nudging)
-        DEBUG_JSX.log("SAME-LAYER STAGGER: Starting selection restoration for " + allProcessedProperties.length + " properties");
-        try {
-            for (var p = 0; p < allProcessedProperties.length; p++) {
-                var propData = allProcessedProperties[p];
-                var prop = propData.property;
-                
-                // Deselect all keyframes first
-                for (var j = 1; j <= prop.numKeys; j++) {
-                    prop.setSelectedAtKey(j, false);
-                }
-                
-                // Select new keyframes
-                for (var k = 0; k < propData.newSelIndices.length; k++) {
-                    var idx = propData.newSelIndices[k];
-                    if (idx > 0 && idx <= prop.numKeys) {
-                        prop.setSelectedAtKey(idx, true);
-                        DEBUG_JSX.log("SAME-LAYER STAGGER: Restored selection for keyframe " + idx + " on " + propData.propertyName);
-                    }
-                }
-            }
-            DEBUG_JSX.log("SAME-LAYER STAGGER: Selection restoration completed successfully");
-        } catch(selectionError) {
-            DEBUG_JSX.log("SAME-LAYER STAGGER: Selection restoration error: " + selectionError.toString());
-        }
-        
-        // Include debug messages in result for debug panel
-        var debugMessages = DEBUG_JSX.getMessages();
-        return "success|Applied same-layer stagger " + Math.round(staggerMs) + "ms/" + Math.round(staggerFrames) + "f to " + allKeyframes.length + " keyframes|" + debugMessages.join("|");
-        
-    } catch(e) {
-        DEBUG_JSX.error("Same-layer keyframe stagger failed", e);
-        var debugMessages = DEBUG_JSX.getMessages();
-        return "error|Same-layer keyframe stagger failed: " + e.toString() + "|" + debugMessages.join("|");
-    }
-}
 
 // Apply stagger to selected keyframes (grouped by layer)
 function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
@@ -9938,11 +9473,10 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         
         DEBUG_JSX.log("Found " + layerGroups.length + " layer groups with selected keyframes");
         
-        // NEW: Handle same-layer staggering when only one layer has selected keyframes
+        // NEW: Require multiple layers for staggering
         if (layerGroups.length === 1) {
-            DEBUG_JSX.log("Single layer detected - applying same-layer keyframe staggering");
-            DEBUG_JSX.log("Layer: " + layerGroups[0].layer.name + " has " + layerGroups[0].keyframes.length + " properties with keyframes");
-            return applySameLayerKeyframeStagger(layerGroups[0], direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
+            DEBUG_JSX.log("Single layer detected - stagger requires multiple layers");
+            return "error|Select > 1 Layer (single layer detected)";
         }
         
         // Skip cross-property staggering - only stagger between different layers
