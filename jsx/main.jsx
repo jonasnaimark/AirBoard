@@ -10160,6 +10160,34 @@ function moveCompositionToFolder(comp, deviceType) {
         // Move the composition to the target folder
         if (currentFolder) {
             comp.parentFolder = currentFolder;
+            
+            // Expand all folders in the hierarchy to show the composition
+            var foldersToExpand = [];
+            var tempFolder = currentFolder;
+            
+            // Collect all parent folders
+            while (tempFolder) {
+                foldersToExpand.unshift(tempFolder); // Add to beginning to expand from root down
+                tempFolder = tempFolder.parentFolder;
+            }
+            
+            // Expand only the specific folders in our hierarchy, then select the composition
+            for (var e = 0; e < foldersToExpand.length; e++) {
+                try {
+                    foldersToExpand[e].selected = true; // This expands the folder
+                    foldersToExpand[e].selected = false; // This deselects it but keeps it expanded
+                } catch(expandError) {
+                    $.writeln("Could not expand folder " + foldersToExpand[e].name + ": " + expandError.toString());
+                }
+            }
+            
+            // Finally, select the composition itself to highlight it in the Project panel
+            try {
+                comp.selected = true;
+                $.writeln("Composition '" + comp.name + "' moved to " + targetFolderPath + " and selected in Project panel");
+            } catch(selectError) {
+                $.writeln("Could not select composition: " + selectError.toString());
+            }
         }
         
     } catch(e) {
