@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.51] - 2025-09-28 🎯 **PROJECT PANEL FOLDER EXPANSION**
+### ✨ New Features
+- **Automatic Folder Expansion**: Device compositions now automatically expand their parent folder hierarchy in Project panel
+- **Smart Composition Selection**: Newly created compositions are automatically selected and highlighted for immediate visibility
+- **Surgical Folder Management**: Only expands target folders (01 - Compositions > Native/Desktop) without affecting other project folders
+
+### 🎨 UI/UX Improvements
+- **Eliminated Manual Navigation**: No more hunting through collapsed folders to find newly created compositions
+- **Clear Visual Feedback**: New compositions immediately visible and selected in Project panel after creation
+- **Non-Intrusive Expansion**: Preserves existing folder states while revealing only the relevant hierarchy
+
+### 🔧 Technical Improvements
+- **Enhanced moveCompositionToFolder()**: Added automatic folder hierarchy expansion and composition selection
+- **Folder State Management**: Precise control over folder expansion without affecting unrelated project organization
+- **Selection Management**: Smart selection handling that highlights new compositions while preserving workflow
+
 ## [4.16.50] - 2025-09-20 🚀 **CROSS-PROPERTY ENHANCEMENTS & STAGGER OPTIMIZATION**
 ### ✨ Major Improvements
 - **60% Faster Stagger Operations**: Applied same performance optimization that improved delay nudging
