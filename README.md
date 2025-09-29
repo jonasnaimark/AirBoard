@@ -17,13 +17,13 @@
 
 ## 🚀 What It Does
 
-**Keyframe Nudger**: Precise control over keyframe timing, duration, staggers, and position with smart snapping and multi-property support
+**Keyframe Nudger**: Precise control over keyframe timing, duration, staggers, and position with smart snapping
 
 **Device Templates**: Auto-generate iPhone and desktop compositions with proper scaling
 
 **Gesture Library**: Pre-built tap, click, and interaction animations
 
-**Effects**: Squircles, shadows, materials, shimmers, and UI elements
+**Effects**: Squircles, shadows, materials, and shimmers
 
 **Components**: Loaders, counters, logos & more to come
 
