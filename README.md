@@ -31,4 +31,4 @@
 
 ---
 
-[All Releases](https://github.com/jonasnaimark/AirBoard/releases) • [Documentation](KEYFRAME_SYSTEM_SUMMARY.md) • [Changelog](CHANGELOG.md)
+[All Releases](https://github.com/jonasnaimark/AirBoard/releases) • [Documentation](docs/) • [Changelog](docs/CHANGELOG.md)
