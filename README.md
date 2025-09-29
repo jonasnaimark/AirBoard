@@ -23,7 +23,7 @@
 
 **Gesture Library**: Pre-built tap, click, and interaction animations
 
-**Effects**: Squircles, shadows, materials, shimmers, and UI elements
+**Effects**: Squircles, shadows, materials, shimmers
 
 **Components**: Loaders, counters, logos & more to come
 
