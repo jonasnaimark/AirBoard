@@ -10751,7 +10751,14 @@ function createDeviceComposition(deviceType, multiplier) {
                         { name: "zArchive" }
                     ]
                 },
-                { name: "02 - Precomps" },
+                {
+                    name: "02 - Precomps",
+                    subfolders: [
+                        { name: "Desktop" },
+                        { name: "Native" },
+                        { name: "zArchive" }
+                    ]
+                },
                 {
                     name: "03 - Assets",
                     subfolders: [
@@ -12940,7 +12947,7 @@ function createAEFoldersFromPanel() {
         // Check if the main folders already exist
         var mainFolders = ["01 - Compositions", "02 - Precomps", "03 - Assets"];
         var existingFolders = 0;
-        
+
         for (var i = 1; i <= app.project.items.length; i++) {
             var item = app.project.items[i];
             if (item instanceof FolderItem) {
@@ -12952,12 +12959,9 @@ function createAEFoldersFromPanel() {
                 }
             }
         }
-        
-        // If all 3 main folders exist, show message and return
-        if (existingFolders === mainFolders.length) {
-            alert("AE Folders have already been created");
-            return "already_exists";
-        }
+
+        // Always proceed to create/restore folder structure
+        // This will create missing main folders and restore missing subfolders
         
         // Define the folder structure
         var folderStructure = [
@@ -12981,7 +12985,14 @@ function createAEFoldersFromPanel() {
                     { name: "zArchive" }
                 ]
             },
-            { name: "02 - Precomps" },
+            {
+                name: "02 - Precomps",
+                subfolders: [
+                    { name: "Desktop" },
+                    { name: "Native" },
+                    { name: "zArchive" }
+                ]
+            },
             {
                 name: "03 - Assets",
                 subfolders: [
@@ -12997,8 +13008,13 @@ function createAEFoldersFromPanel() {
         
         // Create the folder structure recursively
         createFolderStructure(app.project, folderStructure);
-        
-        return "success";
+
+        // Provide appropriate feedback message
+        if (existingFolders === mainFolders.length) {
+            return "folders_restored"; // All main folders existed, subfolders may have been restored
+        } else {
+            return "success"; // Some main folders were created
+        }
         
     } catch(e) {
         alert("Error creating AE folder structure: " + e.toString());

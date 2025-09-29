@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.52] - 2025-09-29 📁 **ENHANCED FOLDER STRUCTURE**
+### ✨ New Features
+- **Enhanced Precomps Folder**: Added Desktop, Native, and zArchive subfolders to "02 - Precomps" structure
+- **Missing Subfolder Restoration**: AE Folders button now restores missing subfolders when main folders exist
+- **Complete Folder Structure**: Subfolder deletion is now automatically detected and restored
+
+### 🔧 Technical Improvements
+- **Intelligent Folder Detection**: Enhanced folder creation logic to check and restore any missing subfolders
+- **Consistent Structure Maintenance**: Ensures project folder hierarchy remains complete and organized
+- **Improved User Experience**: No need to manually recreate accidentally deleted subfolders
+
 ## [4.16.51] - 2025-09-28 🎯 **PROJECT PANEL FOLDER EXPANSION**
 ### ✨ New Features
 - **Automatic Folder Expansion**: Device compositions now automatically expand their parent folder hierarchy in Project panel

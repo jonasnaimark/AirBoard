@@ -2090,6 +2090,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         csInterface.evalScript(script, function(result) {
             console.log('AE Folders result:', result);
+
+            // Show appropriate feedback based on result
+            if (result === 'success') {
+                console.log('AE Folders created successfully');
+            } else if (result === 'folders_restored') {
+                console.log('AE Folders checked - missing subfolders restored');
+            } else if (result === 'error') {
+                console.log('Error creating AE folders');
+            }
+
             // Re-enable button
             aeFoldersButton.disabled = false;
         });
