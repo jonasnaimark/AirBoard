@@ -11350,50 +11350,87 @@ function applyFitToShape(mode) {
         var shapeLayer = null;
         var highestShapeIndex = -1;
         var otherLayers = [];
-        
+
         DEBUG_JSX.log("Analyzing selected layers...");
-        
+
         for (var i = 0; i < selectedLayers.length; i++) {
             var layer = selectedLayers[i];
             DEBUG_JSX.log("Layer " + i + ": " + layer.name + " (type: " + (layer instanceof ShapeLayer ? "Shape" : "Other") + ", index: " + layer.index + ")");
-            
+
             if (layer instanceof ShapeLayer) {
-                // Keep track of the shape layer with the highest index (bottom of layer stack)
-                if (layer.index > highestShapeIndex) {
-                    // If we already had a shape layer, add it to otherLayers
-                    if (shapeLayer) {
-                        DEBUG_JSX.log("Moving previous shape layer '" + shapeLayer.name + "' to content layers");
-                        otherLayers.push(shapeLayer);
-                    }
-                    shapeLayer = layer;
-                    highestShapeIndex = layer.index;
-                    DEBUG_JSX.log("Set shape layer to: " + layer.name + " (index: " + layer.index + ")");
-                } else {
-                    // This shape layer has a lower index, treat it as content
-                    DEBUG_JSX.log("Adding shape layer '" + layer.name + "' to content layers (lower index)");
+                // Check if this layer is a mask layer (parented to another shape layer with no track matte)
+                var isMaskLayer = (layer.parent &&
+                                  layer.parent instanceof ShapeLayer &&
+                                  layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE);
+
+                if (isMaskLayer) {
+                    DEBUG_JSX.log("Layer '" + layer.name + "' appears to be a mask layer (parented to '" + layer.parent.name + "'), treating as content layer");
                     otherLayers.push(layer);
+                } else {
+                    // Keep track of the shape layer with the highest index (bottom of layer stack)
+                    if (layer.index > highestShapeIndex) {
+                        // If we already had a shape layer, add it to otherLayers
+                        if (shapeLayer) {
+                            DEBUG_JSX.log("Moving previous shape layer '" + shapeLayer.name + "' to content layers");
+                            otherLayers.push(shapeLayer);
+                        }
+                        shapeLayer = layer;
+                        highestShapeIndex = layer.index;
+                        DEBUG_JSX.log("Set shape layer to: " + layer.name + " (index: " + layer.index + ")");
+                    } else {
+                        // This shape layer has a lower index, treat it as content
+                        DEBUG_JSX.log("Adding shape layer '" + layer.name + "' to content layers (lower index)");
+                        otherLayers.push(layer);
+                    }
                 }
             } else {
                 DEBUG_JSX.log("Adding layer '" + layer.name + "' to content layers");
                 otherLayers.push(layer);
             }
         }
-        
+
+        DEBUG_JSX.log("Layer analysis complete. shapeLayer is: " + (shapeLayer ? shapeLayer.name : "NULL"));
+
         if (!shapeLayer) {
-            DEBUG_JSX.error("No shape layer found in selection");
-            alert("No shape layer found. Please select at least one shape layer.");
-            var debugMessages = DEBUG_JSX.getMessages();
-            return "error|No shape layer|" + debugMessages.join("|");
+            DEBUG_JSX.log("No shape layer found, checking if mask layer was selected...");
+            // Check if user accidentally selected only mask layers
+            var hasMaskLayerInSelection = false;
+            DEBUG_JSX.log("About to loop through " + selectedLayers.length + " selected layers");
+            for (var i = 0; i < selectedLayers.length; i++) {
+                var layer = selectedLayers[i];
+                DEBUG_JSX.log("Checking layer " + i + ": " + layer.name);
+                if (layer instanceof ShapeLayer &&
+                    layer.parent &&
+                    layer.parent instanceof ShapeLayer &&
+                    layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE) {
+                    hasMaskLayerInSelection = true;
+                    DEBUG_JSX.log("Found mask layer: " + layer.name);
+                    break;
+                }
+            }
+            DEBUG_JSX.log("Mask layer detection complete. hasMaskLayerInSelection: " + hasMaskLayerInSelection);
+
+            if (hasMaskLayerInSelection) {
+                DEBUG_JSX.log("Mask layer selected instead of shape layer");
+                alert("Can't Fit to Squircle because you selected the track matte layer. Please select the original Squircle layer instead (not the one with '- Mask' in the name).");
+                var debugMessages = DEBUG_JSX.getMessages();
+                return "error|Mask layer selected|" + debugMessages.join("|");
+            } else {
+                DEBUG_JSX.log("No shape layer found in selection");
+                alert("No shape layer found. Please select at least one shape layer.");
+                var debugMessages = DEBUG_JSX.getMessages();
+                return "error|No shape layer|" + debugMessages.join("|");
+            }
         }
-        
+
         if (otherLayers.length === 0) {
             DEBUG_JSX.error("No content layers found", "Need at least one content layer plus shape layer");
             alert("Please select at least two layers (one shape layer to define the area, and one or more layers for content).");
             var debugMessages = DEBUG_JSX.getMessages();
             return "error|No content layers|" + debugMessages.join("|");
         }
-        
-        DEBUG_JSX.log("Final selection - Shape layer: " + shapeLayer.name + ", Content layers: " + otherLayers.length);
+
+        DEBUG_JSX.log("Final selection - Shape layer: " + (shapeLayer ? shapeLayer.name : "none") + ", Content layers: " + otherLayers.length);
     
     app.beginUndoGroup("Apply Fit: " + mode);
     
@@ -11402,68 +11439,22 @@ function applyFitToShape(mode) {
         shapeLayer.enabled = true;
         
         // Check if there's already an existing mask layer for this shape layer
+        // Mask layer characteristics:
+        // - Parented to the shape layer
+        // - Is a ShapeLayer
+        // - Has NO track matte set (it's being used AS a track matte by other layers)
         var maskLayer = null;
         for (var i = 1; i <= comp.layers.length; i++) {
             var layer = comp.layers[i];
-            // Check if this layer is parented to our shape layer
-            if (layer.parent === shapeLayer) {
-                // Check if this layer is being used as a track matte by any layer
-                var isUsedAsTrackMatte = false;
-                for (var j = 1; j <= comp.layers.length; j++) {
-                    var otherLayer = comp.layers[j];
-                    try {
-                        DEBUG_JSX.log("Checking layer '" + otherLayer.name + "' (index " + otherLayer.index + ") - trackMatteType: " + otherLayer.trackMatteType);
-                        
-                        if (otherLayer.trackMatteType !== TrackMatteType.NO_TRACK_MATTE) {
-                            DEBUG_JSX.log("Layer '" + otherLayer.name + "' uses track matte, checking if it uses '" + layer.name + "'");
-                            
-                            // Simple approach: use setTrackMatte to test if our layer is the matte source
-                            // We'll temporarily try to get the track matte relationship
-                            try {
-                                // Try to check the track matte source directly 
-                                // In After Effects scripting, we can use the layer's trackMatte property if available
-                                
-                                // Method: Check if setting our layer as track matte would be redundant
-                                // This indicates our layer is already the matte source
-                                var currentMatteType = otherLayer.trackMatteType;
-                                
-                                // Temporarily try to set the track matte to see if it's already set
-                                try {
-                                    otherLayer.setTrackMatte(layer, currentMatteType);
-                                    // If this succeeds without error and doesn't change anything, 
-                                    // it likely means our layer was already the matte source
-                                    DEBUG_JSX.log("✓ Track matte test passed - layer '" + layer.name + "' appears to be matte source for '" + otherLayer.name + "'");
-                                    isUsedAsTrackMatte = true;
-                                    break;
-                                } catch(matteError) {
-                                    // If this fails, our layer might not be the current matte source
-                                    DEBUG_JSX.log("Track matte test failed: " + matteError.toString());
-                                    
-                                    // Alternative: check if our layer name appears in error messages when trying to set track matte
-                                    if (matteError.toString().indexOf(layer.name) !== -1) {
-                                        DEBUG_JSX.log("✓ Layer name found in matte error - likely already the matte source");
-                                        isUsedAsTrackMatte = true;
-                                        break;
-                                    }
-                                }
-                                
-                            } catch(e) {
-                                DEBUG_JSX.log("Track matte detection error: " + e.toString());
-                            }
-                        }
-                    } catch(e) {
-                        // Skip if we can't check track matte
-                        DEBUG_JSX.log("Error checking track matte for layer '" + otherLayer.name + "': " + e.toString());
-                    }
-                }
-                
-                DEBUG_JSX.log("Layer '" + layer.name + "' - parent check: " + (layer.parent === shapeLayer) + ", track matte check: " + isUsedAsTrackMatte);
-                
-                if (isUsedAsTrackMatte) {
-                    maskLayer = layer;
-                    DEBUG_JSX.log("Found existing mask layer: " + maskLayer.name);
-                    break;
-                }
+            DEBUG_JSX.log("Checking layer '" + layer.name + "' - parent: " + (layer.parent ? layer.parent.name : "none") + ", isShapeLayer: " + (layer instanceof ShapeLayer) + ", trackMatteType: " + layer.trackMatteType);
+
+            if (layer.parent === shapeLayer &&
+                layer !== shapeLayer &&
+                layer instanceof ShapeLayer &&
+                layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE) {
+                maskLayer = layer;
+                DEBUG_JSX.log("Found existing mask layer: " + maskLayer.name);
+                break;
             }
         }
         
@@ -12245,11 +12236,11 @@ function applyFitToShape(mode) {
         }
         
         DEBUG_JSX.log("FitToShape operation completed successfully");
-        
+
         // Include debug messages in result
         var debugMessages = DEBUG_JSX.getMessages();
         return "success|Applied " + mode + " to " + otherLayers.length + " layers|" + debugMessages.join("|");
-        
+
     } catch (error) {
         DEBUG_JSX.error("FitToShape operation failed", error.toString());
         alert("Error: " + error.toString());

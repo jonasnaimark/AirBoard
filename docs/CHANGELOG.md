@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.53] - 2025-01-10 🔧 **FIT TO SQUIRCLE BUG FIXES**
+### 🐛 Bug Fixes
+- **Fixed Track Matte Detection**: Corrected mask layer identification to prevent modifying unselected layers' track mattes
+- **Fixed Mask Layer Selection**: Prevents mask layers (e.g., "Squircle - Mask") from being incorrectly used as primary shape layers
+- **Improved Error Handling**: Added helpful error alert when user accidentally selects mask layer instead of original Squircle
+
+### 🎨 UX Improvements
+- **Clear Error Messages**: Shows actionable alert: "Can't Fit to Squircle because you selected the track matte layer. Please select the original Squircle layer instead"
+- **Prevents Duplicate Masks**: No longer creates "Squircle - Mask - Mask" when mask layer is accidentally selected
+
+### 🔧 Technical Improvements
+- **Non-Destructive Detection**: Mask layer detection no longer calls `setTrackMatte()` during identification, preventing side effects
+- **Smart Layer Classification**: Identifies mask layers by properties (parented to shape layer + no track matte set) rather than testing track matte relationships
+- **Proper DEBUG_JSX Usage**: Fixed TypeError from incorrect `DEBUG_JSX.error()` calls
+
+### 📚 Documentation
+- **New Guide**: Added `DEBUGGING_AND_ALERTS.md` with comprehensive debugging patterns and alert best practices
+- **DEBUG_JSX Reference**: Complete documentation of log(), error(), and info() functions with examples
+
+### 🔗 Associated Build
+- AirBoard-v4.16.53.zxp
+
 ## [4.16.52] - 2025-09-29 📁 **ENHANCED FOLDER STRUCTURE**
 ### ✨ New Features
 - **Enhanced Precomps Folder**: Added Desktop, Native, and zArchive subfolders to "02 - Precomps" structure
