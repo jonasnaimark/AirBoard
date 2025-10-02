@@ -11358,10 +11358,12 @@ function applyFitToShape(mode) {
             DEBUG_JSX.log("Layer " + i + ": " + layer.name + " (type: " + (layer instanceof ShapeLayer ? "Shape" : "Other") + ", index: " + layer.index + ")");
 
             if (layer instanceof ShapeLayer) {
-                // Check if this layer is a mask layer (parented to another shape layer with no track matte)
+                // Check if this layer is a mask layer created by "Fit to Squircle"
+                // Real mask layers: parented to shape layer + no track matte + name ends with " - Mask"
                 var isMaskLayer = (layer.parent &&
                                   layer.parent instanceof ShapeLayer &&
-                                  layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE);
+                                  layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE &&
+                                  layer.name.indexOf(" - Mask") !== -1);
 
                 if (isMaskLayer) {
                     DEBUG_JSX.log("Layer '" + layer.name + "' appears to be a mask layer (parented to '" + layer.parent.name + "'), treating as content layer");
@@ -11402,7 +11404,8 @@ function applyFitToShape(mode) {
                 if (layer instanceof ShapeLayer &&
                     layer.parent &&
                     layer.parent instanceof ShapeLayer &&
-                    layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE) {
+                    layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE &&
+                    layer.name.indexOf(" - Mask") !== -1) {
                     hasMaskLayerInSelection = true;
                     DEBUG_JSX.log("Found mask layer: " + layer.name);
                     break;
@@ -11443,6 +11446,7 @@ function applyFitToShape(mode) {
         // - Parented to the shape layer
         // - Is a ShapeLayer
         // - Has NO track matte set (it's being used AS a track matte by other layers)
+        // - Name contains " - Mask" (to distinguish from user-parented layers)
         var maskLayer = null;
         for (var i = 1; i <= comp.layers.length; i++) {
             var layer = comp.layers[i];
@@ -11451,7 +11455,8 @@ function applyFitToShape(mode) {
             if (layer.parent === shapeLayer &&
                 layer !== shapeLayer &&
                 layer instanceof ShapeLayer &&
-                layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE) {
+                layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE &&
+                layer.name.indexOf(" - Mask") !== -1) {
                 maskLayer = layer;
                 DEBUG_JSX.log("Found existing mask layer: " + maskLayer.name);
                 break;

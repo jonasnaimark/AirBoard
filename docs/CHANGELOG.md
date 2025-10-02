@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.54] - 2025-01-10 🔧 **FIX PARENTED SQUIRCLE DETECTION**
+### 🐛 Bug Fixes
+- **Fixed False Mask Layer Detection**: Parented Squircles no longer incorrectly identified as mask layers
+- **More Specific Mask Detection**: Mask layers now identified by name containing " - Mask" in addition to other properties
+
+### 🔧 Technical Improvements
+- **Name-Based Mask Detection**: Added `layer.name.indexOf(" - Mask") !== -1` check to all mask layer detection logic
+- **Distinguishes User Parenting**: User-parented Squircles for organization now work correctly with Fit to Squircle
+
+### 🔗 Associated Build
+- AirBoard-v4.16.54.zxp
+
 ## [4.16.53] - 2025-01-10 🔧 **FIT TO SQUIRCLE BUG FIXES**
 ### 🐛 Bug Fixes
 - **Fixed Track Matte Detection**: Corrected mask layer identification to prevent modifying unselected layers' track mattes
