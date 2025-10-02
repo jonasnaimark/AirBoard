@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.55] - 2025-01-10 🔧 **FIX MASK LAYER REUSE**
+### 🐛 Bug Fixes
+- **Fixed Mask Layer Reuse**: Existing mask layers now properly reused when adding new content to same Squircle
+- **Removed trackMatteType Check**: Mask detection no longer fails when mask is actively being used as track matte
+
+### 🔧 Technical Improvements
+- **Simplified Mask Detection**: Removed `trackMatteType === NO_TRACK_MATTE` requirement from existing mask detection
+- **Key Insight**: Once a mask layer is used as a track matte, its trackMatteType value changes, making the old check unreliable
+- **More Reliable Detection**: Now identifies masks purely by parenting + ShapeLayer type + " - Mask" in name
+
+### 🔗 Associated Build
+- AirBoard-v4.16.55.zxp
+
 ## [4.16.54] - 2025-01-10 🔧 **FIX PARENTED SQUIRCLE DETECTION**
 ### 🐛 Bug Fixes
 - **Fixed False Mask Layer Detection**: Parented Squircles no longer incorrectly identified as mask layers
