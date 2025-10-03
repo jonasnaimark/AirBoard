@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.56] - 2025-01-10 🔧 **TIME REMAP DELAY FIX**
+### 🐛 Bug Fixes
+- **Fixed Time Remap Label Loss**: Time Remap keyframes now preserve their color labels when delayed
+- **Fixed Time Remap Easing**: Time Remap keyframes now preserve their easing curves when delayed
+- **Fixed Time Remap Values**: Time Remap keyframes now preserve their exact values when moved
+
+### 🔧 Technical Improvements
+- **Proper Value Storage**: Time Remap now uses stored keyframe values instead of recalculating after index shifts
+- **Add-Before-Delete Pattern**: Follows documented approach using `setValueAtTime()` with stored values
+- **Immediate Property Restoration**: Easing, labels, and interpolation restored immediately after creating each new keyframe
+- **Complete Data Collection**: Now collects interpolation type, temporal ease, continuity, and labels for Time Remap
+
+### 🔗 Associated Build
+- AirBoard-v4.16.56.zxp
+
 ## [4.16.55] - 2025-01-10 🔧 **FIX MASK LAYER REUSE**
 ### 🐛 Bug Fixes
 - **Fixed Mask Layer Reuse**: Existing mask layers now properly reused when adding new content to same Squircle

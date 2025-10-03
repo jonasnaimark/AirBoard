@@ -5439,21 +5439,37 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                             if (keyTime >= cutoffTime) {
                                 // Create unique key ID for tracking
                                 var keyId = layer.index + "_TimeRemap_" + j + "_" + keyTime.toFixed(3);
-                                
+
                                 // Skip if already processed
                                 if (processedKeys[keyId]) {
                                     continue;
                                 }
-                                
+
                                 var newTime = keyTime + timeOffset;
-                                timeRemapKeys.push({
+                                var keyData = {
                                     index: j,
                                     oldTime: keyTime,
                                     newTime: newTime,
                                     value: prop.keyValue(j),
-                                    keyId: keyId
-                                });
-                                
+                                    keyId: keyId,
+                                    inInterp: prop.keyInInterpolationType(j),
+                                    outInterp: prop.keyOutInterpolationType(j),
+                                    temporalContinuous: prop.keyTemporalContinuous(j),
+                                    temporalAutoBezier: prop.keyTemporalAutoBezier(j),
+                                    label: prop.keyLabel(j)
+                                };
+
+                                // Collect temporal ease if bezier
+                                if (keyData.inInterp === KeyframeInterpolationType.BEZIER ||
+                                    keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                                    try {
+                                        keyData.inEase = prop.keyInTemporalEase(j);
+                                        keyData.outEase = prop.keyOutTemporalEase(j);
+                                    } catch(e) {}
+                                }
+
+                                timeRemapKeys.push(keyData);
+
                                 // Mark as processed
                                 processedKeys[keyId] = true;
                             }
@@ -5461,78 +5477,76 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                         
                         if (timeRemapKeys.length > 0) {
                             DEBUG_JSX.log("    Time Remap: Moving " + timeRemapKeys.length + " keyframes");
-                            
-                            // Verify keyframes exist at expected times
-                            var actualKeysToMove = [];
+
+                            // FIRST: Add new keyframes using setValueAtTime with stored values
                             for (var k = 0; k < timeRemapKeys.length; k++) {
                                 var keyData = timeRemapKeys[k];
-                                var foundAtOldTime = false;
+                                prop.setValueAtTime(keyData.newTime, keyData.value);
+                                DEBUG_JSX.log("    Added Time Remap key at " + keyData.newTime.toFixed(3) + "s with value " + keyData.value);
+
+                                // Immediately restore properties on this keyframe
                                 for (var j = 1; j <= prop.numKeys; j++) {
-                                    if (Math.abs(prop.keyTime(j) - keyData.oldTime) < 0.001) {
-                                        foundAtOldTime = true;
+                                    if (Math.abs(prop.keyTime(j) - keyData.newTime) < 0.001) {
+                                        try {
+                                            // Restore EXACTLY as collected (same as normal properties)
+                                            prop.setInterpolationTypeAtKey(j, keyData.inInterp, keyData.outInterp);
+                                            if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+                                                prop.setTemporalEaseAtKey(j, keyData.inEase, keyData.outEase);
+                                            }
+                                            prop.setTemporalContinuousAtKey(j, keyData.temporalContinuous);
+                                            prop.setTemporalAutoBezierAtKey(j, keyData.temporalAutoBezier);
+                                            if (keyData.label !== undefined && keyData.label !== 0) {
+                                                prop.setLabelAtKey(j, keyData.label);
+                                            }
+                                        } catch(e) {}
                                         break;
                                     }
                                 }
-                                if (foundAtOldTime) {
-                                    actualKeysToMove.push(keyData);
-                                } else {
-                                    DEBUG_JSX.log("    WARNING: Time Remap key not found at " + keyData.oldTime + "s");
-                                }
                             }
-                            
-                            if (actualKeysToMove.length > 0) {
-                                // CRITICAL: Use setValueAtTime to add new keyframes first
-                                for (var k = 0; k < actualKeysToMove.length; k++) {
-                                    var keyData = actualKeysToMove[k];
-                                    prop.setValueAtTime(keyData.newTime, keyData.value);
-                                    DEBUG_JSX.log("    Added Time Remap key at " + keyData.newTime.toFixed(3) + "s");
-                                }
-                                
-                                // Then remove old keyframes (only those not at new positions)
-                                var indicesToRemove = [];
-                                for (var k = 0; k < actualKeysToMove.length; k++) {
-                                    var oldTime = actualKeysToMove[k].oldTime;
-                                    // Find the index of the keyframe at oldTime
-                                    for (var j = prop.numKeys; j >= 1; j--) {
-                                        var keyTime = prop.keyTime(j);
-                                        if (Math.abs(keyTime - oldTime) < 0.001) {
-                                            // Check if this is a new keyframe position
-                                            var isNewPosition = false;
-                                            for (var n = 0; n < actualKeysToMove.length; n++) {
-                                                if (Math.abs(keyTime - actualKeysToMove[n].newTime) < 0.001) {
-                                                    isNewPosition = true;
-                                                    break;
-                                                }
+
+                            // SECOND: Remove old keyframes (only those not at new positions)
+                            var indicesToRemove = [];
+                            for (var k = 0; k < timeRemapKeys.length; k++) {
+                                var oldTime = timeRemapKeys[k].oldTime;
+                                for (var j = prop.numKeys; j >= 1; j--) {
+                                    var keyTime = prop.keyTime(j);
+                                    if (Math.abs(keyTime - oldTime) < 0.001) {
+                                        // Check if this is a new keyframe position
+                                        var isNewPosition = false;
+                                        for (var n = 0; n < timeRemapKeys.length; n++) {
+                                            if (Math.abs(keyTime - timeRemapKeys[n].newTime) < 0.001) {
+                                                isNewPosition = true;
+                                                break;
                                             }
-                                            if (!isNewPosition) {
-                                                indicesToRemove.push(j);
-                                            }
-                                            break;
                                         }
+                                        if (!isNewPosition) {
+                                            indicesToRemove.push(j);
+                                        }
+                                        break;
                                     }
                                 }
-                                
-                                // Remove in descending order
-                                indicesToRemove.sort(function(a, b) { return b - a; });
-                                for (var k = 0; k < indicesToRemove.length; k++) {
-                                    try {
-                                        prop.removeKey(indicesToRemove[k]);
-                                        DEBUG_JSX.log("    Removed old Time Remap key at index " + indicesToRemove[k]);
-                                    } catch(e) {
-                                        DEBUG_JSX.log("    Could not remove Time Remap key: " + e.toString());
-                                    }
-                                }
-                                
-                                // Update moved count and furthest time
-                                movedCount += actualKeysToMove.length;
-                                for (var k = 0; k < actualKeysToMove.length; k++) {
-                                    if (actualKeysToMove[k].newTime > furthestTime) {
-                                        furthestTime = actualKeysToMove[k].newTime;
-                                    }
-                                }
-                                
-                                DEBUG_JSX.log("    Time Remap: Moved " + actualKeysToMove.length + " keyframes successfully");
                             }
+
+                            // Remove old keys in descending order
+                            indicesToRemove.sort(function(a, b) { return b - a; });
+                            for (var k = 0; k < indicesToRemove.length; k++) {
+                                try {
+                                    prop.removeKey(indicesToRemove[k]);
+                                    DEBUG_JSX.log("    Removed old Time Remap key at index " + indicesToRemove[k]);
+                                } catch(e) {
+                                    DEBUG_JSX.log("    Could not remove Time Remap key: " + e.toString());
+                                }
+                            }
+
+                            // Update moved count and furthest time
+                            movedCount += timeRemapKeys.length;
+                            for (var k = 0; k < timeRemapKeys.length; k++) {
+                                if (timeRemapKeys[k].newTime > furthestTime) {
+                                    furthestTime = timeRemapKeys[k].newTime;
+                                }
+                            }
+
+                            DEBUG_JSX.log("    Time Remap: Moved " + timeRemapKeys.length + " keyframes successfully");
                         }
                     } catch(timeRemapError) {
                         DEBUG_JSX.log("    Time Remap error: " + timeRemapError.toString());
@@ -5901,21 +5915,37 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     if (keyTime >= cutoffTime) {
                         // Create unique key ID for tracking
                         var keyId = layer.index + "_TimeRemap_" + j + "_" + keyTime.toFixed(3);
-                        
+
                         // Skip if already processed
                         if (processedKeys[keyId]) {
                             continue;
                         }
-                        
+
                         var newTime = keyTime + timeOffset;
-                        timeRemapKeys.push({
+                        var keyData = {
                             index: j,
                             oldTime: keyTime,
                             newTime: newTime,
                             value: prop.keyValue(j),
-                            keyId: keyId
-                        });
-                        
+                            keyId: keyId,
+                            inInterp: prop.keyInInterpolationType(j),
+                            outInterp: prop.keyOutInterpolationType(j),
+                            temporalContinuous: prop.keyTemporalContinuous(j),
+                            temporalAutoBezier: prop.keyTemporalAutoBezier(j),
+                            label: prop.keyLabel(j)
+                        };
+
+                        // Collect temporal ease if bezier
+                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER ||
+                            keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            try {
+                                keyData.inEase = prop.keyInTemporalEase(j);
+                                keyData.outEase = prop.keyOutTemporalEase(j);
+                            } catch(e) {}
+                        }
+
+                        timeRemapKeys.push(keyData);
+
                         // Mark as processed
                         processedKeys[keyId] = true;
                     }
@@ -5923,78 +5953,76 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                 
                 if (timeRemapKeys.length > 0) {
                     DEBUG_JSX.log("    Time Remap: Moving " + timeRemapKeys.length + " keyframes on " + layer.name);
-                    
-                    // Verify keyframes exist at expected times
-                    var actualKeysToMove = [];
+
+                    // FIRST: Add new keyframes using setValueAtTime with stored values
                     for (var k = 0; k < timeRemapKeys.length; k++) {
                         var keyData = timeRemapKeys[k];
-                        var foundAtOldTime = false;
+                        prop.setValueAtTime(keyData.newTime, keyData.value);
+                        DEBUG_JSX.log("    Added Time Remap key at " + keyData.newTime.toFixed(3) + "s with value " + keyData.value);
+
+                        // Immediately restore properties on this keyframe
                         for (var j = 1; j <= prop.numKeys; j++) {
-                            if (Math.abs(prop.keyTime(j) - keyData.oldTime) < 0.001) {
-                                foundAtOldTime = true;
+                            if (Math.abs(prop.keyTime(j) - keyData.newTime) < 0.001) {
+                                try {
+                                    // Restore EXACTLY as collected (same as normal properties)
+                                    prop.setInterpolationTypeAtKey(j, keyData.inInterp, keyData.outInterp);
+                                    if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+                                        prop.setTemporalEaseAtKey(j, keyData.inEase, keyData.outEase);
+                                    }
+                                    prop.setTemporalContinuousAtKey(j, keyData.temporalContinuous);
+                                    prop.setTemporalAutoBezierAtKey(j, keyData.temporalAutoBezier);
+                                    if (keyData.label !== undefined && keyData.label !== 0) {
+                                        prop.setLabelAtKey(j, keyData.label);
+                                    }
+                                } catch(e) {}
                                 break;
                             }
                         }
-                        if (foundAtOldTime) {
-                            actualKeysToMove.push(keyData);
-                        } else {
-                            DEBUG_JSX.log("    WARNING: Time Remap key not found at " + keyData.oldTime + "s");
-                        }
                     }
-                    
-                    if (actualKeysToMove.length > 0) {
-                        // CRITICAL: Use setValueAtTime to add new keyframes first
-                        for (var k = 0; k < actualKeysToMove.length; k++) {
-                            var keyData = actualKeysToMove[k];
-                            prop.setValueAtTime(keyData.newTime, keyData.value);
-                            DEBUG_JSX.log("    Added Time Remap key at " + keyData.newTime.toFixed(3) + "s");
-                        }
-                        
-                        // Then remove old keyframes (only those not at new positions)
-                        var indicesToRemove = [];
-                        for (var k = 0; k < actualKeysToMove.length; k++) {
-                            var oldTime = actualKeysToMove[k].oldTime;
-                            // Find the index of the keyframe at oldTime
-                            for (var j = prop.numKeys; j >= 1; j--) {
-                                var keyTime = prop.keyTime(j);
-                                if (Math.abs(keyTime - oldTime) < 0.001) {
-                                    // Check if this is a new keyframe position
-                                    var isNewPosition = false;
-                                    for (var n = 0; n < actualKeysToMove.length; n++) {
-                                        if (Math.abs(keyTime - actualKeysToMove[n].newTime) < 0.001) {
-                                            isNewPosition = true;
-                                            break;
-                                        }
+
+                    // SECOND: Remove old keyframes (only those not at new positions)
+                    var indicesToRemove = [];
+                    for (var k = 0; k < timeRemapKeys.length; k++) {
+                        var oldTime = timeRemapKeys[k].oldTime;
+                        for (var j = prop.numKeys; j >= 1; j--) {
+                            var keyTime = prop.keyTime(j);
+                            if (Math.abs(keyTime - oldTime) < 0.001) {
+                                // Check if this is a new keyframe position
+                                var isNewPosition = false;
+                                for (var n = 0; n < timeRemapKeys.length; n++) {
+                                    if (Math.abs(keyTime - timeRemapKeys[n].newTime) < 0.001) {
+                                        isNewPosition = true;
+                                        break;
                                     }
-                                    if (!isNewPosition) {
-                                        indicesToRemove.push(j);
-                                    }
-                                    break;
                                 }
+                                if (!isNewPosition) {
+                                    indicesToRemove.push(j);
+                                }
+                                break;
                             }
                         }
-                        
-                        // Remove in descending order
-                        indicesToRemove.sort(function(a, b) { return b - a; });
-                        for (var k = 0; k < indicesToRemove.length; k++) {
-                            try {
-                                prop.removeKey(indicesToRemove[k]);
-                                DEBUG_JSX.log("    Removed old Time Remap key at index " + indicesToRemove[k]);
-                            } catch(e) {
-                                DEBUG_JSX.log("    Could not remove Time Remap key: " + e.toString());
-                            }
-                        }
-                        
-                        // Update moved count and furthest time
-                        movedCount += actualKeysToMove.length;
-                        for (var k = 0; k < actualKeysToMove.length; k++) {
-                            if (actualKeysToMove[k].newTime > furthestTime) {
-                                furthestTime = actualKeysToMove[k].newTime;
-                            }
-                        }
-                        
-                        DEBUG_JSX.log("    Time Remap: Moved " + actualKeysToMove.length + " keyframes successfully");
                     }
+
+                    // Remove old keys in descending order
+                    indicesToRemove.sort(function(a, b) { return b - a; });
+                    for (var k = 0; k < indicesToRemove.length; k++) {
+                        try {
+                            prop.removeKey(indicesToRemove[k]);
+                            DEBUG_JSX.log("    Removed old Time Remap key at index " + indicesToRemove[k]);
+                        } catch(e) {
+                            DEBUG_JSX.log("    Could not remove Time Remap key: " + e.toString());
+                        }
+                    }
+
+                    // Update moved count and furthest time
+                    movedCount += timeRemapKeys.length;
+                    for (var k = 0; k < timeRemapKeys.length; k++) {
+                        if (timeRemapKeys[k].newTime > furthestTime) {
+                            furthestTime = timeRemapKeys[k].newTime;
+                        }
+                    }
+
+                    DEBUG_JSX.log("    Time Remap: Moved " + timeRemapKeys.length + " keyframes successfully");
                 }
             }
         } catch(timeRemapError) {
@@ -6756,89 +6784,104 @@ function nudgeDelayTimelineMode(direction, frames) {
             if (isTimeRemap) {
                 DEBUG_JSX.log("Special Time Remap handling - add before delete");
                 DEBUG_JSX.log("Time Remap: Processing " + keyframesToMove.length + " keyframes");
-                
-                // CRITICAL: Check if we're trying to move keyframes that have already been moved
-                // This could happen if Time Remap is being processed twice
-                var actualKeyframesToMove = [];
+
+                // FIRST: Add new keyframes using setValueAtTime with STORED values
+                // Then immediately restore easing before anything else happens
                 for (var k = 0; k < keyframesToMove.length; k++) {
                     var data = keyframesToMove[k];
-                    // Verify this keyframe actually exists at the old time
-                    var foundAtOldTime = false;
+
+                    // Use setValueAtTime with the STORED value from collection time
+                    prop.setValueAtTime(data.newTime, data.value);
+                    DEBUG_JSX.log("Added Time Remap key at " + data.newTime + "s with stored value " + data.value);
+
+                    // CRITICAL: Immediately find and restore properties on this keyframe
                     for (var j = 1; j <= prop.numKeys; j++) {
-                        if (Math.abs(prop.keyTime(j) - data.oldTime) < 0.001) {
-                            foundAtOldTime = true;
+                        if (Math.abs(prop.keyTime(j) - data.newTime) < 0.001) {
+                            try {
+                                // Restore interpolation type EXACTLY as it was
+                                // (Same as normal properties - line 6944)
+                                prop.setInterpolationTypeAtKey(j, data.inInterp, data.outInterp);
+
+                                // Restore temporal ease if it exists
+                                // (Same as normal properties - line 6947)
+                                if (data.inEase !== undefined && data.outEase !== undefined) {
+                                    try {
+                                        prop.setTemporalEaseAtKey(j, data.inEase, data.outEase);
+                                    } catch(e) {
+                                        DEBUG_JSX.log("Failed to restore temporal ease: " + e.toString());
+                                    }
+                                }
+
+                                // Restore temporal continuity
+                                // (Same as normal properties - line 6955)
+                                prop.setTemporalContinuousAtKey(j, data.temporalContinuous);
+                                prop.setTemporalAutoBezierAtKey(j, data.temporalAutoBezier);
+
+                                // Restore keyframe label
+                                // (Same as normal properties - line 6970)
+                                if (data.label !== undefined && data.label !== 0) {
+                                    try {
+                                        prop.setLabelAtKey(j, data.label);
+                                    } catch(e) {
+                                        DEBUG_JSX.log("Failed to restore label: " + e.toString());
+                                    }
+                                }
+                            } catch(e) {
+                                DEBUG_JSX.log("Failed to restore properties: " + e.toString());
+                            }
                             break;
                         }
                     }
-                    if (foundAtOldTime) {
-                        actualKeyframesToMove.push(data);
-                    } else {
-                        DEBUG_JSX.log("WARNING: Keyframe not found at " + data.oldTime + "s - may have already been moved");
-                    }
                 }
-                
-                if (actualKeyframesToMove.length === 0) {
-                    DEBUG_JSX.log("No Time Remap keyframes to move - they may have already been processed");
-                } else {
-                    // FIRST: Add all new keyframes at new times using setValueAtTime
-                    for (var k = 0; k < actualKeyframesToMove.length; k++) {
-                        var data = actualKeyframesToMove[k];
-                        var value = prop.keyValue(data.index);
-                        prop.setValueAtTime(data.newTime, value);
-                        DEBUG_JSX.log("Added Time Remap keyframe at " + data.newTime + "s with value " + value);
-                    }
-                    
-                    // SECOND: Remove old keyframes in reverse order
-                    // Sort by index descending to avoid index shifting when removing
-                    var oldKeyIndicesToRemove = [];
-                    for (var k = 0; k < actualKeyframesToMove.length; k++) {
-                        var oldTime = actualKeyframesToMove[k].oldTime;
-                        // Find keyframes at the old time that are NOT at the new time
-                        for (var j = prop.numKeys; j >= 1; j--) {
-                            var keyTime = prop.keyTime(j);
-                            if (Math.abs(keyTime - oldTime) < 0.001) {
-                                // Make sure this isn't one of our new keyframes
-                                var isNewKey = false;
-                                for (var n = 0; n < actualKeyframesToMove.length; n++) {
-                                    if (Math.abs(keyTime - actualKeyframesToMove[n].newTime) < 0.001) {
-                                        isNewKey = true;
-                                        break;
-                                    }
+
+                // SECOND: Remove old keyframes (only those not at new positions)
+                var oldKeyIndicesToRemove = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var oldTime = keyframesToMove[k].oldTime;
+                    for (var j = prop.numKeys; j >= 1; j--) {
+                        var keyTime = prop.keyTime(j);
+                        if (Math.abs(keyTime - oldTime) < 0.001) {
+                            // Make sure this isn't one of our new keyframes
+                            var isNewKey = false;
+                            for (var n = 0; n < keyframesToMove.length; n++) {
+                                if (Math.abs(keyTime - keyframesToMove[n].newTime) < 0.001) {
+                                    isNewKey = true;
+                                    break;
                                 }
-                                if (!isNewKey) {
-                                    oldKeyIndicesToRemove.push(j);
-                                    DEBUG_JSX.log("Will remove old Time Remap key at index " + j + " (time: " + keyTime + "s)");
-                                }
+                            }
+                            if (!isNewKey) {
+                                oldKeyIndicesToRemove.push(j);
+                                DEBUG_JSX.log("Will remove old Time Remap key at index " + j);
                             }
                         }
                     }
-                    
-                    // Remove old keys in descending order
-                    oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
-                    for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
-                        try {
-                            prop.removeKey(oldKeyIndicesToRemove[k]);
-                            DEBUG_JSX.log("Removed old Time Remap key at index " + oldKeyIndicesToRemove[k]);
-                        } catch(e) {
-                            DEBUG_JSX.log("Failed to remove Time Remap key: " + e.toString());
-                        }
-                    }
-                    
-                    // THIRD: Find the new indices for selection restoration
-                    for (var k = 0; k < actualKeyframesToMove.length; k++) {
-                        var targetTime = actualKeyframesToMove[k].newTime;
-                        for (var j = 1; j <= prop.numKeys; j++) {
-                            if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
-                                newIndices.push(j);
-                                DEBUG_JSX.log("Time Remap key at " + targetTime + "s is now at index " + j);
-                                break;
-                            }
-                        }
-                    }
-                    
-                    movedCount += actualKeyframesToMove.length;
-                    DEBUG_JSX.log("Successfully moved " + actualKeyframesToMove.length + " Time Remap keyframes");
                 }
+
+                // Remove old keys in descending order
+                oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
+                    try {
+                        prop.removeKey(oldKeyIndicesToRemove[k]);
+                        DEBUG_JSX.log("Removed old Time Remap key at index " + oldKeyIndicesToRemove[k]);
+                    } catch(e) {
+                        DEBUG_JSX.log("Failed to remove Time Remap key: " + e.toString());
+                    }
+                }
+
+                // THIRD: Find new indices for selection restoration
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var targetTime = keyframesToMove[k].newTime;
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                            newIndices.push(j);
+                            DEBUG_JSX.log("Time Remap key at " + targetTime + "s is now at index " + j);
+                            break;
+                        }
+                    }
+                }
+
+                movedCount += keyframesToMove.length;
+                DEBUG_JSX.log("Successfully moved " + keyframesToMove.length + " Time Remap keyframes");
                 
             } else {
                 // Normal handling for non-Time Remap properties
