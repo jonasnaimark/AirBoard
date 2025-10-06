@@ -5,15 +5,11 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-### 🚧 In Development
-- **Keyframe Helper Section**: Add opacity and position keyframe creation tools
-- **Additional Components**: Progress bars, buttons, icons
-
 ## [4.16.57] - 2025-01-10 🎯 **REVERSE STAGGER & MARKER SYNC FIX**
 ### ✨ New Features
 - **Fixed Reverse Stagger Direction**: Reverse stagger mode for keyframes now works consistently with layer stagger - clicking + or - in reverse mode correctly increments/decrements the stagger without snapping back to 0
 - **Improved Marker Synchronization**: Markers now move with stagger if they're anywhere within the selected keyframe range (not just at exact keyframe times)
+- **Hidden Gesture Bar by Default**: New gesture comps now hide the gesture bar by default for cleaner presentations
 
 ### 🎨 UI/UX Improvements
 - **Position Row Visibility**: X and Y position rows in Keyframe Nudger now hide when there's no data, automatically showing when position data is available
