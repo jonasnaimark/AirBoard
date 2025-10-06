@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyframe Helper Section**: Add opacity and position keyframe creation tools
 - **Additional Components**: Progress bars, buttons, icons
 
+## [4.16.57] - 2025-01-10 🎯 **REVERSE STAGGER & MARKER SYNC FIX**
+### ✨ New Features
+- **Fixed Reverse Stagger Direction**: Reverse stagger mode for keyframes now works consistently with layer stagger - clicking + or - in reverse mode correctly increments/decrements the stagger without snapping back to 0
+- **Improved Marker Synchronization**: Markers now move with stagger if they're anywhere within the selected keyframe range (not just at exact keyframe times)
+
+### 🎨 UI/UX Improvements
+- **Position Row Visibility**: X and Y position rows in Keyframe Nudger now hide when there's no data, automatically showing when position data is available
+- **Smart Margin Control**: Stagger row margin dynamically adjusts based on position row visibility for cleaner spacing
+
+### 🔧 Technical Improvements
+- **Bi-directional Sort Matching**: `calculateStagger()` now sorts layers in the same direction as staggers are applied (top-to-bottom for reverse mode, bottom-to-top for normal mode)
+- **Interval Calculation Fix**: Interval detection in `applyStaggerToKeyframes()` respects stagger direction for accurate current stagger reading
+- **Range-based Marker Detection**: Changed from exact-time matching to range-based detection - markers anywhere between first and last selected keyframe will move with the stagger
+
+### 🔗 Associated Build
+- AirBoard-v4.16.57.zxp
+
 ## [4.16.56] - 2025-01-10 🔧 **TIME REMAP DELAY FIX**
 ### 🐛 Bug Fixes
 - **Fixed Time Remap Label Loss**: Time Remap keyframes now preserve their color labels when delayed
