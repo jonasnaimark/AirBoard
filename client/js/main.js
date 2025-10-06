@@ -22,7 +22,36 @@ const DEBUG = {
     warn: (msg, data) => console.warn(`⚠️ AirBoard Warning: ${msg}`, data || '')
 };
 
-// Helper functions to show/hide control buttons
+// Helper function to update stagger row margin based on position row visibility
+function updateStaggerMargin() {
+    var staggerRow = document.getElementById('staggerRow');
+    var xRow = document.getElementById('xDistanceRow');
+    var yRow = document.getElementById('yDistanceRow');
+
+    if (staggerRow && xRow && yRow) {
+        // If both position rows are hidden, remove stagger bottom margin
+        var bothHidden = !xRow.classList.contains('visible') && !yRow.classList.contains('visible');
+        staggerRow.style.marginBottom = bothHidden ? '0' : '10px';
+    }
+}
+
+// Helper functions to show/hide position rows
+function hidePositionRow(axis) {
+    var row = document.getElementById(axis + 'DistanceRow');
+    if (row && row.classList.contains('visible')) {
+        row.classList.remove('visible');
+        updateStaggerMargin();
+    }
+}
+
+function showPositionRow(axis) {
+    var row = document.getElementById(axis + 'DistanceRow');
+    if (row && !row.classList.contains('visible')) {
+        row.classList.add('visible');
+        updateStaggerMargin();
+    }
+}
+
 function hidePositionButtons() {
     var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
     var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
@@ -858,8 +887,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Helper function for automatic keyframe reading after stagger operations
-    function handleReadKeyframes() {
-        DEBUG.log('handleReadKeyframes called - ENTRY POINT');
+    // updatePositionRows: if false, won't show/hide position rows (used for stagger-triggered reads)
+    function handleReadKeyframes(updatePositionRows) {
+        if (updatePositionRows === undefined) {
+            updatePositionRows = true; // Default to true for manual "Read Keyframes" button clicks
+        }
+        DEBUG.log('handleReadKeyframes called - ENTRY POINT, updatePositionRows=' + updatePositionRows);
         console.trace('Call stack for handleReadKeyframes');
         
         // Reset all displays to default text when starting read operation
@@ -880,7 +913,7 @@ document.addEventListener('DOMContentLoaded', function() {
         yDistanceText.style.opacity = '0.75';
         staggerText.textContent = 'Stagger';
         staggerText.style.opacity = '0.75';
-        
+
         // Reset cumulative stagger counter
         cumulativeStaggerFrames = 0;
         
@@ -930,6 +963,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         xDistanceText.style.opacity = '1';
                         yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
                         yDistanceText.style.opacity = '1';
+
+                        // Hide position rows for this error
+                        if (updatePositionRows) {
+                            hidePositionRow('x');
+                            hidePositionRow('y');
+                        }
                     } else {
                         // Other errors: reset to default text
                         durationText.textContent = 'Duration';
@@ -946,6 +985,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         xDistanceText.style.opacity = '0.75';
                         yDistanceText.textContent = 'Y distance';
                         yDistanceText.style.opacity = '0.75';
+
+                        // Hide position rows for other errors
+                        if (updatePositionRows) {
+                            hidePositionRow('x');
+                            hidePositionRow('y');
+                        }
                     }
                     
                     DEBUG.error('Keyframe reading failed:', errorMsg);
@@ -1121,11 +1166,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Get current resolution multiplier for scaling
                         var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
                         DEBUG.log('Resolution multiplier:', resolutionMultiplier);
-                        
+
                         // Update X Distance display
                         var xDistanceText = document.getElementById('xDistanceText');
                         DEBUG.log('About to update X distance. hasXDistance=' + hasXDistance + ', xDistance=' + xDistance);
                         if (hasXDistance) {
+                            // Show the X distance row with animation
+                            if (updatePositionRows) {
+                                showPositionRow('x');
+                            }
+
                             // Check for special "Multiple" value
                             if (xDistance === -999999) {
                                 xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">Multiple</span>';
@@ -1133,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             } else {
                                 var scaledXDistance = parseFloat((xDistance / resolutionMultiplier).toFixed(2));
                                 DEBUG.log('Scaled X distance:', scaledXDistance);
-                                
+
                                 if (scaledXDistance === 0) {
                                     xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
                                 } else {
@@ -1145,19 +1195,28 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             xDistanceText.style.opacity = '1';
+                        } else {
+                            // Hide the X distance row when no data
+                            if (updatePositionRows) {
+                                hidePositionRow('x');
+                            }
                         }
-                        // If hasXDistance is false, leave the element untouched in its default HTML state
-                    
+
                         // Update Y Distance display
                         var yDistanceText = document.getElementById('yDistanceText');
                         if (hasYDistance) {
+                            // Show the Y distance row with animation
+                            if (updatePositionRows) {
+                                showPositionRow('y');
+                            }
+
                             // Check for special "Multiple" value
                             if (yDistance === -999999) {
                                 yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">Multiple</span>';
                                 DEBUG.log('Set Y distance to Multiple');
                             } else {
                                 var scaledYDistance = parseFloat((yDistance / resolutionMultiplier).toFixed(2));
-                                
+
                                 if (scaledYDistance === 0) {
                                     yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
                                 } else {
@@ -1168,9 +1227,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }
                             }
                             yDistanceText.style.opacity = '1';
+                        } else {
+                            // Hide the Y distance row when no data
+                            if (updatePositionRows) {
+                                hidePositionRow('y');
+                            }
                         }
-                        // If hasYDistance is false, leave the element untouched in its default HTML state
-                    
+
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                         console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
                         console.log('Y Distance:', hasYDistance ? scaledYDistance + 'px @1x (raw: ' + yDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
@@ -1185,13 +1248,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 durationText.style.opacity = '1';
                 delayText.innerHTML = 'Delay: <span style="opacity: 0.75;">0ms / 0f</span>';
                 delayText.style.opacity = '1';
-                
+
                 // Reset X and Y distance displays to 0
                 xDistanceText.innerHTML = 'X: <span style="opacity: 0.75;">0px @1x</span>';
                 xDistanceText.style.opacity = '1';
                 yDistanceText.innerHTML = 'Y: <span style="opacity: 0.75;">0px @1x</span>';
                 yDistanceText.style.opacity = '1';
-                
+
+                // Hide position rows when no keyframes found
+                if (updatePositionRows) {
+                    hidePositionRow('x');
+                    hidePositionRow('y');
+                }
+
                 console.log('Unexpected result:', result);
             }
         });
@@ -1205,7 +1274,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Don't initialize displays on startup - keep default labels
-    
+
+    // Initialize stagger margin based on position row visibility on page load
+    updateStaggerMargin();
+
     // Distance controls - In/Out toggle functionality
     function setupInOutToggle(inBtnId, outBtnId) {
         var inBtn = document.getElementById(inBtnId);
@@ -1376,7 +1448,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // After successful stagger operation, automatically read current state
                         setTimeout(function() {
                             console.log('Auto-reading keyframes after stagger increment to get current state');
-                            handleReadKeyframes();
+                            handleReadKeyframes(false); // Don't update position rows for stagger-triggered reads
                         }, 100);
                         
                     } else if (status === 'error') {
@@ -1482,7 +1554,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // After successful stagger operation, automatically read current state
                         setTimeout(function() {
                             console.log('Auto-reading keyframes after stagger decrement to get current state');
-                            handleReadKeyframes();
+                            handleReadKeyframes(false); // Don't update position rows for stagger-triggered reads
                         }, 100);
                         
                     } else if (status === 'error') {
@@ -2194,9 +2266,10 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
         loadSectionOrder();
         setTimeout(loadAccordionStates, 100);
-        
+
         // Add debug panel for testing (DEV MODE)
-        addDebugPanel();
+        // Disabled by default - uncomment to enable on startup
+        // addDebugPanel();
     }, 200);
     
     

@@ -1066,6 +1066,20 @@ input.distance-input[data-tooltip]:hover::after {
     transform: translateX(-50%);
 }
 
+/* Position row visibility */
+.position-row {
+    display: none;
+}
+
+.position-row.visible {
+    display: flex;
+}
+
+/* Remove bottom margin from last visible row in section */
+.position-row.visible:last-child {
+    margin-bottom: 0;
+}
+
 /* Custom scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;

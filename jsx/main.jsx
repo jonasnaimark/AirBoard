@@ -803,32 +803,21 @@ function calculateStagger(timingData, frameRate, isKeyframeMode, isReverseDirect
         if (layerTimes.length <= 1) {
             return "Stagger"; // Default text for single layer
         }
-        
-        // Sort by layer index for both keyframe and layer modes to get correct stagger sign
-        // FIXED: Detect reverse patterns and sort accordingly
-        // First, sort to analyze the pattern
-        layerTimes.sort(function(a, b) { return b.index - a.index; });
-        
-        // Check if this looks like a reverse stagger pattern
-        // In reverse mode: higher-indexed layers should start earlier than lower-indexed layers
-        var looksLikeReverse = false;
-        if (layerTimes.length >= 2) {
-            // Check if higher layer indices have earlier start times (reverse pattern)  
-            var firstLayerTime = layerTimes[0].time; // Highest index
-            var lastLayerTime = layerTimes[layerTimes.length - 1].time; // Lowest index
-            if (firstLayerTime < lastLayerTime) {
-                looksLikeReverse = true;
-            }
-        }
-        
-        // If it looks like reverse, sort top-to-bottom for proper stagger calculation
-        if (looksLikeReverse) {
+
+        // Sort in the same direction that staggers were applied
+        // This ensures the sign of the calculated stagger matches the direction used during application
+        if (isReverseDirection) {
+            // Reverse mode: staggers are applied top-to-bottom (ascending index)
             layerTimes.sort(function(a, b) { return a.index - b.index; });
-            DEBUG_JSX.log("Detected reverse stagger pattern - sorting top to bottom for calculation");
+            DEBUG_JSX.log("Sorting top-to-bottom (ascending index) for reverse mode stagger calculation");
+        } else {
+            // Normal mode: staggers are applied bottom-to-top (descending index)
+            layerTimes.sort(function(a, b) { return b.index - a.index; });
+            DEBUG_JSX.log("Sorting bottom-to-top (descending index) for normal mode stagger calculation");
         }
         
         if (isKeyframeMode) {
-            DEBUG_JSX.log("After sorting by layer index (bottom to top):");
+            DEBUG_JSX.log("After sorting:");
             for (var i = 0; i < layerTimes.length; i++) {
                 DEBUG_JSX.log("  Layer " + layerTimes[i].index + " (" + layerTimes[i].name + ") at " + Math.round(layerTimes[i].time * 1000) + "ms");
             }
@@ -7961,9 +7950,18 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             DEBUG_JSX.log("Not enough representative times for keyframe analysis");
             return false;
         }
-        
-        // Sort by layer index (should already be sorted, but ensure)
-        layerGroupTimes.sort(function(a, b) { return b.layerIndex - a.layerIndex; });
+
+        // Sort in the same direction that staggers are being applied
+        // This ensures interval calculations match the stagger direction
+        if (isTopToBottom) {
+            // Reverse mode: sort top-to-bottom (ascending index)
+            layerGroupTimes.sort(function(a, b) { return a.layerIndex - b.layerIndex; });
+            DEBUG_JSX.log("Sorted layer times top-to-bottom (ascending) for interval calculation");
+        } else {
+            // Normal mode: sort bottom-to-top (descending index)
+            layerGroupTimes.sort(function(a, b) { return b.layerIndex - a.layerIndex; });
+            DEBUG_JSX.log("Sorted layer times bottom-to-top (descending) for interval calculation");
+        }
         
         // Calculate actual intervals between layer groups
         var actualIntervals = [];
@@ -8032,31 +8030,18 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 DEBUG_JSX.log("UNIFORM INCREMENT: Current=" + currentStaggerMs.toFixed(1) + "ms, increment=" + incrementMs.toFixed(1) + "ms");
                 
                 // Apply directional increment/decrement logic
-                // FIXED: In reverse mode, + should make staggers MORE negative, - should make them LESS negative
+                // Both modes use same math: + adds, - subtracts
+                // The reversal is handled by layer sorting, not by inverting the math
                 var newStaggerMs;
-                
-                if (isTopToBottom) {
-                    // REVERSE MODE: Invert the increment direction
-                    if (direction > 0) {
-                        // + button in reverse mode: make stagger MORE negative
-                        newStaggerMs = currentStaggerMs - incrementMs;
-                        DEBUG_JSX.log("+ button (reverse): " + currentStaggerMs.toFixed(1) + "ms - " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
-                    } else {
-                        // - button in reverse mode: make stagger LESS negative
-                        newStaggerMs = currentStaggerMs + incrementMs;
-                        DEBUG_JSX.log("- button (reverse): " + currentStaggerMs.toFixed(1) + "ms + " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
-                    }
+
+                if (direction > 0) {
+                    // + button: increase stagger
+                    newStaggerMs = currentStaggerMs + incrementMs;
+                    DEBUG_JSX.log("+ button: " + currentStaggerMs.toFixed(1) + "ms + " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
                 } else {
-                    // DEFAULT MODE: Normal increment/decrement
-                    if (direction > 0) {
-                        // + button: add increment
-                        newStaggerMs = currentStaggerMs + incrementMs;
-                        DEBUG_JSX.log("+ button (default): " + currentStaggerMs.toFixed(1) + "ms + " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
-                    } else {
-                        // - button: subtract increment
-                        newStaggerMs = currentStaggerMs - incrementMs;
-                        DEBUG_JSX.log("- button (default): " + currentStaggerMs.toFixed(1) + "ms - " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
-                    }
+                    // - button: decrease stagger
+                    newStaggerMs = currentStaggerMs - incrementMs;
+                    DEBUG_JSX.log("- button: " + currentStaggerMs.toFixed(1) + "ms - " + incrementMs.toFixed(1) + "ms = " + newStaggerMs.toFixed(1) + "ms");
                 }
                 
                 DEBUG_JSX.log("🎯 UNIFORM INCREMENT (reverse-aware): isTopToBottom=" + isTopToBottom + ", direction=" + direction + ", newStagger=" + newStaggerMs.toFixed(1) + "ms");
@@ -8125,84 +8110,35 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 currentRepresentativeTimes.push(layerEarliestTime);
             }
             
-            // Find the baseline - for reverse mode, always anchor the earliest keyframe
-            var simplifiedBaseline;
-            if (isTopToBottom) {
-                // Reverse mode: find the earliest time as the anchor point for both negative AND positive staggers
-                // This keyframe will stay in place, others move progressively later
-                simplifiedBaseline = currentRepresentativeTimes[0];
-                for (var i = 1; i < currentRepresentativeTimes.length; i++) {
-                    if (currentRepresentativeTimes[i] < simplifiedBaseline) {
-                        simplifiedBaseline = currentRepresentativeTimes[i];
-                    }
-                }
-                DEBUG_JSX.log("🎯 REVERSE ANCHOR: Earliest keyframe at " + (simplifiedBaseline * 1000).toFixed(1) + "ms will stay anchored");
-            } else {
-                // Default mode: use first layer's time
-                simplifiedBaseline = currentRepresentativeTimes[0];
-            }
+            // Find the baseline anchor point
+            // The first layer in the sorted array (layerIdx=0) is always the anchor
+            // Sorting handles reverse vs normal mode automatically
+            var simplifiedBaseline = currentRepresentativeTimes[0];
+            DEBUG_JSX.log("🎯 ANCHOR: First layer in sorted order at " + (simplifiedBaseline * 1000).toFixed(1) + "ms will stay anchored");
             
             DEBUG_JSX.log("🎯 SIMPLIFIED: Current baseline time: " + (simplifiedBaseline * 1000).toFixed(1) + "ms");
             
             // Calculate offsets for each layer and execute keyframe movements immediately
             var propertyDataForSelection = [];
             
-            // Calculate new target times maintaining timeline position but with new intervals
+            // Calculate new target times using same formula as layer stagger
+            // staggerOffset = layerIdx * targetInterval
+            // First layer (layerIdx=0) always stays at baseline (anchor)
+            // targetInterval already includes direction (positive or negative)
             var layerOffsets = []; // Track actual offsets for marker syncing
             for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
                 var layerGroup = layerGroups[layerIdx];
-                // Handle both positive and negative intervals correctly
-                if (targetInterval < 0) {
-                    // FIXED FOR REVERSE MODE: Negative intervals in reverse mode need special handling
-                    if (isTopToBottom) {
-                        // Reverse mode with negative stagger: same logic as positive, just different direction
-                        // For negative stagger in reverse mode: top layers should be EARLIER, bottom layers should be LATER
-                        // The top layer (lowest index) becomes the anchor (earliest time)
-                        
-                        // For 3 layers (indices 0,1,2) with -50ms stagger:
-                        // Layer 0 (top): baseline + 0ms (earliest, anchor)
-                        // Layer 1 (mid): baseline + 50ms  
-                        // Layer 2 (bot): baseline + 100ms (latest)
-                        
-                        var newTargetTime = simplifiedBaseline + (layerIdx * Math.abs(targetInterval));
-                        
-                        // The layer that gets layerIdx = 0 will be at baseline (anchor)
-                        if (layerIdx === 0) {
-                            DEBUG_JSX.log("🎯 NEGATIVE ANCHOR: Layer " + layerIdx + " anchored at " + (newTargetTime * 1000).toFixed(1) + "ms");
-                        } else {
-                            DEBUG_JSX.log("🎯 NEGATIVE STAGGER: Layer " + layerIdx + " at " + (newTargetTime * 1000).toFixed(1) + "ms");
-                        }
-                    } else {
-                        // Default mode: standard negative interval progression (earliest stays anchored)
-                        var newTargetTime = simplifiedBaseline - (layerIdx * Math.abs(targetInterval));
-                    }
+
+                // Simple cumulative offset formula (same as layer stagger at line 10095)
+                var staggerOffset = layerIdx * targetInterval;
+                var newTargetTime = simplifiedBaseline + staggerOffset;
+
+                if (layerIdx === 0) {
+                    DEBUG_JSX.log("🎯 ANCHOR: Layer " + layerIdx + " anchored at " + (newTargetTime * 1000).toFixed(1) + "ms");
                 } else {
-                    // Positive interval (forward stagger): different logic for reverse mode
-                    if (isTopToBottom) {
-                        // Reverse mode with positive stagger: mirror the default mode logic but inverted
-                        // In reverse mode: top layers (low index) should be LATER, bottom layers (high index) should be EARLIER
-                        // The bottom layer (highest index) becomes the anchor (earliest time)
-                        
-                        // For 3 layers (indices 0,1,2) with 50ms stagger:
-                        // Layer 0 (top): baseline + 100ms (latest)
-                        // Layer 1 (mid): baseline + 50ms  
-                        // Layer 2 (bot): baseline + 0ms (earliest, anchor)
-                        
-                        var reversedLayerIdx = (layerGroups.length - 1) - layerIdx;
-                        var newTargetTime = simplifiedBaseline + (reversedLayerIdx * targetInterval);
-                        
-                        // The layer that gets reversedLayerIdx = 0 will be at baseline (anchor)
-                        if (reversedLayerIdx === 0) {
-                            DEBUG_JSX.log("🎯 POSITIVE ANCHOR: Layer " + layerIdx + " (reversed=" + reversedLayerIdx + ") anchored at " + (newTargetTime * 1000).toFixed(1) + "ms");
-                        } else {
-                            DEBUG_JSX.log("🎯 POSITIVE STAGGER: Layer " + layerIdx + " (reversed=" + reversedLayerIdx + ") at " + (newTargetTime * 1000).toFixed(1) + "ms");
-                        }
-                    } else {
-                        // Default mode: normal progression
-                        var newTargetTime = simplifiedBaseline + (layerIdx * targetInterval);
-                    }
+                    DEBUG_JSX.log("🎯 STAGGER: Layer " + layerIdx + " at " + (newTargetTime * 1000).toFixed(1) + "ms (offset: " + (staggerOffset * 1000).toFixed(1) + "ms)");
                 }
-                
+
                 // Calculate offset needed to move from current representative time to target time
                 var currentRepTime = currentRepresentativeTimes[layerIdx];
                 var offset = newTargetTime - currentRepTime;
@@ -9572,44 +9508,58 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             // Collect layer markers that need to be moved with keyframes
             if (layer.marker && layer.marker.numKeys > 0) {
                 DEBUG_JSX.log("Collecting markers from layer " + layer.name + " for offset " + (layerStaggerOffset * 1000).toFixed(1) + "ms");
-                
-                // Collect all original keyframe times from this layer
+
+                // Collect all original keyframe times from this layer to find the range
                 var originalKeyframeTimes = [];
                 for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
                     var propData = layerGroup.keyframes[propIdx];
                     var prop = propData.property;
                     var selectedKeys = propData.selectedKeys;
-                    
+
                     for (var k = 0; k < selectedKeys.length; k++) {
                         var keyIndex = selectedKeys[k];
                         var originalKeyTime = prop.keyTime(keyIndex);
-                        originalKeyframeTimes.push(originalKeyTime);
+                        // Check if time already exists (avoid duplicates)
+                        var timeExists = false;
+                        for (var t = 0; t < originalKeyframeTimes.length; t++) {
+                            if (Math.abs(originalKeyframeTimes[t] - originalKeyTime) < 0.001) {
+                                timeExists = true;
+                                break;
+                            }
+                        }
+                        if (!timeExists) {
+                            originalKeyframeTimes.push(originalKeyTime);
+                        }
                     }
                 }
-                
-                // Check each marker for synchronization with keyframes
+
+                // Sort times and find the range of selected keyframes
+                originalKeyframeTimes.sort(function(a, b) { return a - b; });
+                var firstKeyTime = originalKeyframeTimes[0];
+                var lastKeyTime = originalKeyframeTimes[originalKeyframeTimes.length - 1];
+
+                DEBUG_JSX.log("Layer keyframe range: " + (firstKeyTime * 1000).toFixed(1) + "ms to " + (lastKeyTime * 1000).toFixed(1) + "ms");
+
+                // Check each marker - if it's within the keyframe range, move it
                 for (var m = 1; m <= layer.marker.numKeys; m++) {
                     var markerTime = layer.marker.keyTime(m);
-                    
-                    // Check if this marker is at the same time as any keyframe
-                    for (var t = 0; t < originalKeyframeTimes.length; t++) {
-                        if (Math.abs(markerTime - originalKeyframeTimes[t]) < 0.001) { // 1ms tolerance
-                            var markerValue = layer.marker.keyValue(m);
-                            var markerComment = markerValue.comment || "";
-                            var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
-                            
-                            DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
-                            
-                            allMarkersToMove.push({
-                                layer: layer,
-                                markerIndex: m,
-                                oldTime: markerTime,
-                                newTime: newMarkerTime,
-                                markerValue: markerValue,
-                                comment: markerComment
-                            });
-                            break; // Only match once per marker
-                        }
+                    var markerInRange = (markerTime >= firstKeyTime && markerTime <= lastKeyTime);
+
+                    if (markerInRange) {
+                        var markerValue = layer.marker.keyValue(m);
+                        var markerComment = markerValue.comment || "";
+                        var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
+
+                        DEBUG_JSX.log("Found marker '" + markerComment + "' in range at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
+
+                        allMarkersToMove.push({
+                            layer: layer,
+                            markerIndex: m,
+                            oldTime: markerTime,
+                            newTime: newMarkerTime,
+                            markerValue: markerValue,
+                            comment: markerComment
+                        });
                     }
                 }
             }
