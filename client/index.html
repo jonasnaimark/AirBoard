@@ -110,14 +110,34 @@
                     </div>
                 </div>
                 <div class="section-content" data-section="keyframe-reader">
-                <div class="control-row">
-                    <button id="readKeyframes" class="main-button">Read Keyframes</button>
+                <!-- Top row with 5 equal-width elements -->
+                <div class="control-row keyframe-top-row">
+                    <!-- 1. Read Keyframes (icon button, same handler) -->
+                    <button id="readKeyframes" class="stagger-btn" title="Read Keyframes">
+                        <svg width="18" height="18" viewBox="0 0 1200 1200" fill="#ffffff">
+                            <path d="m787.5 112.5h-525c-19.887 0.019531-38.949 7.9297-53.012 21.988-14.059 14.062-21.969 33.125-21.988 53.012v675c0.019531 19.887 7.9297 38.949 21.988 53.012 14.062 14.059 33.125 21.969 53.012 21.988h525c19.883-0.023438 38.949-7.9336 53.008-21.992 14.059-14.059 21.969-33.125 21.992-53.008v-675c-0.023438-19.883-7.9336-38.949-21.992-53.008-14.059-14.059-33.125-21.969-53.008-21.992zm-525 750v-675h525l0.039062 675z"/>
+                            <path d="m1012.5 487.5c0-13.398-7.1484-25.777-18.75-32.477-11.602-6.6992-25.898-6.6992-37.5 0-11.602 6.6992-18.75 19.078-18.75 32.477v487.5c-0.011719 9.9414-3.9648 19.477-10.996 26.504-7.0273 7.0312-16.562 10.984-26.504 10.996h-487.5c-13.398 0-25.777 7.1484-32.477 18.75-6.6992 11.602-6.6992 25.898 0 37.5 6.6992 11.602 19.078 18.75 32.477 18.75h487.5c29.828-0.03125 58.422-11.895 79.512-32.988 21.094-21.09 32.957-49.684 32.988-79.512z"/>
+                        </svg>
+                    </button>
+                    <!-- 2. Stagger direction (moved from stagger row) -->
+                    <button class="stagger-btn" id="staggerActionBtn" type="button" title="Stagger direction">
+                        <img src="assets/icons/Stagger Icon.png" alt="Stagger" style="width: 18px; height: 18px;">
+                    </button>
+                    <!-- 3. Snap keys to playhead (placeholder icon, no functionality yet) -->
+                    <button class="stagger-btn" id="snapToPlayheadBtn" type="button" title="Snap keys to playhead">
+                        <img src="assets/icons/Snap to Playhead Icon.png" alt="Snap" style="width: 20px; height: 20px;">
+                    </button>
+                    <!-- 4. Mirror keys (placeholder icon, no functionality yet) -->
+                    <button class="stagger-btn" id="mirrorKeysBtn" type="button" title="Mirror keys">
+                        <img src="assets/icons/Mirror Icon.png" alt="Mirror" style="width: 20px; height: 20px;">
+                    </button>
+                    <!-- 5. Global frame number input (replaces 3 inputs below) -->
+                    <input class="stagger-input" id="globalFrameInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
                 </div>
                 <div class="control-row">
                     <div class="resolution-display" id="delayDisplay">
                         <span id="delayText" style="opacity: 0.75;">Delay</span>
                         <div class="stagger-controls">
-                            <input class="stagger-input" id="delayInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
                             <button class="stagger-btn decrement" id="delayDecrementBtn" type="button">−</button>
                             <button class="stagger-btn increment" id="delayIncrementBtn" type="button">+</button>
                         </div>
@@ -127,7 +147,6 @@
                     <div class="resolution-display" id="durationDisplay">
                         <span id="durationText" style="opacity: 0.75;">Duration</span>
                         <div class="stagger-controls">
-                            <input class="stagger-input" id="durationInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
                             <button class="stagger-btn decrement" id="durationDecrementBtn" type="button">−</button>
                             <button class="stagger-btn increment" id="durationIncrementBtn" type="button">+</button>
                         </div>
@@ -137,10 +156,6 @@
                     <div class="keyframe-display" id="staggerDisplay">
                         <span id="staggerText">Stagger</span>
                         <div class="distance-controls">
-                            <input class="stagger-input" id="staggerInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
-                            <button class="distance-btn stagger-btn" id="staggerActionBtn" type="button" title="Stagger direction">
-                                <img src="assets/icons/Stagger Icon.png" alt="Stagger" style="width: 16px; height: 16px; opacity: 0.8;">
-                            </button>
                             <button class="stagger-btn decrement" id="staggerDecrementBtn" type="button">−</button>
                             <button class="stagger-btn increment" id="staggerIncrementBtn" type="button">+</button>
                         </div>
@@ -237,12 +252,11 @@
                 <hr class="subsection-divider">
                 <div class="subsection-title">Shimmer</div>
                 <div class="control-row">
-                    <button id="addOverlay" class="main-button">
-                        Add Overlay
-                    </button>
-                    <button id="shimmerLayers" class="main-button">
-                        Add Shimmer
-                    </button>
+                    <select id="shimmerType" class="dropdown">
+                        <option value="selected">Selected Layers</option>
+                        <option value="overlay">Overlay Layer</option>
+                    </select>
+                    <button id="addShimmer" class="main-button">Add Shimmer</button>
                 </div>
                 </div>
             </section>

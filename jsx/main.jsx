@@ -48,16 +48,16 @@ function getFullPropertyPath(prop) {
     try {
         var pathParts = [];
         var currentProp = prop;
-        
+
         // Walk up the property hierarchy to build full path
         while (currentProp && currentProp.name) {
             pathParts.unshift(currentProp.name);
-            
+
             // Stop if we reach the layer level
             if (currentProp.propertyType === PropertyType.LAYER) {
                 break;
             }
-            
+
             // Move to parent property
             try {
                 currentProp = currentProp.parentProperty;
@@ -66,21 +66,58 @@ function getFullPropertyPath(prop) {
                 break;
             }
         }
-        
+
         // Create unique path like "Effects > Blur & Sharpen > Blur > Blurriness"
         // or "Transform > Position" or "Effects > Slider Control > Slider"
         var fullPath = pathParts.join(" > ");
-        
+
         // Add matchName for extra uniqueness in case of name collisions
         if (prop.matchName) {
             fullPath += " [" + prop.matchName + "]";
         }
-        
+
         return fullPath;
-        
+
     } catch(e) {
         // Fallback to basic name if path generation fails
         return prop.name || "Unknown Property";
+    }
+}
+
+// Generate unique property identifier for Sproing marker compatibility
+// Regular properties (Position, Scale, etc.) use simple matchName for backward compatibility
+// Pseudo Effect properties use full path with indices to prevent collisions
+function getUniquePropertyId(prop) {
+    var matchName = prop.matchName;
+
+    // Only use unique path for Pseudo Effect properties
+    // Regular properties use simple matchName for backward compatibility with Sproing markers
+    if (matchName && matchName.indexOf("Pseudo/") === 0) {
+        // Pseudo Effect - build full unique path
+        var id = matchName;
+
+        try {
+            id = prop.propertyIndex + "/" + id;
+
+            // Walk up the property hierarchy to build full path
+            var parent = prop.propertyGroup(1);
+            var depth = 2;
+            while (parent && depth <= prop.propertyDepth) {
+                if (parent.propertyIndex !== undefined) {
+                    id = parent.propertyIndex + "/" + id;
+                }
+                parent = prop.propertyGroup(depth);
+                depth++;
+            }
+        } catch (e) {
+            // Fallback to just matchName if property hierarchy fails
+            id = matchName;
+        }
+
+        return id;
+    } else {
+        // Regular property - return simple matchName for backward compatibility
+        return matchName;
     }
 }
 
@@ -1690,9 +1727,8 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                         
                         try {
                             prop.setValueAtKey(newIdx, data.value);
-                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                            
-                            // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+
+                            // Apply temporal ease first to avoid flipping linear sides
                             if (data.inEase !== undefined && data.outEase !== undefined) {
                                 try {
                                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -1700,6 +1736,9 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                                     // Some properties might not support temporal ease
                                 }
                             }
+
+                            // Then re-assert original interpolation types
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                             prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -1707,7 +1746,10 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                             if (data.spatialContinuous !== undefined) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                // Only restore tangents if NOT auto-bezier (manual tangent control)
+                                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                }
                             }
                             
                             // CRITICAL: Restore keyframe color label
@@ -2038,9 +2080,8 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         
                         try {
                             prop.setValueAtKey(newIdx, data.value);
-                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                            
-                            // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+
+                            // Apply temporal ease first to avoid flipping linear sides
                             if (data.inEase !== undefined && data.outEase !== undefined) {
                                 try {
                                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -2048,6 +2089,9 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                                     // Some properties might not support temporal ease
                                 }
                             }
+
+                            // Then re-assert original interpolation types
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                             prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -2055,7 +2099,10 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                             if (data.spatialContinuous !== undefined) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                // Only restore tangents if NOT auto-bezier (manual tangent control)
+                                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                }
                             }
                             
                             // CRITICAL: Restore keyframe color label
@@ -2647,9 +2694,8 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
             
             // Restore all attributes
             prop.setValueAtKey(newIdx, data.value);
-            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-            
-            // Restore temporal ease if it exists (same as timeline mode)
+
+            // Apply temporal ease first to avoid flipping linear sides
             if (data.inEase !== undefined && data.outEase !== undefined) {
                 try {
                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -2657,6 +2703,9 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                     // Some properties might not support temporal ease
                 }
             }
+
+            // Then re-assert original interpolation types
+            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
             
             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
             prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -2664,7 +2713,10 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
             if (data.spatialContinuous !== undefined) {
                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                // Only restore tangents if NOT auto-bezier (manual tangent control)
+                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                }
             }
             
             // CRITICAL: Restore keyframe color label
@@ -2790,9 +2842,8 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
             
             // Restore all attributes
             prop.setValueAtKey(newIdx, data.value);
-            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-            
-            // Restore temporal ease if it exists (same as timeline mode)
+
+            // Apply temporal ease first to avoid flipping linear sides
             if (data.inEase !== undefined && data.outEase !== undefined) {
                 try {
                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -2800,6 +2851,9 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
                     // Some properties might not support temporal ease
                 }
             }
+
+            // Then re-assert original interpolation types
+            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
             
             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
             prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -2807,7 +2861,10 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
             if (data.spatialContinuous !== undefined) {
                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                // Only restore tangents if NOT auto-bezier (manual tangent control)
+                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                }
             }
             
             // CRITICAL: Restore keyframe color label
@@ -3229,9 +3286,8 @@ function stretchMultiPropertyDuration(direction) {
                     
                     // Restore all attributes
                     prop.setValueAtKey(newIdx, keyData.value);
-                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
-                    
-                    // Restore temporal ease if it exists (same as timeline mode)
+
+                    // Apply temporal ease first to avoid flipping linear sides
                     if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
                         try {
                             prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
@@ -3239,6 +3295,9 @@ function stretchMultiPropertyDuration(direction) {
                             // Some properties might not support temporal ease
                         }
                     }
+
+                    // Then re-assert original interpolation types
+                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
                     prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
                     prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
@@ -3246,7 +3305,10 @@ function stretchMultiPropertyDuration(direction) {
                     if (keyData.spatialContinuous !== undefined) {
                         prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
                         prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
-                        prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                        // Only restore tangents if NOT auto-bezier (manual tangent control)
+                        if (!keyData.spatialAutoBezier && keyData.inTangent !== undefined && keyData.outTangent !== undefined) {
+                            prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                        }
                     }
                     
                     // CRITICAL: Restore keyframe color label
@@ -3766,9 +3828,8 @@ function nudgeDelay(direction) {
                             var data = keyframesToMove[k];
                             var newIdx = prop.addKey(data.newTime);
                             prop.setValueAtKey(newIdx, data.value);
-                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                            
-                            // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+
+                            // Apply temporal ease first to avoid flipping linear sides
                             if (data.inEase !== undefined && data.outEase !== undefined) {
                                 try {
                                     prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -3776,6 +3837,9 @@ function nudgeDelay(direction) {
                                     // Some properties might not support temporal ease
                                 }
                             }
+
+                            // Then re-assert original interpolation types
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                             prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -3784,7 +3848,10 @@ function nudgeDelay(direction) {
                             if (data.spatialContinuous !== undefined) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                // Only restore tangents if NOT auto-bezier (manual tangent control)
+                                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                }
                             }
                             
                             // CRITICAL: Restore keyframe color label
@@ -4240,12 +4307,18 @@ function nudgeDelay(direction) {
                             var data = keyframesToMove[k];
                             var newIdx = prop.addKey(data.newTime);
                             prop.setValueAtKey(newIdx, data.value);
-                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                            
-                            // CRITICAL FIX: Restore temporal ease for perfect easing preservation
-                            if (data.inEase !== undefined && data.outEase !== undefined && data.inInterp === KeyframeInterpolationType.BEZIER && data.outInterp === KeyframeInterpolationType.BEZIER) {
-                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+
+                            // Apply temporal ease first to avoid flipping linear sides
+                            if (data.inEase !== undefined && data.outEase !== undefined) {
+                                try {
+                                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                                } catch(e) {
+                                    // Some properties might not support temporal ease
+                                }
                             }
+
+                            // Then re-assert original interpolation types
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
                             // CRITICAL FIX: Restore temporal properties
                             prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
@@ -4255,7 +4328,10 @@ function nudgeDelay(direction) {
                             if (data.spatialContinuous !== undefined) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                                 prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                // Only restore tangents if NOT auto-bezier (manual tangent control)
+                                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                                }
                             }
                             
                             // CRITICAL: Restore keyframe color label
@@ -4498,9 +4574,8 @@ function nudgeDelay(direction) {
                     
                     // Restore all attributes
                     prop.setValueAtKey(newIdx, keyData.value);
-                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
-                    
-                    // Restore temporal ease if it exists (same as timeline mode)
+
+                    // Apply temporal ease first to avoid flipping linear sides
                     if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
                         try {
                             prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
@@ -4508,6 +4583,9 @@ function nudgeDelay(direction) {
                             // Some properties might not support temporal ease
                         }
                     }
+
+                    // Then re-assert original interpolation types
+                    prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
                     prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
                     prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
@@ -4515,7 +4593,10 @@ function nudgeDelay(direction) {
                     if (keyData.spatialContinuous !== undefined) {
                         prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
                         prop.setSpatialAutoBezierAtKey(newIdx, keyData.spatialAutoBezier);
-                        prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                        // Only restore tangents if NOT auto-bezier (manual tangent control)
+                        if (!keyData.spatialAutoBezier && keyData.inTangent !== undefined && keyData.outTangent !== undefined) {
+                            prop.setSpatialTangentsAtKey(newIdx, keyData.inTangent, keyData.outTangent);
+                        }
                     }
                     
                     // CRITICAL: Restore keyframe color label
@@ -5761,13 +5842,8 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                 
                                 // Restore all attributes
                                 prop.setValueAtKey(newIndex, data.value);
-                                prop.setInterpolationTypeAtKey(newIndex, data.inInterp, data.outInterp);
-                                
-                                // Restore temporal attributes
-                                prop.setTemporalContinuousAtKey(newIndex, data.temporalContinuous);
-                                prop.setTemporalAutoBezierAtKey(newIndex, data.temporalAutoBezier);
-                                
-                                // Restore temporal ease if it exists
+
+                                // Apply temporal ease first to avoid flipping linear sides
                                 if (data.inEase !== undefined && data.outEase !== undefined) {
                                     try {
                                         prop.setTemporalEaseAtKey(newIndex, data.inEase, data.outEase);
@@ -5775,13 +5851,23 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                         // Some properties might not support temporal ease
                                     }
                                 }
+
+                                // Then re-assert original interpolation types
+                                prop.setInterpolationTypeAtKey(newIndex, data.inInterp, data.outInterp);
+
+                                // Restore temporal attributes
+                                prop.setTemporalContinuousAtKey(newIndex, data.temporalContinuous);
+                                prop.setTemporalAutoBezierAtKey(newIndex, data.temporalAutoBezier);
                                 
                                 // Restore spatial attributes if applicable
                                 if (data.spatialContinuous !== undefined) {
                                     try {
                                         prop.setSpatialContinuousAtKey(newIndex, data.spatialContinuous);
                                         prop.setSpatialAutoBezierAtKey(newIndex, data.spatialAutoBezier);
-                                        prop.setSpatialTangentsAtKey(newIndex, data.inTangent, data.outTangent);
+                                        // Only restore tangents if NOT auto-bezier (manual tangent control)
+                                        if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                                            prop.setSpatialTangentsAtKey(newIndex, data.inTangent, data.outTangent);
+                                        }
                                     } catch(e) {
                                         // Spatial properties might not be available
                                     }
@@ -6888,7 +6974,7 @@ function nudgeDelayTimelineMode(direction, frames) {
                     prop.setValueAtKey(newIdx, data.value);
                     prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                     
-                    // Restore temporal ease if it exists
+                    // Apply temporal ease first to avoid flipping linear sides
                     if (data.inEase !== undefined && data.outEase !== undefined) {
                         try {
                             prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -6896,6 +6982,9 @@ function nudgeDelayTimelineMode(direction, frames) {
                             // Some properties might not support temporal ease
                         }
                     }
+
+                    // Then re-assert original interpolation types
+                    prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                     
                     prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                     prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -6905,7 +6994,10 @@ function nudgeDelayTimelineMode(direction, frames) {
                         try {
                             prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
                             prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                            prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            // Only restore tangents if NOT auto-bezier (manual tangent control)
+                            if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            }
                         } catch(e) {
                             // Some properties might not support spatial settings
                         }
@@ -8302,9 +8394,8 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                         
                         try {
                             prop.setValueAtKey(newIdx, keyData.value);
-                            prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
-                            
-                            // Restore temporal ease if it exists
+
+                            // Apply temporal ease first to avoid flipping linear sides
                             if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
                                 try {
                                     prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
@@ -8312,6 +8403,9 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                                     // Some properties might not support temporal ease
                                 }
                             }
+
+                            // Then re-assert original interpolation types
+                            prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                             
                             prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
                             prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
@@ -8819,9 +8913,8 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                     var data = keyframesToMove[k];
                     var newIdx = prop.addKey(data.newTime);
                     prop.setValueAtKey(newIdx, data.value);
-                    prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                    
-                    // Restore temporal ease if it exists (same as timeline mode)
+
+                    // Apply temporal ease first to avoid flipping linear sides
                     if (data.inEase !== undefined && data.outEase !== undefined) {
                         try {
                             prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -8829,6 +8922,9 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                             // Some properties might not support temporal ease
                         }
                     }
+
+                    // Then re-assert original interpolation types
+                    prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                     
                     prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                     prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
@@ -9859,9 +9955,8 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                         
                         // Restore value and interpolation
                         prop.setValueAtKey(newIdx, data.value);
-                        prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                        
-                        // CRITICAL FIX: Restore temporal ease if it exists (same as timeline mode)
+
+                        // Apply temporal ease first to avoid flipping linear sides
                         if (data.inEase !== undefined && data.outEase !== undefined) {
                             try {
                                 prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -9869,6 +9964,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                                 // Some properties might not support temporal ease
                             }
                         }
+
+                        // Then re-assert original interpolation types
+                        prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                         prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
                         prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
                         
@@ -10083,11 +10181,464 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, is
         
         // If final result has no stagger (all layers at same time), show 0ms stagger
         var effectiveStagger = finalStaggerExists ? (direction * staggerMs) : 0;
-        
+
         return "success|Applied stagger to " + processedLayers + " layers|" + effectiveStagger + "ms per layer";
-        
+
     } catch(e) {
         return "error|Layer stagger failed: " + e.toString();
+    }
+}
+
+// Snap selected keyframes to playhead - per-property snapping with marker movement
+function snapToPlayheadFromPanel() {
+    try {
+        app.beginUndoGroup("Snap to Playhead");
+
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            app.endUndoGroup();
+            alert("Please open a composition to snap keyframes to playhead.");
+            return "error|No active composition";
+        }
+
+        var selectedLayers = [];
+        for (var i = 0; i < comp.selectedLayers.length; i++) {
+            selectedLayers.push(comp.selectedLayers[i]);
+        }
+
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            alert("Please select at least one layer with keyframes to snap to playhead.");
+            return "error|No layers selected";
+        }
+
+        var playheadTime = comp.time;
+        var frameRate = comp.frameRate;
+        var propertiesProcessed = 0;
+        var keyframesProcessed = 0;
+        var markersProcessed = 0;
+        // Backup selection restoration store
+        var processedSelections = [];
+
+        // Store marker offsets and time ranges for each layer
+        var layerMarkerOffsets = {}; // layerIndex -> {propertyId -> {offset, minTime, maxTime}}
+
+        // PHASE 1: Collect all selected keyframes grouped by property
+        var allPropertyData = []; // Array of {layer, property, uniqueId, keyframes}
+
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
+            var selectedProps = layer.selectedProperties;
+
+            for (var propIdx = 0; propIdx < selectedProps.length; propIdx++) {
+                var prop = selectedProps[propIdx];
+
+                // Skip invalid properties
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+
+                // Collect selected keyframe indices
+                var selectedKeyIndices = [];
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        selectedKeyIndices.push(k);
+                    }
+                }
+
+                if (selectedKeyIndices.length === 0) continue;
+
+                // Get unique property ID for marker identification
+                var uniquePropId = getUniquePropertyId(prop);
+
+                allPropertyData.push({
+                    layer: layer,
+                    property: prop,
+                    propertyName: prop.name,
+                    uniqueId: uniquePropId,
+                    selectedKeyIndices: selectedKeyIndices.slice()
+                });
+            }
+
+            // SPECIAL: Check for Time Remap (might not be in selectedProperties)
+            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                var timeRemapSelected = [];
+                for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                    if (layer.timeRemap.keySelected(k)) {
+                        timeRemapSelected.push(k);
+                    }
+                }
+
+                if (timeRemapSelected.length > 0) {
+                    // Check if already added via selectedProperties
+                    var alreadyAdded = false;
+                    for (var check = 0; check < allPropertyData.length; check++) {
+                        if (allPropertyData[check].layer === layer &&
+                            allPropertyData[check].propertyName === "Time Remap") {
+                            alreadyAdded = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyAdded) {
+                        allPropertyData.push({
+                            layer: layer,
+                            property: layer.timeRemap,
+                            propertyName: "Time Remap",
+                            uniqueId: getUniquePropertyId(layer.timeRemap),
+                            selectedKeyIndices: timeRemapSelected.slice()
+                        });
+                    }
+                }
+            }
+        }
+
+        if (allPropertyData.length === 0) {
+            app.endUndoGroup();
+            alert("Please select at least one keyframe to snap to playhead.");
+            return "error|No selected keyframes found";
+        }
+
+        // PHASE 2: Process each property independently
+        for (var propDataIdx = 0; propDataIdx < allPropertyData.length; propDataIdx++) {
+            var propData = allPropertyData[propDataIdx];
+            var layer = propData.layer;
+            var prop = propData.property;
+            var uniquePropId = propData.uniqueId;
+            var selectedKeys = propData.selectedKeyIndices;
+
+            // Find earliest and latest selected keyframe times for this property
+            var earliestKeyTime = null;
+            var latestKeyTime = null;
+            var earliestKeyIndex = -1;
+            for (var k = 0; k < selectedKeys.length; k++) {
+                var keyTime = prop.keyTime(selectedKeys[k]);
+                if (earliestKeyTime === null || keyTime < earliestKeyTime) {
+                    earliestKeyTime = keyTime;
+                    earliestKeyIndex = selectedKeys[k];
+                }
+                if (latestKeyTime === null || keyTime > latestKeyTime) {
+                    latestKeyTime = keyTime;
+                }
+            }
+
+            if (earliestKeyTime === null) continue;
+
+            // Calculate offset to snap earliest keyframe to playhead
+            var timeOffset = playheadTime - earliestKeyTime;
+
+            // Skip if already at playhead
+            if (Math.abs(timeOffset) < 0.001) continue;
+
+            // Store offset and time range for marker processing
+            if (!layerMarkerOffsets[layer.index]) {
+                layerMarkerOffsets[layer.index] = {};
+            }
+            layerMarkerOffsets[layer.index][uniquePropId] = {
+                offset: timeOffset,
+                minTime: earliestKeyTime,
+                maxTime: latestKeyTime
+            };
+
+            // Collect all keyframe data for recreation
+            var keyframesToMove = [];
+            var isTimeRemap = (prop.name === "Time Remap" ||
+                              (prop.matchName && prop.matchName === "ADBE Time Remapping"));
+
+            for (var k = 0; k < selectedKeys.length; k++) {
+                var keyIndex = selectedKeys[k];
+                var keyTime = prop.keyTime(keyIndex);
+                var newTime = Math.max(0, keyTime + timeOffset);
+
+                // Collect full keyframe data
+                var keyData = {
+                    oldIndex: keyIndex,
+                    oldTime: keyTime,
+                    newTime: newTime,
+                    value: prop.keyValue(keyIndex),
+                    inInterp: prop.keyInInterpolationType(keyIndex),
+                    outInterp: prop.keyOutInterpolationType(keyIndex),
+                    temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                    temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                    label: prop.keyLabel(keyIndex)
+                };
+
+                // Always collect temporal ease data (even for LINEAR sides)
+                // LINEAR keyframes have ease with speed=0
+                try {
+                    keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                    keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                } catch(e) {
+                    // Ease might not be available for some property types
+                }
+
+                // Collect spatial properties if spatial property
+                if (prop.isSpatial) {
+                    try {
+                        keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                        keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                        keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                        keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                    } catch(e) {
+                        // Spatial properties might not be available
+                    }
+                }
+
+                keyframesToMove.push(keyData);
+            }
+
+            // RECREATE KEYFRAMES with Time Remap special handling
+            if (isTimeRemap) {
+                // Time Remap: Use setValueAtTime approach
+                // First, add new keyframes
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var data = keyframesToMove[k];
+                    prop.setValueAtTime(data.newTime, data.value);
+                }
+
+                // Then remove old keyframes (carefully)
+                var oldKeyIndicesToRemove = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var oldTime = keyframesToMove[k].oldTime;
+                    for (var j = prop.numKeys; j >= 1; j--) {
+                        var keyTime = prop.keyTime(j);
+                        if (Math.abs(keyTime - oldTime) < 0.001) {
+                            // Make sure this isn't a new keyframe
+                            var isNewKey = false;
+                            for (var n = 0; n < keyframesToMove.length; n++) {
+                                if (Math.abs(keyTime - keyframesToMove[n].newTime) < 0.001) {
+                                    isNewKey = true;
+                                    break;
+                                }
+                            }
+                            if (!isNewKey) {
+                                oldKeyIndicesToRemove.push(j);
+                            }
+                        }
+                    }
+                }
+
+                // Remove in descending order
+                oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
+                    prop.removeKey(oldKeyIndicesToRemove[k]);
+                }
+
+                // Track new indices for selection
+                var newSelIndices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var targetTime = keyframesToMove[k].newTime;
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                            newSelIndices.push(j);
+                            break;
+                        }
+                    }
+                }
+
+                // Restore selection for Time Remap
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    prop.setSelectedAtKey(k, false);
+                }
+                for (var k = 0; k < newSelIndices.length; k++) {
+                    prop.setSelectedAtKey(newSelIndices[k], true);
+                }
+
+                // Store for backup restoration pass (use direct property reference to avoid name collisions)
+                processedSelections.push({
+                    layer: layer,
+                    propertyName: prop.name,
+                    propertyReference: prop,
+                    newSelIndices: newSelIndices.slice()
+                });
+
+            } else {
+                // Regular properties: Standard remove-then-add approach
+                // Remove old keyframes in reverse order
+                var indicesToRemove = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    indicesToRemove.push(keyframesToMove[k].oldIndex);
+                }
+                indicesToRemove.sort(function(a, b) { return b - a; });
+                for (var k = 0; k < indicesToRemove.length; k++) {
+                    prop.removeKey(indicesToRemove[k]);
+                }
+
+                // Add new keyframes with all properties preserved
+                var newSelIndices = [];
+                for (var k = 0; k < keyframesToMove.length; k++) {
+                    var data = keyframesToMove[k];
+                    var newIdx = prop.addKey(data.newTime);
+                    prop.setValueAtKey(newIdx, data.value);
+
+                    // Apply temporal ease first to avoid flipping linear sides
+                    if (data.inEase !== undefined && data.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                        } catch(e) {
+                            // Ease setting might fail in some cases
+                        }
+                    }
+
+                    // Re-assert original interpolation types to preserve one-sided linear/bezier
+                    prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+
+                    // Restore temporal continuity and auto-bezier
+                    prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                    prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+
+                    // Restore spatial properties if applicable
+                    if (data.spatialContinuous !== undefined) {
+                        prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                        prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+
+                        // Only restore tangents if NOT auto-bezier (manual tangent control)
+                        // Auto-bezier tangents are automatically recalculated by AE
+                        if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                            prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                        }
+                    }
+
+                    // Restore keyframe color label
+                    if (data.label !== undefined) {
+                        prop.setLabelAtKey(newIdx, data.label);
+                    }
+
+                    newSelIndices.push(newIdx);
+                }
+
+                // Restore selection
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    prop.setSelectedAtKey(k, false);
+                }
+                for (var k = 0; k < newSelIndices.length; k++) {
+                    prop.setSelectedAtKey(newSelIndices[k], true);
+                }
+
+                // Store for backup restoration pass (use direct property reference to avoid name collisions)
+                processedSelections.push({
+                    layer: layer,
+                    propertyName: prop.name,
+                    propertyReference: prop,
+                    newSelIndices: newSelIndices.slice()
+                });
+            }
+
+            propertiesProcessed++;
+            keyframesProcessed += keyframesToMove.length;
+        }
+
+        // PHASE 3: Move markers for processed properties (only markers within selected keyframe ranges)
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
+            var markerProp = layer.property("Marker");
+
+            if (!markerProp || markerProp.numKeys === 0) continue;
+            if (!layerMarkerOffsets[layer.index]) continue;
+
+            var propertyOffsets = layerMarkerOffsets[layer.index];
+
+            // Process each marker
+            for (var m = 1; m <= markerProp.numKeys; m++) {
+                var marker = markerProp.keyValue(m);
+                if (!marker || !marker.comment) continue;
+                var markerTime = markerProp.keyTime(m);
+
+                // Check which properties this marker belongs to
+                for (var propId in propertyOffsets) {
+                    if (marker.comment.indexOf("| Property: " + propId) !== -1) {
+                        var propData = propertyOffsets[propId];
+                        var epsilon = 0.01; // Ultra-precise for 1-frame accuracy at 60fps (matches Sproing)
+
+                        // Only move marker if it's within the selected keyframe time range
+                        if (markerTime >= propData.minTime - epsilon &&
+                            markerTime <= propData.maxTime + epsilon) {
+
+                            var timeOffset = propData.offset;
+                            var oldMarkerTime = markerTime;
+                            var newMarkerTime = Math.max(0, oldMarkerTime + timeOffset);
+
+                            // Recreate marker at new time
+                            markerProp.setValueAtTime(newMarkerTime, marker);
+
+                            // Remove old marker if time changed
+                            if (Math.abs(timeOffset) > 0.001) {
+                                // Find and remove old marker by time
+                                for (var removeIdx = markerProp.numKeys; removeIdx >= 1; removeIdx--) {
+                                    if (Math.abs(markerProp.keyTime(removeIdx) - oldMarkerTime) < 0.001) {
+                                        // Make sure this isn't the new marker
+                                        if (Math.abs(markerProp.keyTime(removeIdx) - newMarkerTime) > 0.001) {
+                                            markerProp.removeKey(removeIdx);
+                                            break;
+                                        }
+                                    }
+                                }
+                                markersProcessed++;
+                            }
+                        }
+
+                        break; // Found matching property, no need to check others
+                    }
+                }
+            }
+        }
+
+        // PHASE 4: Backup selection restoration using fresh property references
+        try {
+            // Helper: find property by name within a layer (supports groups)
+            function findPropertyByName(layer, targetName) {
+                if (targetName === "Time Remap" || targetName === "ADBE Time Remapping") {
+                    try {
+                        if (layer.timeRemapEnabled && layer.timeRemap) {
+                            return layer.timeRemap;
+                        }
+                    } catch(e) {}
+                }
+                function searchGroup(group) {
+                    for (var i = 1; i <= group.numProperties; i++) {
+                        var p = group.property(i);
+                        if (p && p.name === targetName && p.canVaryOverTime) {
+                            return p;
+                        }
+                        if (p && (p.propertyType === PropertyType.INDEXED_GROUP || p.propertyType === PropertyType.NAMED_GROUP)) {
+                            var found = searchGroup(p);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                }
+                return searchGroup(layer);
+            }
+
+            for (var s = 0; s < processedSelections.length; s++) {
+                var sel = processedSelections[s];
+                // Prefer stored property reference; fall back to name search if needed
+                var fresh = sel.propertyReference || findPropertyByName(sel.layer, sel.propertyName);
+                if (fresh && sel.newSelIndices && sel.newSelIndices.length > 0) {
+                    // Deselect all, then select our indices
+                    for (var k = 1; k <= fresh.numKeys; k++) {
+                        try { fresh.setSelectedAtKey(k, false); } catch(e) {}
+                    }
+                    for (var j = 0; j < sel.newSelIndices.length; j++) {
+                        try { fresh.setSelectedAtKey(sel.newSelIndices[j], true); } catch(e) {}
+                    }
+                }
+            }
+        } catch(selectionBackupError) {
+            // Non-fatal selection restoration error
+            $.writeln("Selection backup restoration failed: " + selectionBackupError.toString());
+        }
+
+        app.endUndoGroup();
+
+        var result = "success|Snapped " + keyframesProcessed + " keyframes across " + propertiesProcessed + " properties to playhead";
+        if (markersProcessed > 0) {
+            result += " (moved " + markersProcessed + " markers)";
+        }
+        return result;
+
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Snap to playhead failed: " + e.toString();
     }
 }
 

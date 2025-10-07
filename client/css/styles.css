@@ -239,6 +239,73 @@ body {
     align-items: stretch;
 }
 
+/* Keyframe Nudger top row equal widths */
+.keyframe-top-row > .stagger-btn,
+.keyframe-top-row > .stagger-input {
+    flex: 0 0 calc(20% - 8px); /* 5 items = 20% each, minus gap adjustment */
+    width: calc(20% - 8px);
+    min-width: 0;
+    height: 35px;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Make top-row buttons match input height for visual parity */
+.keyframe-top-row .stagger-btn {
+    height: 35px;
+    border-radius: 6px; /* Larger radius for top row */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; /* Remove any padding that might offset icons */
+}
+
+/* Ensure SVG icons are properly centered */
+.keyframe-top-row .stagger-btn svg,
+.keyframe-top-row .stagger-btn img {
+    display: block;
+    margin: 0 auto;
+    transition: transform 0.3s ease;
+}
+
+/* Stagger direction button flip animation */
+.keyframe-top-row .stagger-btn.flipped img {
+    transform: scaleX(-1);
+}
+
+/* Ensure global input visually matches buttons in top row */
+.keyframe-top-row .stagger-input {
+    height: 35px !important;
+    line-height: 35px;
+    font-size: 12.5px;
+    padding: 0;
+    box-sizing: border-box;
+    vertical-align: middle;
+    border-radius: 6px; /* Match top-row button border-radius */
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15); /* Match button box-shadow */
+    background-color: #1a1a1a; /* Even darker background for input */
+    border: 1px solid rgba(255, 255, 255, 0.16); /* Brighter border */
+    text-align: center;
+}
+
+.keyframe-top-row .stagger-input:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+}
+
+.keyframe-top-row .stagger-input:focus {
+    background-color: #1a1a1a;
+    border-color: #4a90e2;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+}
+
+/* Make stagger +/- match delay/duration widths (original 3-button layout width) */
+#staggerRow .distance-controls {
+    width: calc(33.33% - 12px); /* same container width as delay/duration originally had */
+}
+#staggerRow .distance-controls .stagger-btn {
+    width: calc(50% - 3px); /* each button takes half of the container */
+}
+
 .control-row:last-child {
     margin-bottom: 0;
 }
@@ -280,7 +347,7 @@ body {
 }
 
 .main-button:active {
-    transform: scale(0.98);
+    transform: scale(0.96);
 }
 
 /* Responsive text for Create Squircle button */
@@ -321,11 +388,12 @@ body {
     color: #cccccc;
     font-size: 12.5px;
     font-weight: 500;
-    padding: 0 50% 0 12px; /* Right padding for 50% width buttons */
+    padding: 0 38% 0 12px; /* Right padding adjusted for narrower buttons */
     display: flex;
     align-items: center;
     user-select: none;
     pointer-events: none; /* Prevent text selection/interaction */
+    white-space: nowrap; /* Prevent text wrapping */
 }
 
 /* Keyframe Reader labels with reduced opacity */
@@ -350,6 +418,7 @@ body {
     display: flex;
     align-items: center;
     user-select: none;
+    white-space: nowrap; /* Prevent text wrapping */
 }
 
 .resolution-display .number-controls {
@@ -383,7 +452,7 @@ body {
 }
 
 .resolution-display .number-controls .number-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.96);
 }
 
 .resolution-display .number-controls .add-btn {
@@ -513,7 +582,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .keyframe-display .distance-controls .distance-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.96);
 }
 
 .keyframe-display .distance-controls .distance-btn:focus {
@@ -701,15 +770,15 @@ input.distance-input[data-tooltip]:hover::after {
     padding: 0;
 }
 
-/* Delay and Duration controls - 3 elements at 1/3 width each */
-#delayDisplay .stagger-controls .stagger-input,
-#durationDisplay .stagger-controls .stagger-input {
-    width: calc(33.33% - 4px);
+/* Delay/Duration: match original 3-button layout width */
+#delayDisplay .stagger-controls,
+#durationDisplay .stagger-controls {
+    width: calc(33.33% - 12px); /* same container width as originally had */
 }
 
 #delayDisplay .stagger-controls .stagger-btn,
 #durationDisplay .stagger-controls .stagger-btn {
-    width: calc(33.33% - 4px);
+    width: calc(50% - 3px); /* each button takes half of the container */
 }
 
 .stagger-input {
@@ -765,7 +834,7 @@ input.distance-input[data-tooltip]:hover::after {
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     cursor: pointer;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
@@ -788,7 +857,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .stagger-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.96);
 }
 
 /* In/Out radio-style selection states - subtle opacity-based selection */

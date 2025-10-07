@@ -238,8 +238,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var addNullButton = document.getElementById('addNull');
     var addDeviceButton = document.getElementById('addDevice');
     var addGestureButton = document.getElementById('addGesture');
-    var addOverlayButton = document.getElementById('addOverlay');
-    var addShimmerButton = document.getElementById('shimmerLayers');
+    var addShimmerButton = document.getElementById('addShimmer');
     var addBlurButton = document.getElementById('addBlur');
     var resolutionInput = document.getElementById('resolutionMultiplier');
     var resolutionText = document.getElementById('resolutionText');
@@ -606,22 +605,23 @@ document.addEventListener('DOMContentLoaded', function() {
     var delayIncrementBtn = document.getElementById('delayIncrementBtn');
     var delayDecrementBtn = document.getElementById('delayDecrementBtn');
     
+    // Global frame input replacing per-row inputs
+    var globalFrameInputField = document.getElementById('globalFrameInput');
     // Duration +/- buttons - stretch keyframes with dynamic frame values
-    var durationInputField = document.getElementById('durationInput');
-    if (durationIncrementBtn && durationDecrementBtn && durationInputField) {
-        // Create tooltip for duration input
-        createTooltip(durationInputField, 'Frames');
-        
+    if (durationIncrementBtn && durationDecrementBtn && globalFrameInputField) {
+        // Create tooltip for global frame input
+        createTooltip(globalFrameInputField, 'Frames');
+
         durationIncrementBtn.addEventListener('click', function() {
             console.log('Duration increment (stretch forward) clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get duration frames from input field
-            var durationFrames = parseFloat(durationInputField.value) || 3;
+            var durationFrames = parseFloat(globalFrameInputField.value) || 3;
             console.log('Applying +' + durationFrames + ' frame duration stretch');
             
             durationIncrementBtn.disabled = true;
@@ -700,7 +700,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Get duration frames from input field
-            var durationFrames = parseFloat(durationInputField.value) || 3;
+            var durationFrames = parseFloat(globalFrameInputField.value) || 3;
             console.log('Applying -' + durationFrames + ' frame duration stretch');
             
             durationDecrementBtn.disabled = true;
@@ -772,22 +772,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Delay +/- buttons - call delay nudging functions with dynamic frame values
-    var delayInputField = document.getElementById('delayInput');
-    if (delayIncrementBtn && delayDecrementBtn && delayInputField) {
-        // Create tooltip for delay input
-        createTooltip(delayInputField, 'Frames');
-        
+    if (delayIncrementBtn && delayDecrementBtn && globalFrameInputField) {
+        // Tooltip already created above if present
+
         delayIncrementBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
             console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]'));
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get delay frames from input field
-            var delayFrames = parseFloat(delayInputField.value) || 3;
+            var delayFrames = parseFloat(globalFrameInputField.value) || 3;
             console.log('Applying +' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
             
             delayIncrementBtn.disabled = true;
@@ -869,7 +867,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Get delay frames from input field
-            var delayFrames = parseFloat(delayInputField.value) || 3;
+            var delayFrames = parseFloat(globalFrameInputField.value) || 3;
             console.log('Applying -' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
             
             delayDecrementBtn.disabled = true;
@@ -1344,18 +1342,48 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     
-    // Setup stagger input tooltip functionality
-    var staggerInput = document.getElementById('staggerInput');
-    if (staggerInput) {
-        createTooltip(staggerInput, 'Frames');
-    }
-    
-    // Setup stagger direction button tooltip
+    // Setup top row button tooltips
+    var readKeyframesBtn = document.getElementById('readKeyframes');
     var staggerActionBtn = document.getElementById('staggerActionBtn');
-    if (staggerActionBtn) {
-        createTooltip(staggerActionBtn, 'Stagger direction');
+    var snapToPlayheadBtn = document.getElementById('snapToPlayheadBtn');
+    var mirrorKeysBtn = document.getElementById('mirrorKeysBtn');
+
+    if (readKeyframesBtn) createTooltip(readKeyframesBtn, 'Read Keyframes');
+    if (staggerActionBtn) createTooltip(staggerActionBtn, 'Stagger direction');
+    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to Playhead');
+    if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror Keys');
+
+    // Snap to Playhead button handler
+    if (snapToPlayheadBtn) {
+        snapToPlayheadBtn.addEventListener('click', function() {
+            console.log('Snap to Playhead clicked');
+
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+
+            // Call ExtendScript function to snap keyframes to playhead
+            csInterface.evalScript('snapToPlayheadFromPanel()', function(result) {
+                console.log('Snap to playhead result:', result);
+
+                if (result && result.indexOf('success') === 0) {
+                    // Parse result: "success|Snapped 5 keyframes across 2 properties to playhead (moved 1 markers)"
+                    var parts = result.split('|');
+                    if (parts.length >= 2) {
+                        var message = parts[1];
+                        console.log('✓ ' + message);
+                        // Optionally show success feedback in UI
+                    }
+                } else if (result && result.indexOf('error') === 0) {
+                    var errorMsg = result.split('|')[1] || 'Unknown error';
+                    console.error('Snap to playhead error:', errorMsg);
+                    // Error alert is now shown in ExtendScript for native AE dialog
+                }
+            });
+        });
     }
-    
+
     // Setup In/Out button tooltips for X and Y distance
     var xInBtn = document.getElementById('xInBtn');
     var xOutBtn = document.getElementById('xOutBtn');
@@ -1370,21 +1398,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Stagger +/- buttons
     var staggerIncrementBtn = document.getElementById('staggerIncrementBtn');
     var staggerDecrementBtn = document.getElementById('staggerDecrementBtn');
-    var staggerInputField = document.getElementById('staggerInput');
-    
+    var staggerInputField = document.getElementById('globalFrameInput');
+
     if (staggerIncrementBtn) {
         staggerIncrementBtn.addEventListener('click', function() {
             console.log('Stagger increment (+) clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Skip pre-check - let ExtendScript handle single layer vs multi-layer scenarios
             // This allows same-layer staggering to work
             proceedWithStaggerIncrement();
-            
+
             function proceedWithStaggerIncrement() {
                 // Get stagger frames from input field
                 var staggerFrames = parseFloat(staggerInputField.value) || 3;
@@ -1993,39 +2021,34 @@ document.addEventListener('DOMContentLoaded', function() {
             addNullButton.textContent = 'Fit to Squircle';
         });
     });
-    
-    // Add Overlay button handler
-    addOverlayButton.addEventListener('click', function() {
-        console.log('Add Overlay clicked');
-        
-        // Disable button while working
-        addOverlayButton.disabled = true;
-        addOverlayButton.textContent = 'Adding...';
-        
-        // Call the After Effects script to add shimmer
-        csInterface.evalScript('addShimmerFromPanel()', function(result) {
-            console.log('Shimmer result:', result);
-            // Re-enable button
-            addOverlayButton.disabled = false;
-            addOverlayButton.textContent = 'Add Overlay';
-        });
-    });
-    
-    // Add Shimmer button handler
+
+    // Add Shimmer button handler (with dropdown for Selected/Overlay layers)
     addShimmerButton.addEventListener('click', function() {
-        console.log('Add Shimmer clicked');
-        
+        var shimmerType = document.getElementById('shimmerType').value;
+        console.log('Add Shimmer clicked, type:', shimmerType);
+
         // Disable button while working
         addShimmerButton.disabled = true;
         addShimmerButton.textContent = 'Adding...';
-        
-        // Call the After Effects script to add shimmer effect
-        csInterface.evalScript('addShimmerEffectFromPanel()', function(result) {
-            console.log('Shimmer effect result:', result);
-            // Re-enable button
-            addShimmerButton.disabled = false;
-            addShimmerButton.textContent = 'Add Shimmer';
-        });
+
+        // Call the appropriate After Effects script based on dropdown selection
+        if (shimmerType === 'overlay') {
+            // Overlay Layers - calls addShimmerFromPanel()
+            csInterface.evalScript('addShimmerFromPanel()', function(result) {
+                console.log('Shimmer overlay result:', result);
+                // Re-enable button
+                addShimmerButton.disabled = false;
+                addShimmerButton.textContent = 'Add Shimmer';
+            });
+        } else {
+            // Selected Layers (default) - calls addShimmerEffectFromPanel()
+            csInterface.evalScript('addShimmerEffectFromPanel()', function(result) {
+                console.log('Shimmer effect result:', result);
+                // Re-enable button
+                addShimmerButton.disabled = false;
+                addShimmerButton.textContent = 'Add Shimmer';
+            });
+        }
     });
     
     // Add Blur button handler
