@@ -1347,11 +1347,45 @@ document.addEventListener('DOMContentLoaded', function() {
     var staggerActionBtn = document.getElementById('staggerActionBtn');
     var snapToPlayheadBtn = document.getElementById('snapToPlayheadBtn');
     var mirrorKeysBtn = document.getElementById('mirrorKeysBtn');
+    var globalFrameInput = document.getElementById('globalFrameInput');
 
-    if (readKeyframesBtn) createTooltip(readKeyframesBtn, 'Read Keyframes');
+    if (readKeyframesBtn) createTooltip(readKeyframesBtn, 'Read keyframes');
     if (staggerActionBtn) createTooltip(staggerActionBtn, 'Stagger direction');
-    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to Playhead');
-    if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror Keys');
+    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead');
+    if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror keys');
+
+    // Mirror Keys button handler
+    if (mirrorKeysBtn) {
+        mirrorKeysBtn.addEventListener('click', function() {
+            console.log('Mirror Keys clicked');
+
+            if (!csInterface) {
+                console.log('CSInterface not available');
+                return;
+            }
+
+            // Call ExtendScript function to mirror keyframes
+            csInterface.evalScript('mirrorKeysFromPanel()', function(result) {
+                console.log('Mirror keys result:', result);
+
+                if (result && result.indexOf('success') === 0) {
+                    // Parse result: "success|Mirrored X properties"
+                    var parts = result.split('|');
+                    if (parts.length >= 2) {
+                        var message = parts[1];
+                        console.log('✓ ' + message);
+                    }
+                } else if (result && result.indexOf('error') === 0) {
+                    var errorMsg = result.split('|')[1] || 'Unknown error';
+                    console.error('Mirror keys error:', errorMsg);
+                    // Error alert is shown in ExtendScript for native AE dialog
+                }
+            });
+        });
+    }
+
+    // Sync overlay display with numeric input and keep centered group like "3f" or "12f"
+    // No overlay suffix; input displays its own value
 
     // Snap to Playhead button handler
     if (snapToPlayheadBtn) {

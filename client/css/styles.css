@@ -278,7 +278,7 @@ body {
     height: 35px !important;
     line-height: 35px;
     font-size: 12.5px;
-    padding: 0;
+    padding: 2px 0 0 0; /* Lower text by 2px */
     box-sizing: border-box;
     vertical-align: middle;
     border-radius: 6px; /* Match top-row button border-radius */
@@ -297,6 +297,8 @@ body {
     border-color: #4a90e2;
     box-shadow: 0 3px 6px rgba(0,0,0,0.15);
 }
+
+/* Non-selectable suffix "f" inside frame input */
 
 /* Make stagger +/- match delay/duration widths (original 3-button layout width) */
 #staggerRow .distance-controls {
@@ -1166,4 +1168,3 @@ input.distance-input[data-tooltip]:hover::after {
 ::-webkit-scrollbar-thumb:hover {
     background: #4a4a4a;
 }
-

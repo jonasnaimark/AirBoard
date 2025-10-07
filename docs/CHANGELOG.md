@@ -5,6 +5,30 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.58] - 2025-01-10 ✨ **MIRROR KEYS FEATURE**
+### ✨ New Features
+- **Mirror Keys Button**: New keyframe mirroring feature that duplicates and reverses first/last selected keyframes
+- **30-Frame Spacing**: Mirrored keys placed 30 frames apart starting at playhead position
+- **Value Reversal**: First keyframe value becomes second key, last keyframe value becomes first key
+- **Label Preservation**: Keyframe color labels preserved and reversed to match mirrored values
+- **Linear Interpolation**: All easing removed for clean linear interpolation on mirrored keys
+- **Top Row Integration**: Mirror keys button added to Keyframe Nudger top row with custom icon
+
+### 🎨 UI/UX Improvements
+- **Custom Mirror Icon**: 72×62px icon with proper aspect ratio (21×18px displayed)
+- **Frame Input Enhancement**: Non-selectable "f" suffix added to frame input for clarity
+- **Consistent Tooltips**: "Mirror keys" tooltip with proper first-word capitalization
+- **Icon Consistency**: All top row icons standardized to 18×18px (mirror icon 21×18px for proportions)
+
+### 🔧 Technical Improvements
+- **ExtendScript ES3 Compatibility**: Replaced `.map()` with traditional for loops for ExtendScript compatibility
+- **Property Detection**: Works across multiple layers using `selectedProperties` API
+- **Smart Selection**: Automatically selects newly created mirrored keyframes
+- **Robust Error Handling**: Native AE error dialogs for clear user feedback
+
+### 🔗 Associated Build
+- AirBoard-v4.16.58.zxp
+
 ## [4.16.57] - 2025-01-10 🎯 **REVERSE STAGGER & MARKER SYNC FIX**
 ### ✨ New Features
 - **Fixed Reverse Stagger Direction**: Reverse stagger mode for keyframes now works consistently with layer stagger - clicking + or - in reverse mode correctly increments/decrements the stagger without snapping back to 0

@@ -14879,3 +14879,170 @@ function removeMaterialEffects(layer) {
     
     return debugInfo;
 }
+// Mirror selected keyframes: take first and last selected key per property, duplicate them starting at playhead,
+// reverse order, set second key at +30 frames, and remove easing and labels.
+function mirrorKeysFromPanel() {
+    try {
+        app.beginUndoGroup("Mirror Keys");
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            app.endUndoGroup();
+            alert("Please open a composition to mirror keyframes.");
+            return "error|No active composition";
+        }
+        var playheadTime = comp.time;
+        var frameRate = comp.frameRate || 60;
+        var offsetSeconds = 30 / frameRate;
+
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            alert("Please select at least one layer with keyframes to mirror.");
+            return "error|No layers selected";
+        }
+
+        var processedProps = 0;
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("Mirror Keys: playhead=" + playheadTime.toFixed(3) + "s, offset=" + offsetSeconds.toFixed(3) + "s");
+
+        function collectSelectedKeys(prop) {
+            var sel = [];
+            for (var k = 1; k <= prop.numKeys; k++) {
+                if (prop.keySelected(k)) sel.push(k);
+            }
+            return sel;
+        }
+        function walkProperties(group, cb) {
+            for (var i = 1; i <= group.numProperties; i++) {
+                var p = group.property(i);
+                if (!p) continue;
+                if (p.canVaryOverTime) cb(p);
+                if (p.propertyType === PropertyType.INDEXED_GROUP || p.propertyType === PropertyType.NAMED_GROUP) {
+                    walkProperties(p, cb);
+                }
+            }
+        }
+
+        for (var li = 0; li < selectedLayers.length; li++) {
+            var layer = selectedLayers[li];
+            DEBUG_JSX.log("Layer: " + layer.name);
+
+            // Build a unique set of properties to process: prefer selectedProperties, but also walk all to catch selected keys
+            var propertiesToProcess = [];
+            var seenProps = {};
+            // Add from selectedProperties
+            var selectedProps = layer.selectedProperties;
+            for (var pi = 0; pi < selectedProps.length; pi++) {
+                var prop = selectedProps[pi];
+                if (!prop || !prop.canVaryOverTime || prop.numKeys === 0) continue;
+                var sel = collectSelectedKeys(prop);
+                if (sel.length >= 2) {
+                    propertiesToProcess.push({ prop: prop, sel: sel });
+                    seenProps[prop.name + "@" + prop.propertyIndex] = true;
+                }
+            }
+            // Fallback: walk entire property tree to catch selected keyframes
+            walkProperties(layer, function(p) {
+                try {
+                    if (!p || p.numKeys === 0) return;
+                    var keySel = collectSelectedKeys(p);
+                    if (keySel.length >= 2) {
+                        var key = p.name + "@" + p.propertyIndex;
+                        if (!seenProps[key]) {
+                            propertiesToProcess.push({ prop: p, sel: keySel });
+                            seenProps[key] = true;
+                        }
+                    }
+                } catch(e) {}
+            });
+
+            DEBUG_JSX.log("  Found props to mirror: " + propertiesToProcess.length);
+            for (var idx = 0; idx < propertiesToProcess.length; idx++) {
+                var entry = propertiesToProcess[idx];
+                var prop = entry.prop;
+                var sel = entry.sel;
+
+                // Identify first and last selected keys by time
+                var firstIdx = sel[0];
+                var lastIdx = sel[sel.length - 1];
+                // Sort by time to ensure first/last are temporal bounds (no .map() in ExtendScript)
+                var keyed = [];
+                for (var ki = 0; ki < sel.length; ki++) {
+                    keyed.push({ idx: sel[ki], t: prop.keyTime(sel[ki]) });
+                }
+                keyed.sort(function(a,b){ return a.t - b.t; });
+                firstIdx = keyed[0].idx;
+                lastIdx = keyed[keyed.length - 1].idx;
+                DEBUG_JSX.log("    Prop: " + prop.name + " | firstIdx=" + firstIdx + " t=" + prop.keyTime(firstIdx).toFixed(3) + "s, lastIdx=" + lastIdx + " t=" + prop.keyTime(lastIdx).toFixed(3) + "s");
+
+                // Read values and labels of first and last
+                var firstVal = prop.keyValue(firstIdx);
+                var lastVal = prop.keyValue(lastIdx);
+                var firstLabel = prop.keyLabel(firstIdx);
+                var lastLabel = prop.keyLabel(lastIdx);
+
+                // Create mirrored keys: first at playhead, second at playhead + 30 frames
+                var newFirst = prop.addKey(playheadTime);
+                var newSecond = prop.addKey(playheadTime + offsetSeconds);
+
+                // Reverse order: the value at start becomes lastVal, and the second becomes firstVal
+                prop.setValueAtKey(newFirst, lastVal);
+                prop.setValueAtKey(newSecond, firstVal);
+
+                // Clear easing: set interpolation to LINEAR
+                try {
+                    prop.setInterpolationTypeAtKey(newFirst, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.LINEAR);
+                    prop.setInterpolationTypeAtKey(newSecond, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.LINEAR);
+                } catch(e) {}
+                try {
+                    // Remove temporal ease by setting empty arrays if supported
+                    prop.setTemporalEaseAtKey(newFirst, [], []);
+                    prop.setTemporalEaseAtKey(newSecond, [], []);
+                } catch(e) {}
+                try {
+                    // Clear temporal continuity/auto-bezier
+                    prop.setTemporalContinuousAtKey(newFirst, false);
+                    prop.setTemporalAutoBezierAtKey(newFirst, false);
+                    prop.setTemporalContinuousAtKey(newSecond, false);
+                    prop.setTemporalAutoBezierAtKey(newSecond, false);
+                } catch(e) {}
+
+                // Clear spatial settings for Position-like properties
+                if (prop.isSpatial) {
+                    try {
+                        prop.setSpatialContinuousAtKey(newFirst, false);
+                        prop.setSpatialAutoBezierAtKey(newFirst, false);
+                        prop.setSpatialContinuousAtKey(newSecond, false);
+                        prop.setSpatialAutoBezierAtKey(newSecond, false);
+                    } catch(e) {}
+                }
+
+                // Preserve keyframe color labels (reversed to match mirrored values)
+                try {
+                    prop.setLabelAtKey(newFirst, lastLabel);
+                    prop.setLabelAtKey(newSecond, firstLabel);
+                } catch(e) {}
+
+                // Reselect only the new mirrored keys
+                for (var rk = 1; rk <= prop.numKeys; rk++) {
+                    try { prop.setSelectedAtKey(rk, false); } catch(e) {}
+                }
+                try { prop.setSelectedAtKey(newFirst, true); } catch(e) {}
+                try { prop.setSelectedAtKey(newSecond, true); } catch(e) {}
+
+                processedProps++;
+            }
+        }
+
+        app.endUndoGroup();
+        if (processedProps === 0) {
+            alert("No selected keyframes found to mirror. Please select at least two keyframes per property.");
+            return "error|No selected keyframes found to mirror";
+        }
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|Mirrored keys on " + processedProps + " properties|" + debugMessages.join("|");
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Mirror keys failed: " + e.toString();
+    }
+}
