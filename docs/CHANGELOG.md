@@ -5,26 +5,24 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.16.58] - 2025-01-10 ✨ **MIRROR KEYS FEATURE**
+## [4.16.58] - 2025-01-10 ✨ **KEYFRAME NUDGER ENHANCEMENTS**
 ### ✨ New Features
-- **Mirror Keys Button**: New keyframe mirroring feature that duplicates and reverses first/last selected keyframes
-- **30-Frame Spacing**: Mirrored keys placed 30 frames apart starting at playhead position
-- **Value Reversal**: First keyframe value becomes second key, last keyframe value becomes first key
-- **Label Preservation**: Keyframe color labels preserved and reversed to match mirrored values
-- **Linear Interpolation**: All easing removed for clean linear interpolation on mirrored keys
-- **Top Row Integration**: Mirror keys button added to Keyframe Nudger top row with custom icon
+- **Mirror Keys**: Duplicates and reverses first/last selected keyframes with 30-frame spacing at playhead
+- **Snap to Playhead**: Moves all selected keyframes to current playhead position
+- **Stagger Direction Toggle**: Moved to top row for quick access to reverse layer stagger order
+- **Global Frame Input**: Single frame input now controls delay, duration, and stagger increments
+- **Smart Position Rows**: X/Y position distance rows only appear when reading position keyframes
 
-### 🎨 UI/UX Improvements
-- **Custom Mirror Icon**: 72×62px icon with proper aspect ratio (21×18px displayed)
-- **Frame Input Enhancement**: Non-selectable "f" suffix added to frame input for clarity
-- **Consistent Tooltips**: "Mirror keys" tooltip with proper first-word capitalization
-- **Icon Consistency**: All top row icons standardized to 18×18px (mirror icon 21×18px for proportions)
+### 🎨 UI Improvements
+- Custom icons for mirror (21×18px) and snap to playhead (18×18px)
+- Top row now contains: Snap | Mirror | Stagger Direction | Frame Input
+- Cleaner interface with position rows hidden until needed
+- Frame input shows "f" suffix for clarity
 
-### 🔧 Technical Improvements
-- **ExtendScript ES3 Compatibility**: Replaced `.map()` with traditional for loops for ExtendScript compatibility
-- **Property Detection**: Works across multiple layers using `selectedProperties` API
-- **Smart Selection**: Automatically selects newly created mirrored keyframes
-- **Robust Error Handling**: Native AE error dialogs for clear user feedback
+### 🔧 Technical
+- ExtendScript ES3 fix: replaced `.map()` with for loops
+- Preserves keyframe labels (reversed to match mirrored values)
+- Linear interpolation on mirrored keys
 
 ### 🔗 Associated Build
 - AirBoard-v4.16.58.zxp
