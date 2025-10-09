@@ -16026,8 +16026,43 @@ function mirrorKeysFromPanel() {
                             prop.setValueAtTime(keyTime, valueToSet);
                         }
 
-                        // Apply velocity-based easing exactly like Sproing
-                        applyVelocityBasedEasing(prop, simplifiedKeyframes, fullCurveData);
+                        // Apply velocity-based easing exactly like Sproing (unless max precision)
+                        if (detectedPrecision !== 'max') {
+                            applyVelocityBasedEasing(prop, simplifiedKeyframes, fullCurveData);
+                        }
+
+                        // CRITICAL: For max precision, set linear interpolation on ALL keyframes (matching Sproing behavior)
+                        // This removes all easing curves to create pure linear interpolation between every frame
+                        if (detectedPrecision === 'max') {
+                            DEBUG_JSX.log("    Setting linear interpolation for max precision keyframes");
+                            for (var i = 0; i < simplifiedKeyframes.length; i++) {
+                                var keyTime = simplifiedKeyframes[i].x;
+                                var keyIndex = prop.nearestKeyIndex(keyTime);
+                                if (keyIndex) {
+                                    try {
+                                        // Set linear temporal interpolation
+                                        prop.setInterpolationTypeAtKey(keyIndex, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.LINEAR);
+                                        prop.setTemporalAutoBezierAtKey(keyIndex, false);
+                                        prop.setTemporalContinuousAtKey(keyIndex, false);
+
+                                        // Set linear spatial interpolation for spatial properties (Position, etc.)
+                                        if (prop.isSpatial) {
+                                            prop.setSpatialAutoBezierAtKey(keyIndex, false);
+                                            prop.setSpatialContinuousAtKey(keyIndex, false);
+                                            // Set zero spatial tangents for linear interpolation
+                                            var dim = simplifiedKeyframes[0].y.length;
+                                            var zeroTangent = [];
+                                            for (var d = 0; d < dim; d++) {
+                                                zeroTangent.push(0);
+                                            }
+                                            prop.setSpatialTangentsAtKey(keyIndex, zeroTangent, zeroTangent);
+                                        }
+                                    } catch (e) {
+                                        // Ignore if operations fail for this keyframe
+                                    }
+                                }
+                            }
+                        }
 
                         // Set blue labels on first and last keyframes (for Sproing unbake compatibility)
                         var firstMirroredKeyIndex = prop.nearestKeyIndex(simplifiedKeyframes[0].x);
