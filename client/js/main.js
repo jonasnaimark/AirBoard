@@ -241,7 +241,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var addShimmerButton = document.getElementById('addShimmer');
     var addBlurButton = document.getElementById('addBlur');
     var resolutionInput = document.getElementById('resolutionMultiplier');
-    var resolutionText = document.getElementById('resolutionText');
     
     // Accordion functionality
     function initializeAccordion() {
@@ -401,14 +400,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize section reordering
     initializeSectionReordering();
     
-    // Function to update resolution display text only
-    function updateResolutionDisplay() {
-        var currentValue = resolutionInput.value;
-        console.log('Updating display to:', currentValue);
-        resolutionText.textContent = 'Resolution: ' + currentValue + 'x';
-        console.log('Display updated to:', resolutionText.textContent);
-    }
-    
     // Function to save resolution preference
     function saveResolutionPreference(multiplier) {
         if (csInterface) {
@@ -427,7 +418,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 var savedResolution = parseInt(result);
                 if (savedResolution >= 1 && savedResolution <= 6) {
                     resolutionInput.value = savedResolution;
-                    updateResolutionDisplay();
+
+                    // Update dropdown selection
+                    var resolutionDropdown = document.getElementById('resolutionMultiplierDropdown');
+                    if (resolutionDropdown) {
+                        resolutionDropdown.value = savedResolution;
+                    }
+
                     console.log('Loaded resolution preference:', savedResolution);
                 }
             });
@@ -561,37 +558,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Get the increment/decrement buttons and attach event listeners
-    var incrementBtn = document.querySelector('.resolution-display .number-btn.increment');
-    var decrementBtn = document.querySelector('.resolution-display .number-btn.decrement');
-    
-    incrementBtn.addEventListener('click', function() {
-        console.log('Increment clicked');
-        var currentValue = parseInt(resolutionInput.value);
-        console.log('Current value:', currentValue);
-        var maxValue = 6; // Max resolution multiplier
-        if (currentValue < maxValue) {
-            resolutionInput.value = currentValue + 1;
-            console.log('New value:', resolutionInput.value);
-            updateResolutionDisplay();
+    // Get the resolution multiplier dropdown and attach event listener
+    var resolutionDropdown = document.getElementById('resolutionMultiplierDropdown');
+
+    if (resolutionDropdown) {
+        resolutionDropdown.addEventListener('change', function() {
+            var selectedValue = parseInt(resolutionDropdown.value);
+            console.log('Resolution multiplier changed to:', selectedValue);
+
+            // Update the hidden input field for backward compatibility
+            resolutionInput.value = selectedValue;
+
             // Save the new preference
-            saveResolutionPreference(parseInt(resolutionInput.value));
-        }
-    });
-    
-    decrementBtn.addEventListener('click', function() {
-        console.log('Decrement clicked');
-        var currentValue = parseInt(resolutionInput.value);
-        console.log('Current value:', currentValue);
-        var minValue = 1; // Min resolution multiplier
-        if (currentValue > minValue) {
-            resolutionInput.value = currentValue - 1;
-            console.log('New value:', resolutionInput.value);
-            updateResolutionDisplay();
-            // Save the new preference
-            saveResolutionPreference(parseInt(resolutionInput.value));
-        }
-    });
+            saveResolutionPreference(selectedValue);
+        });
+    }
     
     // Keyframe Reader Controls
     var durationValue = document.getElementById('durationValue');

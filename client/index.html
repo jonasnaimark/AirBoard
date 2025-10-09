@@ -37,24 +37,23 @@
                 </div>
                 <div class="section-content" data-section="device-templates">
                 <div class="control-row">
-                    <select id="deviceType" class="dropdown">
-                        <option value="iphone">iPhone UI - 393</option>
+                    <select id="deviceType" class="dropdown" style="flex: 0 0 calc(50% - 7px);">
+                        <option value="iphone">iPhone - 393</option>
                         <option value="desktop">Web - 1440</option>
                         <option disabled>──────────</option>
                         <option value="iphone15">iPhone 15 - 393</option>
                         <option value="iphone-simple">iPhone Simple - 393</option>
                         <option value="web-chrome">Web Chrome - 1440</option>
                     </select>
-                    <button id="addDevice" class="main-button">Make Comp</button>
-                </div>
-                <div class="control-row">
-                    <div class="resolution-display" id="resolutionDisplay">
-                        <span id="resolutionText">Resolution: 2x</span>
-                        <div class="number-controls">
-                            <button class="number-btn decrement" type="button">−</button>
-                            <button class="number-btn increment" type="button">+</button>
-                        </div>
-                    </div>
+                    <select id="resolutionMultiplierDropdown" class="dropdown" style="flex: 0 0 calc(15% - 7px);">
+                        <option value="1">1x</option>
+                        <option value="2" selected>2x</option>
+                        <option value="3">3x</option>
+                        <option value="4">4x</option>
+                        <option value="5">5x</option>
+                        <option value="6">6x</option>
+                    </select>
+                    <button id="addDevice" class="main-button" style="flex: 0 0 calc(35% - 6px); white-space: nowrap; min-width: 0;">Add Comp</button>
                     <input type="hidden" id="resolutionMultiplier" value="2">
                 </div>
                 </div>

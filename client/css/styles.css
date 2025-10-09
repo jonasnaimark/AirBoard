@@ -912,6 +912,13 @@ input.distance-input[data-tooltip]:hover::after {
     background-size: 16px;
 }
 
+/* Hide dropdown arrow for resolution multiplier dropdown only */
+#resolutionMultiplierDropdown {
+    background-image: none;
+    padding: 0 8px;
+    text-align: center;
+}
+
 .dropdown:hover {
     border-color: #666666;
 }
