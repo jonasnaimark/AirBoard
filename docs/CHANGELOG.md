@@ -5,6 +5,25 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.60] - 2025-10-08 🛡️ **SHIFT-CLICK DELAY PROTECTION FIX**
+### 🎯 Fixed - BASELINE DELAY MODE PROTECTION
+- **Shift-Click Delay Protection**: Fixed adjacent keyframe corruption when using shift+click on delay buttons (baseline delay mode)
+- **Missing Data Structure**: Added `selectedKeys` array to `propertyDelays` structure so protection code can identify which keyframes are selected
+
+### 🔧 Technical Implementation
+- **Root Cause**: The `propertyDelays` structure was missing the `selectedKeys` property, causing `captureNextKeyframe(prop, propData.selectedKeys)` to receive `undefined`
+- **Solution**: Added `selectedKeys: propData.selectedKeys` to propertyDelays structure at line 3849
+- **Code Location**: jsx/main.jsx line 3849 in the `nudgeDelay` function's property delays building section
+- **Protection Already In Place**: The capture (line 3986) and restore (lines 4099-4102) code was already there, just needed the correct data
+
+### 🎨 UI Improvements
+- **Updated Icon Layout**: Reorganized keyframe nudger top row - Read | Snap | Mirror | Stagger | Input
+- **Updated Snap Icon**: Refined snap to playhead icon positioning and alignment
+- **Updated Mirror Icon**: Enhanced mirror icon diamond size and positioning
+
+### 🔗 Associated Build
+- AirBoard-v4.16.60.zxp
+
 ## [4.16.59] - 2025-01-10 🛡️ **KEYFRAME PROTECTION SYSTEM**
 ### 🎯 Fixed - CRITICAL ADJACENT KEYFRAME PROTECTION
 - **Spring Animation Corruption Fix**: Keyframes immediately after delay/duration/stagger/snap operations no longer get modified

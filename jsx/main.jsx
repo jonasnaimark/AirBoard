@@ -3834,18 +3834,19 @@ function nudgeDelay(direction) {
         for (var propName in propertyMap) {
             var propData = propertyMap[propName];
             var keyframes = propData.keyframes;
-            
+
             // Sort by time to get first keyframe
             keyframes.sort(function(a, b) { return a.time - b.time; });
             var firstTime = keyframes[0].time;
-            
+
             // Track if this is a baseline property (ANY property at the earliest time)
             var isOriginalBaseline = (Math.abs(firstTime - originalEarliestTime) < 0.001); // Use small tolerance for time comparison
-            
+
             propertyDelays.push({
                 property: propName,
                 propObject: propData.property,
                 keyframes: keyframes,
+                selectedKeys: propData.selectedKeys,
                 currentDelay: firstTime,
                 timeOffset: 0,
                 isOriginalBaseline: isOriginalBaseline
