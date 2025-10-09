@@ -114,22 +114,35 @@
                 <div class="control-row keyframe-top-row">
                     <!-- 1. Read Keyframes (icon button, same handler) -->
                     <button id="readKeyframes" class="stagger-btn" title="Read Keyframes">
-                        <svg width="18" height="18" viewBox="0 0 1200 1200" fill="#ffffff">
-                            <path d="m787.5 112.5h-525c-19.887 0.019531-38.949 7.9297-53.012 21.988-14.059 14.062-21.969 33.125-21.988 53.012v675c0.019531 19.887 7.9297 38.949 21.988 53.012 14.062 14.059 33.125 21.969 53.012 21.988h525c19.883-0.023438 38.949-7.9336 53.008-21.992 14.059-14.059 21.969-33.125 21.992-53.008v-675c-0.023438-19.883-7.9336-38.949-21.992-53.008-14.059-14.059-33.125-21.969-53.008-21.992zm-525 750v-675h525l0.039062 675z"/>
-                            <path d="m1012.5 487.5c0-13.398-7.1484-25.777-18.75-32.477-11.602-6.6992-25.898-6.6992-37.5 0-11.602 6.6992-18.75 19.078-18.75 32.477v487.5c-0.011719 9.9414-3.9648 19.477-10.996 26.504-7.0273 7.0312-16.562 10.984-26.504 10.996h-487.5c-13.398 0-25.777 7.1484-32.477 18.75-6.6992 11.602-6.6992 25.898 0 37.5 6.6992 11.602 19.078 18.75 32.477 18.75h487.5c29.828-0.03125 58.422-11.895 79.512-32.988 21.094-21.09 32.957-49.684 32.988-79.512z"/>
+                        <svg width="18" height="18" viewBox="0 0 62 62" fill="none">
+                            <path d="M48 13C50.2091 13 52 14.7909 52 17V53C52 55.2091 50.2091 57 48 57H21C18.7909 57 17 55.2091 17 53H48V13Z" fill="white"/>
+                            <rect x="11" y="7" width="31" height="40" stroke="white" stroke-width="4" stroke-linejoin="round"/>
                         </svg>
                     </button>
                     <!-- 2. Stagger direction (moved from stagger row) -->
                     <button class="stagger-btn" id="staggerActionBtn" type="button" title="Stagger direction">
-                        <img src="assets/icons/Stagger Icon.png" alt="Stagger" style="width: 18px; height: 18px;">
+                        <svg width="18" height="18" viewBox="0 0 62 62" fill="none">
+                            <path d="M43 31L19 31" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                            <path d="M29 48L5 48" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                            <path d="M57 14L33 14" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                        </svg>
                     </button>
                     <!-- 3. Snap keys to playhead (placeholder icon, no functionality yet) -->
                     <button class="stagger-btn" id="snapToPlayheadBtn" type="button" title="Snap keys to playhead">
-                        <img src="assets/icons/Snap to Playhead Icon.png" alt="Snap" style="width: 18px; height: 18px;">
+                        <svg width="18" height="18" viewBox="0 0 62 62" fill="none">
+                            <path d="M31 31L31 58" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                            <path d="M41.3682 35L48.8543 42.4861L41.3682 49.9723" stroke="white" stroke-width="4" stroke-linecap="square"/>
+                            <path d="M20.6025 35L13.1164 42.4861L20.6025 49.9723" stroke="white" stroke-width="4" stroke-linecap="square"/>
+                            <path d="M40 4C41.1046 4 42 4.89543 42 6V18.1377C42 18.6365 41.8138 19.1179 41.4775 19.4863L32.4775 29.3486C32.0986 29.7638 31.5621 30 31 30C30.4379 30 29.9014 29.7638 29.5225 29.3486L20.5225 19.4863C20.1862 19.1179 20 18.6365 20 18.1377V6L20.0107 5.7959C20.113 4.78722 20.9643 4 22 4L40 4Z" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+                        </svg>
                     </button>
                     <!-- 4. Mirror keys (placeholder icon, no functionality yet) -->
                     <button class="stagger-btn" id="mirrorKeysBtn" type="button" title="Mirror keys">
-                        <img src="assets/icons/Mirror Icon.png" alt="Mirror" style="width: 21px; height: 18px;">
+                        <svg width="21" height="18" viewBox="0 0 72 62" fill="none">
+                            <path d="M36 7L36 55" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                            <rect x="59" y="22.1716" width="13" height="13" transform="rotate(45 59 22.1716)" stroke="white" stroke-width="4"/>
+                            <rect x="13" y="22.1716" width="13" height="13" transform="rotate(45 13 22.1716)" stroke="white" stroke-width="4"/>
+                        </svg>
                     </button>
                     <!-- 5. Global frame number input (replaces 3 inputs below) -->
                     <input class="stagger-input" id="globalFrameInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">

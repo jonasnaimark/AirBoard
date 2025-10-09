@@ -121,6 +121,209 @@ function getUniquePropertyId(prop) {
     }
 }
 
+// ============================================================================
+// KEYFRAME PROTECTION HELPERS
+// ============================================================================
+// These functions protect adjacent keyframes from unwanted modification during
+// keyframe operations. After Effects automatically adjusts adjacent keyframes
+// when timeline structure changes, which can corrupt spring animations and
+// other precise timing work.
+
+/**
+ * Captures the complete state of a keyframe for later restoration
+ * @param {Property} prop - The property containing the keyframe
+ * @param {number} keyIndex - The 1-based index of the keyframe to capture
+ * @returns {Object|null} - Keyframe data object or null if capture fails
+ */
+function captureKeyframeState(prop, keyIndex) {
+    if (!prop || keyIndex < 1 || keyIndex > prop.numKeys) {
+        return null;
+    }
+
+    try {
+        var keyData = {
+            index: keyIndex,
+            time: prop.keyTime(keyIndex),
+            value: prop.keyValue(keyIndex),
+            inInterp: prop.keyInInterpolationType(keyIndex),
+            outInterp: prop.keyOutInterpolationType(keyIndex),
+            temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+            temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+            label: prop.keyLabel(keyIndex)
+        };
+
+        // Collect temporal ease (even for LINEAR - they have ease with speed=0)
+        try {
+            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+        } catch(e) {
+            // Ease might not be available for some property types
+        }
+
+        // Collect spatial properties if applicable
+        if (prop.isSpatial) {
+            try {
+                keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+            } catch(e) {
+                // Spatial properties might not be available
+            }
+        }
+
+        return keyData;
+    } catch(e) {
+        return null;
+    }
+}
+
+/**
+ * Restores a keyframe to its captured state
+ * @param {Property} prop - The property containing the keyframe
+ * @param {number} currentIndex - The current 1-based index of the keyframe
+ * @param {Object} keyData - The captured keyframe state
+ * @returns {boolean} - True if restoration succeeded, false otherwise
+ */
+function restoreKeyframeState(prop, currentIndex, keyData) {
+    if (!prop || !keyData || currentIndex < 1 || currentIndex > prop.numKeys) {
+        return false;
+    }
+
+    try {
+        // Restore value
+        prop.setValueAtKey(currentIndex, keyData.value);
+
+        // Apply temporal ease first to avoid flipping linear sides
+        if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
+            try {
+                prop.setTemporalEaseAtKey(currentIndex, keyData.inEase, keyData.outEase);
+            } catch(e) {
+                // Ease setting might fail in some cases
+            }
+        }
+
+        // Re-assert original interpolation types to preserve one-sided linear/bezier
+        prop.setInterpolationTypeAtKey(currentIndex, keyData.inInterp, keyData.outInterp);
+
+        // Restore temporal continuity and auto-bezier
+        prop.setTemporalContinuousAtKey(currentIndex, keyData.temporalContinuous);
+        prop.setTemporalAutoBezierAtKey(currentIndex, keyData.temporalAutoBezier);
+
+        // Restore spatial properties if applicable
+        if (keyData.spatialContinuous !== undefined) {
+            prop.setSpatialContinuousAtKey(currentIndex, keyData.spatialContinuous);
+            prop.setSpatialAutoBezierAtKey(currentIndex, keyData.spatialAutoBezier);
+
+            // Only restore tangents if NOT auto-bezier (manual tangent control)
+            // Auto-bezier tangents are automatically recalculated by AE
+            if (!keyData.spatialAutoBezier && keyData.inTangent !== undefined && keyData.outTangent !== undefined) {
+                prop.setSpatialTangentsAtKey(currentIndex, keyData.inTangent, keyData.outTangent);
+            }
+        }
+
+        // Restore keyframe color label
+        if (keyData.label !== undefined) {
+            prop.setLabelAtKey(currentIndex, keyData.label);
+        }
+
+        return true;
+    } catch(e) {
+        return false;
+    }
+}
+
+/**
+ * Captures the keyframe immediately after a set of selected keyframes
+ * This is used to protect adjacent keyframes from AE's automatic modifications
+ * @param {Property} prop - The property to check
+ * @param {Array} selectedKeyIndices - Array of selected keyframe indices (1-based)
+ * @returns {Object|null} - Captured keyframe state or null if no next key exists
+ */
+function captureNextKeyframe(prop, selectedKeyIndices) {
+    if (!prop || !selectedKeyIndices || selectedKeyIndices.length === 0) {
+        return null;
+    }
+
+    // Find the highest selected key index
+    var maxSelectedIndex = selectedKeyIndices[0];
+    for (var i = 1; i < selectedKeyIndices.length; i++) {
+        if (selectedKeyIndices[i] > maxSelectedIndex) {
+            maxSelectedIndex = selectedKeyIndices[i];
+        }
+    }
+
+    // Capture the keyframe after the last selected one
+    var nextKeyIndex = maxSelectedIndex + 1;
+    DEBUG_JSX.log("🎯 CAPTURE NEXT KEY: maxSelected=" + maxSelectedIndex + ", nextIndex=" + nextKeyIndex + ", totalKeys=" + prop.numKeys);
+
+    if (nextKeyIndex <= prop.numKeys) {
+        var captured = captureKeyframeState(prop, nextKeyIndex);
+        if (captured) {
+            DEBUG_JSX.log("✅ Captured next key at index " + nextKeyIndex + ", time=" + captured.time);
+        }
+        return captured;
+    }
+
+    DEBUG_JSX.log("⚠️ No next key to capture (last key selected)");
+    return null;
+}
+
+/**
+ * Restores the next keyframe after a keyframe operation
+ * Calculates the new index accounting for keys that were added/removed
+ * @param {Property} prop - The property containing the keyframe
+ * @param {Object} nextKeyData - The captured keyframe state
+ * @param {number} keysAdded - Number of keyframes added (positive) or removed (negative)
+ * @returns {boolean} - True if restoration succeeded
+ */
+function restoreNextKeyframe(prop, nextKeyData, keysAdded) {
+    if (!prop || !nextKeyData) {
+        return false;
+    }
+
+    try {
+        // Calculate new index after keys were added/removed
+        var newIndex = nextKeyData.index + keysAdded;
+
+        DEBUG_JSX.log("🔧 RESTORE NEXT KEY: Original index=" + nextKeyData.index + ", keysAdded=" + keysAdded + ", newIndex=" + newIndex + ", expectedTime=" + nextKeyData.time);
+
+        // First, try the calculated index (works when keys don't move in time)
+        if (newIndex > 0 && newIndex <= prop.numKeys) {
+            var currentTime = prop.keyTime(newIndex);
+            DEBUG_JSX.log("🔧 Checking calculated index " + newIndex + ": time=" + currentTime + ", expected=" + nextKeyData.time);
+            if (Math.abs(currentTime - nextKeyData.time) < 0.001) {
+                DEBUG_JSX.log("✅ Time matched at calculated index, restoring");
+                return restoreKeyframeState(prop, newIndex, nextKeyData);
+            }
+        }
+
+        // If time doesn't match at calculated index, the keyframe is at the same
+        // absolute position but the timeline structure around it changed.
+        // The keyframe should still be at the same index position relative to
+        // the newly added keys. Try the calculated index regardless of time:
+        if (newIndex > 0 && newIndex <= prop.numKeys) {
+            DEBUG_JSX.log("⚠️ Time didn't match, but restoring at calculated index anyway");
+            return restoreKeyframeState(prop, newIndex, nextKeyData);
+        }
+
+        // Last resort: try to find by time (works for snap-to-playhead style operations)
+        DEBUG_JSX.log("🔍 Searching for keyframe by time...");
+        for (var i = 1; i <= prop.numKeys; i++) {
+            if (Math.abs(prop.keyTime(i) - nextKeyData.time) < 0.001) {
+                DEBUG_JSX.log("✅ Found by time at index " + i);
+                return restoreKeyframeState(prop, i, nextKeyData);
+            }
+        }
+
+        DEBUG_JSX.log("❌ Failed to restore next keyframe");
+        return false;
+    } catch(e) {
+        DEBUG_JSX.log("❌ Error restoring next keyframe: " + e.toString());
+        return false;
+    }
+}
+
 // User Preferences - Save/Load resolution multiplier
 function saveResolutionPreference(multiplier) {
     try {
@@ -1562,7 +1765,10 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                 
                 // Sort selected key indices
                 selKeys.sort(function(a, b) { return a - b; });
-                
+
+                // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                var nextKeyData = captureNextKeyframe(prop, selKeys);
+
                 // Collect keyframe data, sorted by time
                 var keyData = [];
                 for (var k = 0; k < selKeys.length; k++) {
@@ -1728,20 +1934,14 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                         try {
                             prop.setValueAtKey(newIdx, data.value);
 
-                            // Apply temporal ease first to avoid flipping linear sides
-                            if (data.inEase !== undefined && data.outEase !== undefined) {
-                                try {
-                                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
-                                } catch(e) {
-                                    // Some properties might not support temporal ease
-                                }
-                            }
+                            // Apply temporal ease only for sides originally Bezier
+                            restoreTemporalEaseSafely(prop, newIdx, data.inInterp, data.outInterp, data.inEase, data.outEase);
 
                             // Then re-assert original interpolation types
                             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
                             
-                            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
-                            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                            // Restore flags safely to keep fully-linear keys visually linear
+                            restoreTemporalFlagsSafely(prop, newIdx, data.inInterp, data.outInterp, data.temporalContinuous, data.temporalAutoBezier);
                             
                             if (data.spatialContinuous !== undefined) {
                                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
@@ -1772,6 +1972,12 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
                         }
                         
                         newSelIndices.push(newIdx);
+                    }
+
+                    // PROTECTION: Restore the next keyframe
+                    if (nextKeyData !== null) {
+                        var keysAdded = newSelIndices.length - selKeys.length;
+                        restoreNextKeyframe(prop, nextKeyData, keysAdded);
                     }
                 }
             }
@@ -1877,10 +2083,13 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
             } catch(e) {
                 // Property name/matchName might not be accessible
             }
-            
+
             // Sort selected key indices
             selKeys.sort(function(a, b) { return a - b; });
-                
+
+            // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+            var nextKeyData = captureNextKeyframe(prop, selKeys);
+
                 // Collect keyframe data, sorted by time (same as original)
                 var keyData = [];
                 for (var k = 0; k < selKeys.length; k++) {
@@ -2040,7 +2249,13 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         for (var t = 0; t < newKeyTimes.length; t++) {
                             allProcessedKeyframeTimes.push(newKeyTimes[t]);
                         }
-                        
+
+                        // PROTECTION: Restore the next keyframe
+                        if (nextKeyData !== null) {
+                            var keysAdded = processedIndices.length - selKeys.length;
+                            restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                        }
+
                         // COLLECT selections for GLOBAL restoration instead of selecting immediately
                         // This ensures Time Remap selection is preserved along with other properties
                         DEBUG_JSX.log("🎬 COLLECTING " + processedIndices.length + " Time Remap keyframe selections for layer " + cached.layerName);
@@ -2120,7 +2335,13 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         // COLLECT indices first, don't select yet
                         newSelIndices.push(newIdx);
                     }
-                    
+
+                    // PROTECTION: Restore the next keyframe
+                    if (nextKeyData !== null) {
+                        var keysAdded = newSelIndices.length - selKeys.length;
+                        restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                    }
+
                     // COLLECT selections for GLOBAL restoration at the very end (include layer reference)
                     DEBUG_JSX.log("🎬 COLLECTING " + newSelIndices.length + " keyframe selections for property " + prop.name + " on layer " + cached.layerName);
                     allProcessedSelections.push({
@@ -2614,6 +2835,9 @@ function stretchKeyframesForCrossProperty(direction, frames) {
 // Helper function to stretch duration of a single property with cached selection support
 function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cached) {
     try {
+        // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+        var nextKeyData = captureNextKeyframe(prop, selectedKeys);
+
         // Collect keyframe data
         var keyframeData = [];
         for (var k = 0; k < selectedKeys.length; k++) {
@@ -2695,20 +2919,13 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
             // Restore all attributes
             prop.setValueAtKey(newIdx, data.value);
 
-            // Apply temporal ease first to avoid flipping linear sides
-            if (data.inEase !== undefined && data.outEase !== undefined) {
-                try {
-                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
-                } catch(e) {
-                    // Some properties might not support temporal ease
-                }
-            }
+            // Apply temporal ease only for sides originally Bezier
+            restoreTemporalEaseSafely(prop, newIdx, data.inInterp, data.outInterp, data.inEase, data.outEase);
 
             // Then re-assert original interpolation types
             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
             
-            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
-            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+            restoreTemporalFlagsSafely(prop, newIdx, data.inInterp, data.outInterp, data.temporalContinuous, data.temporalAutoBezier);
             
             if (data.spatialContinuous !== undefined) {
                 prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
@@ -2741,7 +2958,13 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
             // COLLECT times for total span calculation
             newKeyframeTimes.push(data.newTime);
         }
-        
+
+        // PROTECTION: Restore the next keyframe
+        if (nextKeyData !== null) {
+            var keysAdded = newSelIndices.length - selectedKeys.length;
+            restoreNextKeyframe(prop, nextKeyData, keysAdded);
+        }
+
         return {
             success: true,
             durationMs: newDuration * 1000,
@@ -2763,6 +2986,9 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
 // Helper function to stretch duration of a single property
 function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
     try {
+        // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+        var nextKeyData = captureNextKeyframe(prop, selectedKeys);
+
         // Collect keyframe data
         var keyframeData = [];
         for (var k = 0; k < selectedKeys.length; k++) {
@@ -2878,7 +3104,13 @@ function stretchPropertyDuration(prop, selectedKeys, deltaSeconds) {
             
             newSelIndices.push(newIdx);
         }
-        
+
+        // PROTECTION: Restore the next keyframe
+        if (nextKeyData !== null) {
+            var keysAdded = newSelIndices.length - selectedKeys.length;
+            restoreNextKeyframe(prop, nextKeyData, keysAdded);
+        }
+
         // Restore selection
         for (var i = 1; i <= prop.numKeys; i++) {
             prop.setSelectedAtKey(i, false);
@@ -3287,20 +3519,13 @@ function stretchMultiPropertyDuration(direction) {
                     // Restore all attributes
                     prop.setValueAtKey(newIdx, keyData.value);
 
-                    // Apply temporal ease first to avoid flipping linear sides
-                    if (keyData.inEase !== undefined && keyData.outEase !== undefined) {
-                        try {
-                            prop.setTemporalEaseAtKey(newIdx, keyData.inEase, keyData.outEase);
-                        } catch(e) {
-                            // Some properties might not support temporal ease
-                        }
-                    }
+                    // Apply temporal ease only for sides originally Bezier
+                    restoreTemporalEaseSafely(prop, newIdx, keyData.inInterp, keyData.outInterp, keyData.inEase, keyData.outEase);
 
                     // Then re-assert original interpolation types
                     prop.setInterpolationTypeAtKey(newIdx, keyData.inInterp, keyData.outInterp);
                     
-                    prop.setTemporalContinuousAtKey(newIdx, keyData.temporalContinuous);
-                    prop.setTemporalAutoBezierAtKey(newIdx, keyData.temporalAutoBezier);
+                    restoreTemporalFlagsSafely(prop, newIdx, keyData.inInterp, keyData.outInterp, keyData.temporalContinuous, keyData.temporalAutoBezier);
                     
                     if (keyData.spatialContinuous !== undefined) {
                         prop.setSpatialContinuousAtKey(newIdx, keyData.spatialContinuous);
@@ -3756,10 +3981,13 @@ function nudgeDelay(direction) {
                         var propData = propertyDelays[i];
                         var prop = propData.propObject;
                         var keyframesToMove = [];
-                        
+
+                        // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                        var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
+
                         // Calculate the timeline offset to apply to all keyframes
                         var timelineOffset = newTimelineTime - scanEarliestTime;
-                        
+
                         // Collect keyframe data - maintain relative spacing
                         for (var k = 0; k < propData.keyframes.length; k++) {
                             var keyIndex = propData.keyframes[k].index;
@@ -3866,7 +4094,13 @@ function nudgeDelay(direction) {
                             newSelIndices.push(newIdx);
                             debugInfo.push("FORCED: Added keyframe at " + (data.newTime * 1000) + "ms, got index " + newIdx);
                         }
-                        
+
+                        // PROTECTION: Restore the next keyframe
+                        if (nextKeyData !== null) {
+                            var keysAdded = newSelIndices.length - keyframesToMove.length;
+                            restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                        }
+
                         // Store for later selection
                         timelinePropertyData.push({
                             property: prop,
@@ -4238,10 +4472,13 @@ function nudgeDelay(direction) {
                         var propData = propertyMap[propName];
                         var prop = propData.property;
                         var keyframesToMove = [];
-                        
+
+                        // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                        var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
+
                         // Calculate timeline offset
                         var timelineOffset = newTimelineTime - firstKeyframeTime;
-                        
+
                         // Collect keyframe data - maintain relative spacing
                         for (var k = 0; k < propData.keyframes.length; k++) {
                             var keyIndex = propData.keyframes[k].index;
@@ -4341,7 +4578,13 @@ function nudgeDelay(direction) {
                             
                             newSelIndices.push(newIdx);
                         }
-                        
+
+                        // PROTECTION: Restore the next keyframe
+                        if (nextKeyData !== null) {
+                            var keysAdded = newSelIndices.length - keyframesToMove.length;
+                            restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                        }
+
                         // Store for later selection
                         timelinePropertyData.push({
                             property: prop,
@@ -4510,7 +4753,10 @@ function nudgeDelay(direction) {
                 // Move all selected keyframes of this property by the time offset using remove/recreate approach
                 var prop = propData.propObject;
                 var keyframesToMove = [];
-                
+
+                // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
+
                 // First, collect all keyframe data
                 for (var k = 0; k < propData.keyframes.length; k++) {
                     var keyframe = propData.keyframes[k];
@@ -4614,7 +4860,13 @@ function nudgeDelay(direction) {
                         debugInfo.push("DEBUG: Moving keyframe from 0s to 0.05s (0ms→50ms)");
                     }
                 }
-                
+
+                // PROTECTION: Restore the next keyframe
+                if (nextKeyData !== null) {
+                    var keysAdded = newSelIndices.length - keyframesToMove.length;
+                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                }
+
                 // Store new indices for later selection
                 propData.newSelIndices = newSelIndices;
             }
@@ -5544,6 +5796,17 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                 processedKeys[keyId] = true;
                             }
                         }
+
+                        // PROTECTION: Capture the FIRST keyframe that is NOT being moved (right before cutoffTime)
+                        var protectKeyIndex = null;
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (prop.keyTime(j) < cutoffTime) {
+                                protectKeyIndex = j;
+                            } else {
+                                break;
+                            }
+                        }
+                        var nextKeyData = protectKeyIndex ? captureKeyframeState(prop, protectKeyIndex) : null;
                         
                         if (timeRemapKeys.length > 0) {
                             DEBUG_JSX.log("    Time Remap: Moving " + timeRemapKeys.length + " keyframes");
@@ -5617,6 +5880,11 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                             }
 
                             DEBUG_JSX.log("    Time Remap: Moved " + timeRemapKeys.length + " keyframes successfully");
+
+                            // PROTECTION: Restore the protected keyframe
+                            if (nextKeyData !== null && protectKeyIndex) {
+                                restoreKeyframeState(prop, protectKeyIndex, nextKeyData);
+                            }
                         }
                     } catch(timeRemapError) {
                         DEBUG_JSX.log("    Time Remap error: " + timeRemapError.toString());
@@ -5706,6 +5974,16 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                         }
                     }
                     
+                    // PROTECTION: Capture the last keyframe BEFORE cutoffTime (the one that's NOT being moved)
+                    var protectKeyIndex = null;
+                    for (var j = prop.numKeys; j >= 1; j--) {
+                        if (prop.keyTime(j) < cutoffTime) {
+                            protectKeyIndex = j;
+                            break;
+                        }
+                    }
+                    var nextKeyData = protectKeyIndex ? captureKeyframeState(prop, protectKeyIndex) : null;
+
                     // Move keyframes that are at or after cutoff time
                     var keyframesToMove = [];
                     for (var j = 1; j <= prop.numKeys; j++) {
@@ -5908,6 +6186,11 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                 // Silently increment error count
                                 errorCount++;
                             }
+                        }
+
+                        // PROTECTION: Restore the protected keyframe
+                        if (nextKeyData !== null && protectKeyIndex) {
+                            restoreKeyframeState(prop, protectKeyIndex, nextKeyData);
                         }
                     }
                 }
@@ -6795,7 +7078,10 @@ function nudgeDelayTimelineMode(direction, frames) {
             var prop = cached.property;
             var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
             DEBUG_JSX.log("Processing property " + (i+1) + "/" + cachedSelections.length + ": " + cached.propertyName + " on " + cached.layerName + " with " + selKeys.length + " keys");
-            
+
+            // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+            var nextKeyData = captureNextKeyframe(prop, selKeys);
+
             // Collect complete keyframe data including easing
             var keyframesToMove = [];
             for (var k = 0; k < selKeys.length; k++) {
@@ -6957,7 +7243,13 @@ function nudgeDelayTimelineMode(direction, frames) {
 
                 movedCount += keyframesToMove.length;
                 DEBUG_JSX.log("Successfully moved " + keyframesToMove.length + " Time Remap keyframes");
-                
+
+                // PROTECTION: Restore the next keyframe
+                if (nextKeyData !== null) {
+                    var keysAdded = newIndices.length - keyframesToMove.length;
+                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                }
+
             } else {
                 // Normal handling for non-Time Remap properties
                 // Remove old keyframes (in reverse order to avoid index issues)
@@ -6985,9 +7277,9 @@ function nudgeDelayTimelineMode(direction, frames) {
 
                     // Then re-assert original interpolation types
                     prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                    
-                    prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
-                    prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+
+                    // Safe flags restoration to keep linear icons for fully-linear keys
+                    restoreTemporalFlagsSafely(prop, newIdx, data.inInterp, data.outInterp, data.temporalContinuous, data.temporalAutoBezier);
                     
                     // Restore spatial properties if they exist
                     if (data.spatialContinuous !== undefined) {
@@ -7020,8 +7312,14 @@ function nudgeDelayTimelineMode(direction, frames) {
                     movedCount++;
                     DEBUG_JSX.log("Moved keyframe from " + data.oldTime + "s to " + data.newTime + "s");
                 }
+
+                // PROTECTION: Restore the next keyframe
+                if (nextKeyData !== null) {
+                    var keysAdded = newIndices.length - keyframesToMove.length;
+                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                }
             }
-            
+
             // Store selections for restoration with CORRECT new indices AND property reference
             // CRITICAL: Store the actual property reference to avoid name conflicts
             processedSelections.push({
@@ -8246,7 +8544,10 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                     var propData = layerGroup.keyframes[propIdx];
                     var prop = propData.property;
                     var selectedKeys = propData.selectedKeys;
-                    
+
+                    // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                    var nextKeyData = captureNextKeyframe(prop, selectedKeys);
+
                     // Collect keyframe data for this property
                     var keyframesToMove = [];
                     for (var k = 0; k < selectedKeys.length; k++) {
@@ -8298,7 +8599,8 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                         property: prop,
                         propName: propData.propertyName || prop.name,
                         keyframesToMove: keyframesToMove,
-                        layer: layerGroup.layer
+                        layer: layerGroup.layer,
+                        nextKeyData: nextKeyData // Store for protection restoration
                     });
                 }
             }
@@ -8438,7 +8740,20 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                     }
                 }
             }
-            
+
+            // PROTECTION: Restore the next keyframe for each property after keyframe creation
+            for (var i = 0; i < propertyDataForSelection.length; i++) {
+                var propInfo = propertyDataForSelection[i];
+                var prop = propInfo.property;
+                var nextKeyData = propInfo.nextKeyData;
+                var keyframesToMove = propInfo.keyframesToMove;
+
+                if (nextKeyData !== null) {
+                    var keysAdded = keyframesToMove.length - keyframesToMove.length; // In this case, 0 since we remove then add the same count
+                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                }
+            }
+
             // PHASE 3: Restore selection
             
             for (var i = 0; i < propertyDataForSelection.length; i++) {
@@ -8725,11 +9040,14 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 var propData = layerGroup.keyframes[propIdx];
                 var prop = propData.property;
                 var selectedKeys = propData.selectedKeys;
-                
+
+                // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                var nextKeyData = captureNextKeyframe(prop, selectedKeys);
+
                 DEBUG_JSX.log("Processing " + selectedKeys.length + " keyframes on property " + prop.name);
-                
+
                 var keyframesToMove = [];
-                
+
                 // Collect keyframe data for this property (same pattern as uniform staggers)
                 for (var k = 0; k < selectedKeys.length; k++) {
                     var keyIndex = selectedKeys[k];
@@ -8778,7 +9096,8 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
                 propertyDataForSelection.push({
                     property: prop,
                     propName: propData.propertyName || prop.name,
-                    keyframesToMove: keyframesToMove
+                    keyframesToMove: keyframesToMove,
+                    nextKeyData: nextKeyData // Store for protection restoration
                 });
             }
         }
@@ -8958,7 +9277,20 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
             // Store new indices for deferred selection (same as delay nudging)
             propInfo.newSelIndices = newSelIndices;
         }
-        
+
+        // PROTECTION: Restore the next keyframe for each property after keyframe creation
+        for (var i = 0; i < propertyDataForSelection.length; i++) {
+            var propInfo = propertyDataForSelection[i];
+            var prop = propInfo.property;
+            var nextKeyData = propInfo.nextKeyData;
+            var keyframesToMove = propInfo.keyframesToMove;
+
+            if (nextKeyData !== null) {
+                var keysAdded = keyframesToMove.length - keyframesToMove.length; // In this case, 0 since we remove then add the same count
+                restoreNextKeyframe(prop, nextKeyData, keysAdded);
+            }
+        }
+
         // PHASE 4: DEFERRED SELECTION - Deselect all, then select new indices at the very end (same as delay nudging)
         DEBUG_JSX.log("Phase 4: Applying deferred selection to all properties");
         for (var i = 0; i < propertyDataForSelection.length; i++) {
@@ -9890,6 +10222,10 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 } else {
                     // NORMAL PROPERTIES: Standard remove/recreate approach
                     // Process all keyframes in this property (none would clamp)
+
+                    // PROTECTION: Capture the next keyframe to prevent AE from modifying it
+                    var nextKeyData = captureNextKeyframe(prop, selectedKeys);
+
                     var keyframeData = [];
                     for (var k = 0; k < selectedKeys.length; k++) {
                         var keyIndex = selectedKeys[k];
@@ -9983,7 +10319,13 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                         
                         newSelIndices.push(newIdx);
                     }
-                    
+
+                    // PROTECTION: Restore the next keyframe
+                    if (nextKeyData !== null) {
+                        var keysAdded = newSelIndices.length - keyframeData.length;
+                        restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                    }
+
                     // Store the new indices for final selection
                     propData.newSelIndices = newSelIndices;
                 }
@@ -10310,6 +10652,7 @@ function snapToPlayheadFromPanel() {
             var earliestKeyTime = null;
             var latestKeyTime = null;
             var earliestKeyIndex = -1;
+            var latestKeyIndex = -1;
             for (var k = 0; k < selectedKeys.length; k++) {
                 var keyTime = prop.keyTime(selectedKeys[k]);
                 if (earliestKeyTime === null || keyTime < earliestKeyTime) {
@@ -10318,6 +10661,7 @@ function snapToPlayheadFromPanel() {
                 }
                 if (latestKeyTime === null || keyTime > latestKeyTime) {
                     latestKeyTime = keyTime;
+                    latestKeyIndex = selectedKeys[k];
                 }
             }
 
@@ -10338,6 +10682,43 @@ function snapToPlayheadFromPanel() {
                 minTime: earliestKeyTime,
                 maxTime: latestKeyTime
             };
+
+            // CRITICAL: Preserve the keyframe AFTER the selected ones to prevent AE from modifying it
+            var nextKeyIndex = latestKeyIndex + 1;
+            var nextKeyData = null;
+            if (nextKeyIndex <= prop.numKeys) {
+                try {
+                    nextKeyData = {
+                        index: nextKeyIndex,
+                        time: prop.keyTime(nextKeyIndex),
+                        value: prop.keyValue(nextKeyIndex),
+                        inInterp: prop.keyInInterpolationType(nextKeyIndex),
+                        outInterp: prop.keyOutInterpolationType(nextKeyIndex),
+                        temporalContinuous: prop.keyTemporalContinuous(nextKeyIndex),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(nextKeyIndex),
+                        label: prop.keyLabel(nextKeyIndex)
+                    };
+
+                    // Collect temporal ease
+                    try {
+                        nextKeyData.inEase = prop.keyInTemporalEase(nextKeyIndex);
+                        nextKeyData.outEase = prop.keyOutTemporalEase(nextKeyIndex);
+                    } catch(e) {}
+
+                    // Collect spatial properties if applicable
+                    if (prop.isSpatial) {
+                        try {
+                            nextKeyData.spatialContinuous = prop.keySpatialContinuous(nextKeyIndex);
+                            nextKeyData.spatialAutoBezier = prop.keySpatialAutoBezier(nextKeyIndex);
+                            nextKeyData.inTangent = prop.keyInSpatialTangent(nextKeyIndex);
+                            nextKeyData.outTangent = prop.keyOutSpatialTangent(nextKeyIndex);
+                        } catch(e) {}
+                    }
+                } catch(e) {
+                    // Next key might not exist or be accessible
+                    nextKeyData = null;
+                }
+            }
 
             // Collect all keyframe data for recreation
             var keyframesToMove = [];
@@ -10451,6 +10832,24 @@ function snapToPlayheadFromPanel() {
                     newSelIndices: newSelIndices.slice()
                 });
 
+                // CRITICAL: Restore the next keyframe to prevent AE from modifying it
+                if (nextKeyData !== null) {
+                    try {
+                        // For Time Remap, find next keyframe by time since indices may have shifted
+                        var foundNextKey = false;
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (Math.abs(prop.keyTime(j) - nextKeyData.time) < 0.001) {
+                                // Restore all properties of the next keyframe
+                                prop.setValueAtTime(nextKeyData.time, nextKeyData.value);
+                                foundNextKey = true;
+                                break;
+                            }
+                        }
+                    } catch(e) {
+                        // If restoration fails, continue (not critical to main operation)
+                    }
+                }
+
             } else {
                 // Regular properties: Standard remove-then-add approach
                 // Remove old keyframes in reverse order
@@ -10521,6 +10920,49 @@ function snapToPlayheadFromPanel() {
                     propertyReference: prop,
                     newSelIndices: newSelIndices.slice()
                 });
+
+                // CRITICAL: Restore the next keyframe to prevent AE from modifying it
+                if (nextKeyData !== null) {
+                    try {
+                        // Find the new index of the next keyframe (it may have shifted)
+                        var currentNextKeyIndex = nextKeyData.index - selectedKeys.length + newSelIndices.length;
+                        if (currentNextKeyIndex > 0 && currentNextKeyIndex <= prop.numKeys) {
+                            // Restore all properties of the next keyframe
+                            prop.setValueAtKey(currentNextKeyIndex, nextKeyData.value);
+
+                            // Apply temporal ease first
+                            if (nextKeyData.inEase !== undefined && nextKeyData.outEase !== undefined) {
+                                try {
+                                    prop.setTemporalEaseAtKey(currentNextKeyIndex, nextKeyData.inEase, nextKeyData.outEase);
+                                } catch(e) {}
+                            }
+
+                            // Re-assert original interpolation types
+                            prop.setInterpolationTypeAtKey(currentNextKeyIndex, nextKeyData.inInterp, nextKeyData.outInterp);
+
+                            // Restore temporal continuity and auto-bezier
+                            prop.setTemporalContinuousAtKey(currentNextKeyIndex, nextKeyData.temporalContinuous);
+                            prop.setTemporalAutoBezierAtKey(currentNextKeyIndex, nextKeyData.temporalAutoBezier);
+
+                            // Restore spatial properties if applicable
+                            if (nextKeyData.spatialContinuous !== undefined) {
+                                prop.setSpatialContinuousAtKey(currentNextKeyIndex, nextKeyData.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(currentNextKeyIndex, nextKeyData.spatialAutoBezier);
+
+                                if (!nextKeyData.spatialAutoBezier && nextKeyData.inTangent !== undefined && nextKeyData.outTangent !== undefined) {
+                                    prop.setSpatialTangentsAtKey(currentNextKeyIndex, nextKeyData.inTangent, nextKeyData.outTangent);
+                                }
+                            }
+
+                            // Restore keyframe color label
+                            if (nextKeyData.label !== undefined) {
+                                prop.setLabelAtKey(currentNextKeyIndex, nextKeyData.label);
+                            }
+                        }
+                    } catch(e) {
+                        // If restoration fails, continue (not critical to main operation)
+                    }
+                }
             }
 
             propertiesProcessed++;
@@ -14879,6 +15321,536 @@ function removeMaterialEffects(layer) {
     
     return debugInfo;
 }
+
+// ============================================================================
+// SPRING PHYSICS & BAKING FUNCTIONS
+// COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx)
+// SOURCE: /Users/jonas_naimark/Documents/Sproing/host/SpringBaker.jsx
+// DATE COPIED: 2025-10-08
+// LINES: 17-37, 41-65, 68-88, 91-96, 99-230, 574-641
+//
+// DO NOT MODIFY THESE FUNCTIONS - Keep identical to Sproing source
+// Any changes here will break unbake compatibility with Sproing
+// ============================================================================
+
+/**
+ * valueDeviation - Calculate perpendicular deviation from line
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 17-37)
+ */
+function valueDeviation(pt, lineStart, lineEnd) {
+    var dx = lineEnd.x - lineStart.x;
+    var dim = pt.y.length;  // Number of dimensions
+
+    if (dx === 0) {
+        var distSq = 0;
+        for (var d = 0; d < dim; d++) {
+            distSq += Math.pow(pt.y[d] - lineStart.y[d], 2);
+        }
+        return Math.sqrt(distSq);
+    }
+
+    var s = (pt.x - lineStart.x) / dx;
+    s = Math.max(0, Math.min(1, s));
+
+    var distSq = 0;
+    for (var d = 0; d < dim; d++) {
+        var interp = lineStart.y[d] + s * (lineEnd.y[d] - lineStart.y[d]);
+        distSq += Math.pow(pt.y[d] - interp, 2);
+    }
+    return Math.sqrt(distSq);
+}
+
+/**
+ * douglasPeucker - Recursive curve simplification algorithm
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 41-65)
+ */
+function douglasPeucker(points, epsilon) {
+    if (points.length < 3) return points;
+
+    var dmax = 0;
+    var index = 0;
+    var end = points.length - 1;
+
+    for (var i = 1; i < end; i++) {
+        var d = valueDeviation(points[i], points[0], points[end]);
+        if (d > dmax) {
+            index = i;
+            dmax = d;
+        }
+    }
+
+    var results = [];
+    if (dmax > epsilon) {
+        var recResults1 = douglasPeucker(points.slice(0, index + 1), epsilon);
+        var recResults2 = douglasPeucker(points.slice(index), epsilon);
+        results = recResults1.slice(0, -1).concat(recResults2);
+    } else {
+        results = [points[0], points[end]];
+    }
+    return results;
+}
+
+/**
+ * getOriginalValueAtTime - Interpolate original value at time t (multi-dim)
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 68-88)
+ */
+function getOriginalValueAtTime(t, originalPoints, dim) {
+    if (originalPoints.length === 0) return new Array(dim).fill(0);  // Fallback
+
+    // Find bracketing points
+    for (var i = 0; i < originalPoints.length - 1; i++) {
+        if (originalPoints[i].x <= t && t <= originalPoints[i + 1].x) {
+            var frac = (t - originalPoints[i].x) / (originalPoints[i + 1].x - originalPoints[i].x);
+            var y = [];
+            for (var d = 0; d < dim; d++) {
+                y[d] = originalPoints[i].y[d] + frac * (originalPoints[i + 1].y[d] - originalPoints[i].y[d]);
+            }
+            return y;
+        }
+    }
+
+    // Extrapolate if outside (though shouldn't happen)
+    if (t < originalPoints[0].x) {
+        return originalPoints[0].y.slice();
+    }
+    return originalPoints[originalPoints.length - 1].y.slice();
+}
+
+/**
+ * PRECISION_SETTINGS - Precision configuration for spring baking
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 91-96)
+ */
+var PRECISION_SETTINGS = {
+    'max': { precision: 0, maxGapFrames: 0 },    // 0 precision = use current dense baking
+    'high': { precision: 10, maxGapFrames: 10 },
+    'medium': { precision: 5, maxGapFrames: 15 },
+    'low': { precision: 1, maxGapFrames: 20 }
+};
+
+/**
+ * generateFullSpringCurve - Generate full spring curve data
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 99-172)
+ */
+function generateFullSpringCurve(t1, t2, v1, v2, dampingRatio, stiffness, mass, frameRate, maxFrames) {
+    var points = [];
+
+    if (v1 instanceof Array && v2 instanceof Array && v1.length === v2.length) {
+        // Multi-dimensional
+        var dim = v1.length;
+        var allValues = [];
+
+        // Generate spring values for each dimension
+        for (var d = 0; d < dim; d++) {
+            var values = [];
+            var settled = false;
+            var i = 0;
+            while (!settled && i < maxFrames) {
+                var springVals = androidSpring(dampingRatio, stiffness, mass, v1[d], v2[d], i, frameRate);
+                values = springVals;
+                settled = isSettled(values, v2[d], 0.01, frameRate);
+                i++;
+            }
+            if (values.length < 2) {
+                values = androidSpring(dampingRatio, stiffness, mass, v1[d], v2[d], 1, frameRate);
+            }
+            allValues.push(values);
+        }
+
+        // Pad all dimensions to same length
+        var maxLen = 0;
+        for (var d = 0; d < dim; d++) {
+            if (allValues[d].length > maxLen) maxLen = allValues[d].length;
+        }
+        for (var d = 0; d < dim; d++) {
+            while (allValues[d].length < maxLen) {
+                allValues[d].push(allValues[d][allValues[d].length - 1]);
+            }
+        }
+
+        // Create points array
+        for (var i = 0; i < maxLen; i++) {
+            var t = t1 + (i / frameRate);
+            var y = [];
+            for (var d = 0; d < dim; d++) {
+                y[d] = allValues[d][i];
+            }
+            points.push({x: t, y: y});
+        }
+    } else {
+        // Single-dimensional
+        if (v1 instanceof Array) v1 = v1[0];
+        if (v2 instanceof Array) v2 = v2[0];
+
+        var values = [];
+        var settled = false;
+        var i = 1;
+        while (!settled && i < maxFrames) {
+            var springVals = androidSpring(dampingRatio, stiffness, mass, v1, v2, i, frameRate);
+            values = springVals;
+            if (values.length >= 2) {
+                settled = isSettled(values, v2, 0.01, frameRate);
+            }
+            i++;
+        }
+
+        if (values.length < 2) {
+            values = androidSpring(dampingRatio, stiffness, mass, v1, v2, 1, frameRate);
+        }
+
+        for (var j = 0; j < values.length; j++) {
+            var t = t1 + (j / frameRate);
+            points.push({x: t, y: [values[j]]});
+        }
+    }
+
+    return points;
+}
+
+/**
+ * simplifySpringKeyframes - Simplify spring keyframes using CleanBakedKeys algorithm
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 175-230)
+ */
+function simplifySpringKeyframes(fullCurveData, precisionSetting, frameRate) {
+    if (!PRECISION_SETTINGS[precisionSetting] || precisionSetting === 'max') {
+        return fullCurveData; // Return all points for max precision
+    }
+
+    var settings = PRECISION_SETTINGS[precisionSetting];
+    var precision = settings.precision;
+    var maxGapFrames = settings.maxGapFrames;
+
+    if (fullCurveData.length < 3) return fullCurveData;
+
+    var dim = fullCurveData[0].y.length;
+    var frameDuration = 1.0 / frameRate;
+
+    // Scale precision and max gap based on dimensionality
+    var scaledPrecision = dim >= 2 ? precision * 2 : precision;
+    var scaledMaxGapFrames = dim >= 2 ? Math.max(1, Math.round(maxGapFrames / 2)) : maxGapFrames;
+
+    var epsilon = 20 * Math.pow(0.25, (scaledPrecision - 1) / 9);
+    var maxGapTime = scaledMaxGapFrames * frameDuration;
+
+    // Apply Douglas-Peucker simplification
+    var simplifiedPoints = douglasPeucker(fullCurveData, epsilon);
+
+    // Insert points in large gaps if maxGapTime > 0
+    if (maxGapTime > 0) {
+        var keyTimes = [];
+        for (var i = 0; i < simplifiedPoints.length; i++) {
+            keyTimes.push(simplifiedPoints[i].x);
+        }
+
+        var newKeyTimes = [];
+        for (var i = 0; i < keyTimes.length - 1; i++) {
+            newKeyTimes.push(keyTimes[i]);
+            var dt = keyTimes[i + 1] - keyTimes[i];
+            if (dt > maxGapTime) {
+                var numInsert = Math.ceil(dt / maxGapTime) - 1;
+                for (var j = 1; j <= numInsert; j++) {
+                    var newT = keyTimes[i] + j * (dt / (numInsert + 1));
+                    newKeyTimes.push(newT);
+                }
+            }
+        }
+        newKeyTimes.push(keyTimes[keyTimes.length - 1]);
+
+        // Sort and rebuild points
+        newKeyTimes.sort(function(a, b) { return a - b; });
+        simplifiedPoints = [];
+        for (var i = 0; i < newKeyTimes.length; i++) {
+            var val = getOriginalValueAtTime(newKeyTimes[i], fullCurveData, dim);
+            simplifiedPoints.push({x: newKeyTimes[i], y: val});
+        }
+    }
+
+    return simplifiedPoints;
+}
+
+/**
+ * isSettled - Check if spring animation has settled
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 574-579)
+ */
+function isSettled(values, endValue, threshold, frameRate) {
+    var last = values[values.length - 1];
+    var prev = values[values.length - 2];
+    var velocity = Math.abs(last - prev) * frameRate;
+    return Math.abs(last - endValue) < threshold && velocity < threshold;
+}
+
+/**
+ * androidSpring - Android spring physics calculation (damped harmonic oscillator)
+ * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 581-641)
+ */
+function androidSpring(dampingRatio, stiffness, mass, fromValue, toValue, numFrames, frameRate) {
+    // Validate inputs to prevent mathematical errors
+    if (!dampingRatio || dampingRatio <= 0) dampingRatio = 1;
+    if (!stiffness || stiffness <= 0) stiffness = 175;
+    if (!mass || mass <= 0) mass = 1;
+    if (!frameRate || frameRate <= 0) frameRate = 30;
+    if (!numFrames || numFrames < 0) numFrames = 30;
+
+    var omega0 = Math.sqrt(stiffness / mass);
+    var zeta = dampingRatio;
+    var x0 = fromValue - toValue;
+    var v0 = 0;
+    var result = [];
+    var dt = 1.0 / frameRate;
+
+    // Handle edge case where fromValue equals toValue
+    if (Math.abs(x0) < 1e-6) {
+        for (var i = 0; i <= numFrames; i++) {
+            result.push(toValue);
+        }
+        return result;
+    }
+    for (var i = 0; i <= numFrames; i++) {
+        var t = i * dt;
+        var value;
+        try {
+            if (zeta < 1) {
+                // Underdamped
+                var omegaD = omega0 * Math.sqrt(1 - zeta * zeta);
+                if (omegaD === 0) omegaD = 1e-6; // Prevent division by zero
+                value = Math.exp(-zeta * omega0 * t) *
+                    (x0 * Math.cos(omegaD * t) +
+                     ((v0 + zeta * omega0 * x0) / omegaD) * Math.sin(omegaD * t));
+            } else if (zeta === 1) {
+                // Critically damped
+                value = (x0 + (v0 + omega0 * x0) * t) * Math.exp(-omega0 * t);
+            } else {
+                // Overdamped
+                var omegaD = omega0 * Math.sqrt(zeta * zeta - 1);
+                if (omegaD === 0) omegaD = 1e-6; // Prevent division by zero
+                var expTerm1 = Math.exp((-zeta * omega0 + omegaD) * t);
+                var expTerm2 = Math.exp((-zeta * omega0 - omegaD) * t);
+                var C1 = (v0 + (zeta + Math.sqrt(zeta * zeta - 1)) * omega0 * x0) / (2 * omegaD);
+                var C2 = (v0 + (zeta - Math.sqrt(zeta * zeta - 1)) * omega0 * x0) / (2 * omegaD);
+                value = C1 * expTerm1 + C2 * expTerm2;
+            }
+
+            // Check for invalid numbers
+            if (!isFinite(value) || isNaN(value)) {
+                value = (i === 0) ? x0 : 0; // Use starting displacement or settled value
+            }
+
+            result.push(toValue + value);
+        } catch (e) {
+            // If calculation fails, use linear interpolation as fallback
+            var progress = i / numFrames;
+            result.push(fromValue + (toValue - fromValue) * progress);
+        }
+    }
+    return result;
+}
+
+// ============================================================================
+// END SPRING PHYSICS FUNCTIONS (from Sproing)
+// ============================================================================
+
+// ============================================================================
+// HELPER FUNCTIONS FOR SPRING-AWARE MIRROR KEYS
+// ============================================================================
+
+/**
+ * findMarkerAtTime - Find marker at specific time within tolerance
+ */
+function findMarkerAtTime(markerProp, time, epsilon) {
+    if (!markerProp || markerProp.numKeys === 0) return null;
+
+    for (var m = 1; m <= markerProp.numKeys; m++) {
+        var markerTime = markerProp.keyTime(m);
+        if (Math.abs(markerTime - time) < epsilon) {
+            return {index: m, time: markerTime};
+        }
+    }
+    return null;
+}
+
+// (Removed duplicate getUniquePropertyId; using core Sproing-compatible implementation defined earlier)
+
+/**
+ * parseSpringFromMarker - Extract spring parameters from marker comment for specific property
+ */
+function parseSpringFromMarker(markerComment, uniquePropId) {
+    if (!markerComment || markerComment === "") return null;
+
+    // Split by separator to find blocks
+    var separator = "=======================================";
+    var blocks = markerComment.split(separator);
+
+    // Find the block for this property
+    var targetBlock = null;
+    for (var i = 0; i < blocks.length; i++) {
+        var block = blocks[i];
+        if (block.indexOf("| Property: " + uniquePropId) !== -1) {
+            targetBlock = block;
+            break;
+        }
+    }
+
+    if (!targetBlock) return null;
+
+    // Parse spring parameters using regex
+    var stiffnessMatch = targetBlock.match(/Stiffness:\s*([\d.]+)/i);
+    var dampingRatioMatch = targetBlock.match(/Damping Ratio:\s*([\d.]+)/i);
+    var massMatch = targetBlock.match(/Mass:\s*([\d.]+)/i);
+
+    if (!stiffnessMatch || !dampingRatioMatch) return null;
+
+    var stiffness = parseFloat(stiffnessMatch[1]);
+    var dampingRatio = parseFloat(dampingRatioMatch[1]);
+    var mass = massMatch ? parseFloat(massMatch[1]) : 1;
+
+    // Try to extract preset name (first line of block)
+    var lines = targetBlock.split("\n");
+    var presetName = null;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line !== "" && line.indexOf("Stiffness:") === -1 && line.indexOf("| Property:") === -1) {
+            presetName = line;
+            break;
+        }
+    }
+
+    return {
+        stiffness: stiffness,
+        dampingRatio: dampingRatio,
+        mass: mass,
+        presetName: presetName,
+        blockText: targetBlock
+    };
+}
+
+/**
+ * createSpringBlock - Format spring data block in Sproing format
+ */
+function createSpringBlock(stiffness, dampingRatio, mass, uniquePropId, presetName) {
+    // Match Sproing block core (no extra blank lines before Property; merge appends separator)
+    var dampingAbs = 2 * dampingRatio * Math.sqrt(stiffness);
+    var title = presetName || "Custom Spring";
+    var core = title + "\n" +
+        "Stiffness: " + stiffness + ", Damping: " + dampingAbs.toFixed(2) + ", Damping Ratio: " + dampingRatio + ", Mass: " + mass + "\n" +
+        "| Property: " + uniquePropId;
+    return core;
+}
+
+/**
+ * createOrUpdateMirroredMarker - Create or update marker with spring data
+ * Handles multi-property markers by preserving other property blocks
+ */
+function createOrUpdateMirroredMarker(markerProp, targetTime, springBlock, uniquePropId, epsilon) {
+    var existingMarkerData = findMarkerAtTime(markerProp, targetTime, epsilon);
+
+    var separator = "=======================================";
+    // Normalize input block core and append exact spacing before separator
+    function normalizeBlockCore(blockText) {
+        if (!blockText) return "";
+        var parts = blockText.split(separator);
+        var core = parts[0];
+        // Trim leading/trailing whitespace to avoid extra blank lines between blocks
+        core = core.replace(/^\s+/,'').replace(/\s+$/,'');
+        return core;
+    }
+
+    var newBlockCore = normalizeBlockCore(springBlock);
+    var newBlockWithSep = newBlockCore + "\n\n" + separator + "\n";
+
+    if (existingMarkerData) {
+        // Marker exists - parse and merge blocks
+        var markerIdx = existingMarkerData.index;
+        var markerTime = markerProp.keyTime(markerIdx);
+        var existingComment = markerProp.keyValue(markerIdx).comment || "";
+
+        // Split by separator and rebuild blocks excluding current property
+        var rawBlocks = existingComment.split(separator);
+        var rebuilt = "";
+        for (var i = 0; i < rawBlocks.length; i++) {
+            var blockRaw = rawBlocks[i];
+            var blockCore = normalizeBlockCore(blockRaw);
+            if (!blockCore) continue;
+            if (blockCore.indexOf("| Property: " + uniquePropId) !== -1) {
+                continue; // remove old block for this property
+            }
+            // Re-append kept block with exact spacing before separator
+            rebuilt += blockCore + "\n\n" + separator + "\n";
+        }
+        // Append the new block with separator
+        rebuilt += newBlockWithSep;
+
+        // Update existing marker
+        var markerValue = markerProp.keyValue(markerIdx);
+        markerValue.comment = rebuilt;
+        markerProp.setValueAtKey(markerIdx, markerValue);
+        DEBUG_JSX.log("Updated existing marker at time " + markerTime.toFixed(3) + " with new spring block");
+    } else {
+        // No marker exists - create new one (single block + separator)
+        var newMarker = new MarkerValue(newBlockWithSep);
+        markerProp.setValueAtTime(targetTime, newMarker);
+        DEBUG_JSX.log("Created new marker at time " + targetTime.toFixed(3));
+    }
+}
+
+/**
+ * detectBakingPrecision - Auto-detect if spring was baked with Max precision
+ * Max precision = keyframes on every single frame
+ */
+function detectBakingPrecision(prop, selectedKeyIndices, frameRate) {
+    if (selectedKeyIndices.length < 2) {
+        return 'medium'; // Not enough keys to detect
+    }
+
+    var hasEveryFrame = true;
+    var frameTolerance = 0.1; // 10% tolerance for frame alignment
+
+    // Check if keyframes are exactly 1 frame apart
+    for (var i = 1; i < selectedKeyIndices.length; i++) {
+        var keyIdx1 = selectedKeyIndices[i - 1];
+        var keyIdx2 = selectedKeyIndices[i];
+
+        var time1 = prop.keyTime(keyIdx1);
+        var time2 = prop.keyTime(keyIdx2);
+
+        var timeDiff = time2 - time1;
+        var frameDiff = timeDiff * frameRate;
+
+        // If not exactly 1 frame apart (within tolerance), not Max precision
+        if (Math.abs(frameDiff - 1.0) > frameTolerance) {
+            hasEveryFrame = false;
+            break;
+        }
+    }
+
+    return hasEveryFrame ? 'max' : 'medium';
+}
+
+// ============================================================================
+// END HELPER FUNCTIONS
+// ============================================================================
+
+// Safe temporal ease restoration: only apply ease to sides that were originally Bezier
+function restoreTemporalEaseSafely(prop, idx, inInterp, outInterp, inEase, outEase) {
+    try {
+        var inEases = (inInterp === KeyframeInterpolationType.BEZIER && inEase) ? inEase : [];
+        var outEases = (outInterp === KeyframeInterpolationType.BEZIER && outEase) ? outEase : [];
+        if ((inEases && inEases.length) || (outEases && outEases.length)) {
+            prop.setTemporalEaseAtKey(idx, inEases, outEases);
+        }
+    } catch(e) {}
+}
+
+// Safe temporal flags restoration: keep linear keys visually linear
+function restoreTemporalFlagsSafely(prop, idx, inInterp, outInterp, temporalContinuous, temporalAutoBezier) {
+    try {
+        // If both sides were linear originally, force auto-bezier and continuity off
+        var bothLinear = (inInterp !== KeyframeInterpolationType.BEZIER && outInterp !== KeyframeInterpolationType.BEZIER);
+        var autoBezier = bothLinear ? false : temporalAutoBezier;
+        var continuous = bothLinear ? false : temporalContinuous;
+        prop.setTemporalContinuousAtKey(idx, continuous);
+        prop.setTemporalAutoBezierAtKey(idx, autoBezier);
+    } catch(e) {}
+}
+
 // Mirror selected keyframes: take first and last selected key per property, duplicate them starting at playhead,
 // reverse order, set second key at +30 frames, and remove easing and labels.
 function mirrorKeysFromPanel() {
@@ -14981,9 +15953,140 @@ function mirrorKeysFromPanel() {
                 var firstLabel = prop.keyLabel(firstIdx);
                 var lastLabel = prop.keyLabel(lastIdx);
 
-                // Create mirrored keys: first at playhead, second at playhead + 30 frames
+                // =================================================================
+                // SPRING DETECTION: Check for Sproing spring marker at first key
+                // =================================================================
+                var firstKeyTime = prop.keyTime(firstIdx);
+                var markerProp = null;
+                try {
+                    // Try both standard and matchName forms for robustness
+                    markerProp = layer.property("Marker") || layer.property("ADBE Marker");
+                } catch(e) {}
+
+                var springMarkerData = null;
+                var springParams = null;
+                if (markerProp && markerProp.numKeys > 0) {
+                    // Widen epsilon slightly to tolerate frame rounding
+                    springMarkerData = findMarkerAtTime(markerProp, firstKeyTime, 0.05);
+                    if (springMarkerData) {
+                        var markerComment = markerProp.keyValue(springMarkerData.index).comment;
+                        var uniquePropId = getUniquePropertyId(prop);
+                        var parsed = parseSpringFromMarker(markerComment, uniquePropId);
+                        if (parsed) {
+                            springParams = {
+                                stiffness: parsed.stiffness,
+                                dampingRatio: parsed.dampingRatio,
+                                mass: parsed.mass,
+                                presetName: parsed.presetName
+                            };
+                            // Preserve exact original block text for this property
+                            var originalSpringBlockTextForProperty = parsed.blockText;
+                        }
+                    }
+                }
+
+                if (springParams) {
+                    // ==============================================================
+                    // SPRING MODE: Bake reversed spring physics
+                    // ==============================================================
+                    DEBUG_JSX.log("    ✓ Spring detected: " + springParams.presetName + " (stiffness=" + springParams.stiffness + ", dampingRatio=" + springParams.dampingRatio + ")");
+
+                    // Detect baking precision
+                    var detectedPrecision = detectBakingPrecision(prop, sel, frameRate);
+                    DEBUG_JSX.log("    Detected precision: " + detectedPrecision);
+
+                    // Generate reversed spring curve (swap start/end values)
+                    var maxDuration = 3; // 3 seconds max
+                    var maxFrames = Math.ceil(maxDuration * frameRate);
+
+                    try {
+                        var fullCurveData = generateFullSpringCurve(
+                            playheadTime,                    // t1
+                            playheadTime + maxDuration,      // t2
+                            lastVal,                         // v1 (reversed - end becomes start)
+                            firstVal,                        // v2 (reversed - start becomes end)
+                            springParams.dampingRatio,
+                            springParams.stiffness,
+                            springParams.mass,
+                            frameRate,
+                            maxFrames
+                        );
+
+                        var simplifiedKeyframes = simplifySpringKeyframes(fullCurveData, detectedPrecision, frameRate);
+
+                        DEBUG_JSX.log("    Baking " + simplifiedKeyframes.length + " spring keyframes with " + detectedPrecision + " precision");
+
+                        // Bake all spring keyframes (values only)
+                        for (var i = 0; i < simplifiedKeyframes.length; i++) {
+                            var keyData = simplifiedKeyframes[i];
+                            var keyTime = keyData.x;
+                            var keyValue = keyData.y;
+                            var valueToSet = (keyValue.length === 1) ? keyValue[0] : keyValue;
+                            prop.setValueAtTime(keyTime, valueToSet);
+                        }
+
+                        // Apply velocity-based easing exactly like Sproing
+                        applyVelocityBasedEasing(prop, simplifiedKeyframes, fullCurveData);
+
+                        // Set blue labels on first and last keyframes (for Sproing unbake compatibility)
+                        var firstMirroredKeyIndex = prop.nearestKeyIndex(simplifiedKeyframes[0].x);
+                        var lastMirroredKeyIndex = prop.nearestKeyIndex(simplifiedKeyframes[simplifiedKeyframes.length - 1].x);
+
+                        try {
+                            prop.setLabelAtKey(firstMirroredKeyIndex, 8); // Blue label
+                            prop.setLabelAtKey(lastMirroredKeyIndex, 8);  // Blue label
+                            DEBUG_JSX.log("    Set blue labels on keys " + firstMirroredKeyIndex + " and " + lastMirroredKeyIndex);
+                        } catch (e) {
+                            DEBUG_JSX.error("Failed to set blue labels: " + e.toString());
+                        }
+
+                        // Create mirrored marker at first baked keyframe (playhead)
+                        var targetMarkerTime = playheadTime;
+                        var uniquePropId = getUniquePropertyId(prop);
+                        // Prefer copying exact original block text for this property if available
+                        var springBlock = originalSpringBlockTextForProperty || (function(){
+                            var damping = springParams.dampingRatio; // copy ratio for compatibility block
+                            var title = springParams.presetName || "Mirrored Spring";
+                            return title + "\n\n" +
+                                "Stiffness: " + springParams.stiffness + ", Damping: " + damping.toFixed(2) +
+                                ", Damping Ratio: " + springParams.dampingRatio.toFixed(2) + ", Mass: " + springParams.mass + "\n\n" +
+                                "| Property: " + uniquePropId;
+                        })();
+
+                        // Merge/update marker at first baked key using Sproing-format blocks
+                        createOrUpdateMirroredMarker(markerProp, targetMarkerTime, springBlock, uniquePropId, 0.01);
+
+                        // Reselect all baked spring keys
+                        for (var rk = 1; rk <= prop.numKeys; rk++) {
+                            try { prop.setSelectedAtKey(rk, false); } catch(e) {}
+                        }
+                        for (var i = 0; i < simplifiedKeyframes.length; i++) {
+                            var keyTime = simplifiedKeyframes[i].x;
+                            var keyIdx = prop.nearestKeyIndex(keyTime);
+                            try { prop.setSelectedAtKey(keyIdx, true); } catch(e) {}
+                        }
+
+                        processedProps++;
+                        DEBUG_JSX.log("    ✓ Spring mirror complete");
+
+                        // Skip the linear mirroring code below
+                        continue;
+
+                    } catch (springError) {
+                        DEBUG_JSX.error("Spring baking failed: " + springError.toString());
+                        DEBUG_JSX.log("    Falling back to linear mirroring");
+                        // Fall through to linear mirroring below
+                    }
+                }
+
+                // =================================================================
+                // LINEAR MODE: Default behavior (no spring detected or error)
+                // =================================================================
+
+                // Create mirrored keys: preserve original duration between keys
+                var originalDuration = prop.keyTime(lastIdx) - prop.keyTime(firstIdx);
                 var newFirst = prop.addKey(playheadTime);
-                var newSecond = prop.addKey(playheadTime + offsetSeconds);
+                var newSecond = prop.addKey(playheadTime + Math.max(0, originalDuration));
 
                 // Reverse order: the value at start becomes lastVal, and the second becomes firstVal
                 prop.setValueAtKey(newFirst, lastVal);

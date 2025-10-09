@@ -268,8 +268,15 @@ body {
     transition: transform 0.3s ease;
 }
 
+/* Make PNG icons crisp on high-DPI displays */
+.keyframe-top-row .stagger-btn img,
+.keyframe-display .distance-controls .distance-btn img {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
 /* Stagger direction button flip animation */
-.keyframe-top-row .stagger-btn.flipped img {
+.keyframe-top-row .stagger-btn.flipped svg {
     transform: scaleX(-1);
 }
 

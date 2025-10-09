@@ -5,6 +5,31 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.59] - 2025-01-10 🛡️ **KEYFRAME PROTECTION SYSTEM**
+### 🎯 Fixed - CRITICAL ADJACENT KEYFRAME PROTECTION
+- **Spring Animation Corruption Fix**: Keyframes immediately after delay/duration/stagger/snap operations no longer get modified
+- **Universal Protection System**: All keyframe manipulation functions now protect adjacent keyframes from After Effects' automatic modifications
+- **Precision Animation Preservation**: Spring animations, bezier curves, and precise timing sequences maintain perfect integrity
+
+### 🔧 Technical Implementation - COMPREHENSIVE PROTECTION
+- **Reusable Helper Functions**: Created `captureKeyframeState()`, `restoreKeyframeState()`, `captureNextKeyframe()`, and `restoreNextKeyframe()` helper functions
+- **Protected Operations**:
+  - Snap to Playhead (regular and Time Remap paths)
+  - Delay Nudging (forced timeline, regular timeline, and baseline modes)
+  - Duration Stretching (all 4 stretch functions)
+  - Stagger (all 3 stagger code paths)
+  - Global Delay (`moveKeyframesAfterTime` function for Time Remap and regular properties)
+- **Smart Index Calculation**: Handles keyframe index shifts during remove/add operations
+- **Time-Based Fallback**: Multiple strategies ensure protection works in all scenarios
+
+### 🎨 How It Works
+1. **Before Operation**: Captures complete state of the keyframe after your selection (value, interpolation, ease curves, spatial tangents, labels)
+2. **During Operation**: Your keyframes are removed and recreated at new times/values
+3. **After Operation**: Restores the adjacent keyframe to its exact original state, preventing AE's auto-adjustments
+
+### 🔗 Associated Build
+- AirBoard-v4.16.59.zxp
+
 ## [4.16.58] - 2025-01-10 ✨ **KEYFRAME NUDGER ENHANCEMENTS**
 ### ✨ New Features
 - **Mirror Keys**: Duplicates and reverses first/last selected keyframes with 30-frame spacing at playhead
