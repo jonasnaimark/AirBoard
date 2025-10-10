@@ -430,43 +430,20 @@ body {
     white-space: nowrap; /* Prevent text wrapping */
 }
 
-.resolution-display .number-controls {
+.resolution-display .stagger-controls {
     position: absolute;
-    right: 6px; /* 6px from right edge */
+    right: 6px;
     top: 50%;
     transform: translateY(-50%);
-    width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
+    width: calc(33.33% - 12px);
     display: flex;
-    gap: 6px; /* Match the container padding spacing */
-    pointer-events: all; /* Allow button clicks */
+    gap: 6px;
+    pointer-events: all;
     padding: 0;
 }
 
-.resolution-display .number-controls .number-btn {
-    flex: 1; /* Each button takes equal space (25% of total row) */
-    margin: 0;
-    background-color: #2f2f2f;
-    color: #cccccc;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
-    cursor: pointer;
-    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
-}
-
-
-.resolution-display .number-controls .number-btn:hover {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
-}
-
-.resolution-display .number-controls .number-btn:active {
-    transform: scale(0.96);
-}
-
-.resolution-display .number-controls .add-btn {
-    font-size: 12.5px;
-    font-weight: 500;
+.resolution-display .stagger-controls .stagger-btn {
+    width: calc(50% - 3px);
 }
 
 /* Distance controls - 4 buttons for In/Out/−/+ */
@@ -1017,43 +994,7 @@ input.distance-input[data-tooltip]:hover::after {
     margin: 0;
 }
 
-.number-controls {
-    position: absolute;
-    right: 9px;
-    top: 49%;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
-}
-
-.number-btn {
-    width: 28px;
-    height: 26px;
-    background-color: #555555;
-    border: none;
-    border-radius: 4px;
-    color: #cccccc;
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
-    outline: none;
-}
-
-.number-btn:hover {
-    background-color: #666666;
-    color: #ffffff;
-}
-
-.number-btn:active {
-    background-color: #4a90e2;
-    color: #ffffff;
-}
+/* Removed old .number-controls and .number-btn in favor of unified .stagger-controls/.stagger-btn */
 
 /* Removed specific section classes - now using unified .section class */
 

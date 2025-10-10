@@ -2,8 +2,8 @@
 
 // Always show all control buttons - per user request for consistency
 setTimeout(function() {
-    var durationControls = document.querySelector('#durationDisplay .number-controls');
-    var delayControls = document.querySelector('#delayDisplay .number-controls');
+    var durationControls = document.querySelector('#durationDisplay .stagger-controls');
+    var delayControls = document.querySelector('#delayDisplay .stagger-controls');
     var xControls = document.querySelector('#xDistanceDisplay .distance-controls');
     var yControls = document.querySelector('#yDistanceDisplay .distance-controls');
     
@@ -87,12 +87,12 @@ function showYButtons() {
 }
 
 function hideDurationButtons() {
-    var durationControls = document.querySelector('#durationDisplay .number-controls');
+    var durationControls = document.querySelector('#durationDisplay .stagger-controls');
     if (durationControls) durationControls.style.display = 'none';
 }
 
 function showDurationButtons() {
-    var durationControls = document.querySelector('#durationDisplay .number-controls');
+    var durationControls = document.querySelector('#durationDisplay .stagger-controls');
     if (durationControls) durationControls.style.display = 'flex';
 }
 
@@ -562,8 +562,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Get the increment/decrement buttons and attach event listeners
-    var incrementBtn = document.querySelector('.resolution-display .number-btn.increment');
-    var decrementBtn = document.querySelector('.resolution-display .number-btn.decrement');
+    var incrementBtn = document.querySelector('#resolutionDisplay .stagger-controls .stagger-btn.increment');
+    var decrementBtn = document.querySelector('#resolutionDisplay .stagger-controls .stagger-btn.decrement');
     
     incrementBtn.addEventListener('click', function() {
         console.log('Increment clicked');

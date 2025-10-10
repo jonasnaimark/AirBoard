@@ -5,6 +5,18 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.62] - 2025-10-09 🚀 **UI CONSOLIDATION & TEMPLATE SYNC**
+### 🎨 UI/UX Improvements
+- Unified all +/- controls to use the same button style and sizing (resolution, delay, duration, stagger)
+
+### 🔧 Technical
+- Resolution row now reuses `.stagger-controls`/`.stagger-btn` classes for consistency
+- Cleaned up old `.number-controls` CSS and JS selectors
+
+### 📦 Packaging
+- Prepared production build v4.16.62
+- Associated with AirBoard-v4.16.62.zxp
+
 ## [4.16.60] - 2025-10-08 🛡️ **SHIFT-CLICK DELAY PROTECTION FIX**
 ### 🎯 Fixed - BASELINE DELAY MODE PROTECTION
 - **Shift-Click Delay Protection**: Fixed adjacent keyframe corruption when using shift+click on delay buttons (baseline delay mode)
