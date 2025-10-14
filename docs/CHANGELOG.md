@@ -5,6 +5,29 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.66] - 2025-01-13 🎯 **SMART FOLDER ORGANIZATION**
+### ✨ New Features - RESPECTS USER FOLDER DELETIONS
+- **Smart Folder Logic**: Plugin now respects user's intentional folder deletions (Specs, Lottie, etc.)
+- **Fresh Project Detection**: Creates complete folder structure with all subfolders only for brand new projects
+- **Existing Project Respect**: If "01 - Compositions" already exists, won't recreate deleted subfolders
+- **Intelligent Composition Placement**: Tries Native/Desktop subfolder → Falls back to main folder → Creates minimal structure only if needed
+
+### 🔧 Technical Implementation
+- **Root Cause**: Previous logic always recreated full folder hierarchy, undoing user's deletions
+- **Solution**: Check if "01 - Compositions" exists before creating structure
+- **Fresh Project Path**: No existing folder → Create Desktop/Native with Specs/Lottie subfolders
+- **Existing Project Path**: Folder exists → Respect user's organization, don't recreate deleted folders
+- **Composition Logic**: Smart 3-tier fallback system for composition placement
+
+### 🎯 User Impact
+- **Before**: Deleting Specs/Lottie folders → They get recreated every time you make a comp
+- **After**: Deleted folders stay deleted, plugin respects your organizational choices
+- **Fresh Projects**: Still get complete professional folder structure automatically
+- **Flexibility**: Users can customize their folder structure without fighting the plugin
+
+### 🔗 Associated Build
+- AirBoard-v4.16.66.zxp
+
 ## [4.16.65] - 2025-01-13 🔧 **FIT TO SQUIRCLE MASK ALIGNMENT FIX**
 ### 🔧 Fixed - CRITICAL MASK LAYER POSITIONING
 - **Fixed Mask Layer Position**: Mask layers now correctly positioned at [0, 0] relative to parent shape layer

@@ -11088,76 +11088,73 @@ function snapToPlayheadFromPanel() {
 // Helper function to move composition to appropriate folder based on device type
 function moveCompositionToFolder(comp, deviceType) {
     try {
-        // Define folder structure mapping
-        var folderMapping = {
-            "iphone": "01 - Compositions > Native",
-            "desktop": "01 - Compositions > Desktop",
-            "iphone15": "01 - Compositions > Native",
-            "iphone-simple": "01 - Compositions > Native",
-            "web-chrome": "01 - Compositions > Desktop"
+        // Define subfolder names for each device type
+        var subfolderMapping = {
+            "iphone": "Native",
+            "desktop": "Desktop",
+            "iphone15": "Native",
+            "iphone-simple": "Native",
+            "web-chrome": "Desktop"
         };
-        
-        var targetFolderPath = folderMapping[deviceType];
-        if (!targetFolderPath) {
+
+        var subfolderName = subfolderMapping[deviceType];
+        if (!subfolderName) {
             $.writeln("Unknown device type for folder organization: " + deviceType);
             return;
         }
-        
-        // Split the path to get folder hierarchy
-        var folderNames = targetFolderPath.split(" > ");
-        var currentFolder = null;
-        
-        // Find or create the folder hierarchy
-        for (var i = 0; i < folderNames.length; i++) {
-            var folderName = folderNames[i];
-            var foundFolder = null;
-            
-            if (currentFolder === null) {
-                // Look in root level
-                for (var j = 1; j <= app.project.items.length; j++) {
-                    var item = app.project.items[j];
-                    if (item instanceof FolderItem && item.name === folderName) {
-                        foundFolder = item;
-                        break;
-                    }
-                }
-            } else {
-                // Look in current folder
-                for (var k = 1; k <= currentFolder.items.length; k++) {
-                    var item = currentFolder.items[k];
-                    if (item instanceof FolderItem && item.name === folderName) {
-                        foundFolder = item;
-                        break;
-                    }
-                }
+
+        // SMART LOGIC: Try to find existing folders first, only create minimal structure if needed
+
+        // Step 1: Look for "01 - Compositions" folder in root
+        var compositionsFolder = null;
+        for (var i = 1; i <= app.project.items.length; i++) {
+            var item = app.project.items[i];
+            if (item instanceof FolderItem && item.name === "01 - Compositions") {
+                compositionsFolder = item;
+                break;
             }
-            
-            // Create folder if not found
-            if (!foundFolder) {
-                if (currentFolder === null) {
-                    foundFolder = app.project.items.addFolder(folderName);
-                } else {
-                    foundFolder = currentFolder.items.addFolder(folderName);
-                }
-            }
-            
-            currentFolder = foundFolder;
         }
-        
+
+        // Step 2: If "01 - Compositions" exists, look for Native/Desktop subfolder
+        var targetFolder = null;
+        if (compositionsFolder) {
+            for (var j = 1; j <= compositionsFolder.items.length; j++) {
+                var subItem = compositionsFolder.items[j];
+                if (subItem instanceof FolderItem && subItem.name === subfolderName) {
+                    targetFolder = subItem;
+                    $.writeln("Found existing folder: 01 - Compositions > " + subfolderName);
+                    break;
+                }
+            }
+
+            // If subfolder doesn't exist but main folder does, use main folder
+            if (!targetFolder) {
+                targetFolder = compositionsFolder;
+                $.writeln("Using existing folder: 01 - Compositions (subfolder " + subfolderName + " doesn't exist)");
+            }
+        }
+
+        // Step 3: If no "01 - Compositions" folder exists, create minimal structure
+        if (!targetFolder) {
+            $.writeln("No existing Compositions folder found, creating minimal structure: 01 - Compositions > " + subfolderName);
+            compositionsFolder = app.project.items.addFolder("01 - Compositions");
+            targetFolder = compositionsFolder.items.addFolder(subfolderName);
+        }
+
         // Move the composition to the target folder
-        if (currentFolder) {
-            comp.parentFolder = currentFolder;
-            
+        if (targetFolder) {
+            comp.parentFolder = targetFolder;
+
             // Expand all folders in the hierarchy to show the composition
             var foldersToExpand = [];
-            var tempFolder = currentFolder;
-            
+            var tempFolder = targetFolder;
+
             // Collect all parent folders
             while (tempFolder) {
                 foldersToExpand.unshift(tempFolder); // Add to beginning to expand from root down
                 tempFolder = tempFolder.parentFolder;
             }
-            
+
             // Expand only the specific folders in our hierarchy, then select the composition
             for (var e = 0; e < foldersToExpand.length; e++) {
                 try {
@@ -11167,16 +11164,16 @@ function moveCompositionToFolder(comp, deviceType) {
                     $.writeln("Could not expand folder " + foldersToExpand[e].name + ": " + expandError.toString());
                 }
             }
-            
+
             // Finally, select the composition itself to highlight it in the Project panel
             try {
                 comp.selected = true;
-                $.writeln("Composition '" + comp.name + "' moved to " + targetFolderPath + " and selected in Project panel");
+                $.writeln("Composition '" + comp.name + "' moved to " + targetFolder.name + " and selected in Project panel");
             } catch(selectError) {
                 $.writeln("Could not select composition: " + selectError.toString());
             }
         }
-        
+
     } catch(e) {
         $.writeln("Error in moveCompositionToFolder: " + e.toString());
     }
@@ -11715,54 +11712,68 @@ function createDeviceComposition(deviceType, multiplier) {
         // Open the composition in the viewer
         comp.openInViewer();
         
-        // Create the full AE project folder structure (same as AE Folders button)
-        try {
-            var folderStructure = [
-                {
-                    name: "01 - Compositions",
-                    subfolders: [
-                        {
-                            name: "Desktop",
-                            subfolders: [
-                                { name: "01_Specs" },
-                                { name: "02_Lottie" }
-                            ]
-                        },
-                        {
-                            name: "Native", 
-                            subfolders: [
-                                { name: "01_Specs" },
-                                { name: "02_Lottie" }
-                            ]
-                        },
-                        { name: "zArchive" }
-                    ]
-                },
-                {
-                    name: "02 - Precomps",
-                    subfolders: [
-                        { name: "Desktop" },
-                        { name: "Native" },
-                        { name: "zArchive" }
-                    ]
-                },
-                {
-                    name: "03 - Assets",
-                    subfolders: [
-                        { name: "Images" },
-                        { name: "Reference" },
-                        { name: "Renders" },
-                        { name: "Vector" },
-                        { name: "Video" },
-                        { name: "zImported_projects" }
-                    ]
-                }
-            ];
-            
-            // Create the folder structure recursively (reuses existing function)
-            createFolderStructure(app.project, folderStructure);
-        } catch(folderError) {
-            $.writeln("Folder structure creation failed: " + folderError.toString());
+        // Check if "01 - Compositions" folder already exists
+        var compositionsFolderExists = false;
+        for (var i = 1; i <= app.project.items.length; i++) {
+            var item = app.project.items[i];
+            if (item instanceof FolderItem && item.name === "01 - Compositions") {
+                compositionsFolderExists = true;
+                $.writeln("Found existing 01 - Compositions folder, respecting user's folder structure");
+                break;
+            }
+        }
+
+        // Only create full folder structure if starting fresh (no 01 - Compositions folder)
+        if (!compositionsFolderExists) {
+            $.writeln("No existing folder structure found, creating fresh complete structure");
+            try {
+                var folderStructure = [
+                    {
+                        name: "01 - Compositions",
+                        subfolders: [
+                            {
+                                name: "Desktop",
+                                subfolders: [
+                                    { name: "01_Specs" },
+                                    { name: "02_Lottie" }
+                                ]
+                            },
+                            {
+                                name: "Native",
+                                subfolders: [
+                                    { name: "01_Specs" },
+                                    { name: "02_Lottie" }
+                                ]
+                            },
+                            { name: "zArchive" }
+                        ]
+                    },
+                    {
+                        name: "02 - Precomps",
+                        subfolders: [
+                            { name: "Desktop" },
+                            { name: "Native" },
+                            { name: "zArchive" }
+                        ]
+                    },
+                    {
+                        name: "03 - Assets",
+                        subfolders: [
+                            { name: "Images" },
+                            { name: "Reference" },
+                            { name: "Renders" },
+                            { name: "Vector" },
+                            { name: "Video" },
+                            { name: "zImported_projects" }
+                        ]
+                    }
+                ];
+
+                // Create the folder structure recursively (reuses existing function)
+                createFolderStructure(app.project, folderStructure);
+            } catch(folderError) {
+                $.writeln("Folder structure creation failed: " + folderError.toString());
+            }
         }
         
         // Move composition to appropriate folder
