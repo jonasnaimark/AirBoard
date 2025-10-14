@@ -12459,32 +12459,10 @@ function applyFitToShape(mode) {
             // Move mask layer above the original shape layer (index - 1)
             maskLayer.moveBefore(shapeLayer);
             
-            // Parent mask layer to original shape layer
-            maskLayer.parent = shapeLayer;
-            
-            // Shy the mask layer to reduce clutter
-            maskLayer.shy = true;
-            
-            // Link opacity and anchor point to original shape layer using expressions
-            maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
-            maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
-            
-            // Clean up mask layer effects - remove ALL effects including Squircle
-            var maskEffects = maskLayer.property("Effects");
-            if (maskEffects && maskEffects.numProperties > 0) {
-                // Go backwards to avoid index shifting issues
-                for (var fx = maskEffects.numProperties; fx >= 1; fx--) {
-                    var effect = maskEffects.property(fx);
-                    var effectName = effect.name;
-                    effect.remove();
-                    DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
-                }
-            }
-            
-            // Clean up keyframes from mask layer - remove all keyframes from transform properties
+            // Clean up keyframes from mask layer FIRST - remove all keyframes from transform properties
             try {
                 var transform = maskLayer.property("Transform");
-                var transformProps = ["Position", "Scale", "Rotation", "Opacity"];
+                var transformProps = ["Position", "Scale", "Rotation", "Opacity", "Anchor Point"];
                 for (var p = 0; p < transformProps.length; p++) {
                     var prop = transform.property(transformProps[p]);
                     if (prop && prop.numKeys > 0) {
@@ -12497,6 +12475,32 @@ function applyFitToShape(mode) {
                 }
             } catch(keyframeError) {
                 DEBUG_JSX.log("Could not remove keyframes from mask layer: " + keyframeError.toString());
+            }
+
+            // Parent mask layer to original shape layer
+            maskLayer.parent = shapeLayer;
+
+            // CRITICAL: Reset position to [0, 0] since it's now parented
+            // This ensures the mask layer aligns perfectly with the parent shape layer
+            maskLayer.property("Transform").property("Position").setValue([0, 0]);
+
+            // Shy the mask layer to reduce clutter
+            maskLayer.shy = true;
+
+            // Link opacity and anchor point to original shape layer using expressions
+            maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
+            maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
+
+            // Clean up mask layer effects - remove ALL effects including Squircle
+            var maskEffects = maskLayer.property("Effects");
+            if (maskEffects && maskEffects.numProperties > 0) {
+                // Go backwards to avoid index shifting issues
+                for (var fx = maskEffects.numProperties; fx >= 1; fx--) {
+                    var effect = maskEffects.property(fx);
+                    var effectName = effect.name;
+                    effect.remove();
+                    DEBUG_JSX.log("Removed effect from mask layer: " + effectName);
+                }
             }
             
             // Remove layer markers from mask layer

@@ -5,6 +5,21 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.65] - 2025-01-13 🔧 **FIT TO SQUIRCLE MASK ALIGNMENT FIX**
+### 🔧 Fixed - CRITICAL MASK LAYER POSITIONING
+- **Fixed Mask Layer Position**: Mask layers now correctly positioned at [0, 0] relative to parent shape layer
+- **Perfect Alignment**: Eliminated position offset that was causing mask misalignment with shape layers
+- **Keyframe Cleanup**: All keyframes now removed from mask layer before setting position to prevent setValue() errors
+
+### 🔧 Technical Implementation
+- **Root Cause**: Duplicated mask layer retained original position values, causing offset when parented
+- **Solution**: Remove all keyframes from transform properties BEFORE parenting, then set position to [0, 0]
+- **Order of Operations**: Keyframe removal → Parenting → Position reset → Effect cleanup
+- **Properties Cleaned**: Position, Scale, Rotation, Opacity, and Anchor Point keyframes all removed
+
+### 🔗 Associated Build
+- AirBoard-v4.16.65.zxp
+
 ## [4.16.62] - 2025-10-09 🚀 **UI CONSOLIDATION & TEMPLATE SYNC**
 ### 🎨 UI/UX Improvements
 - Unified all +/- controls to use the same button style and sizing (resolution, delay, duration, stagger)
