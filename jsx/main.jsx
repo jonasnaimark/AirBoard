@@ -16104,6 +16104,21 @@ function mirrorKeysFromPanel() {
                                 "| Property: " + uniquePropId;
                         })();
 
+                        // Strip out "Initial Velocity:" lines from the spring block for mirrored markers
+                        // (Initial velocity doesn't make sense for mirrored springs)
+                        if (springBlock) {
+                            var lines = springBlock.split("\n");
+                            var filteredLines = [];
+                            for (var lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+                                var line = lines[lineIdx];
+                                // Check if line starts with "Initial Velocity:" (with optional whitespace)
+                                if (line.replace(/^\s+/, '').indexOf("Initial Velocity:") !== 0) {
+                                    filteredLines.push(line);
+                                }
+                            }
+                            springBlock = filteredLines.join("\n");
+                        }
+
                         // Merge/update marker at first baked key using Sproing-format blocks
                         createOrUpdateMirroredMarker(markerProp, targetMarkerTime, springBlock, uniquePropId, 0.01);
 

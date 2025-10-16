@@ -5,6 +5,26 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.67] - 2025-01-13 🔧 **MIRROR KEYS VELOCITY CLEANUP**
+### 🔧 Fixed - INITIAL VELOCITY REMOVAL
+- **Spring Mirroring Cleanup**: Mirror Keys now removes "Initial Velocity:" lines from mirrored spring markers
+- **Cleaner Markers**: Mirrored springs no longer include velocity data (which doesn't apply to mirrored animations)
+- **Format Preservation**: Maintains all other spring parameters (stiffness, damping ratio, mass, preset name)
+
+### 🔧 Technical Implementation
+- **Smart Line Filtering**: Strips any line starting with "Initial Velocity:" (handles both array and single value formats)
+- **Whitespace Handling**: Correctly detects velocity lines regardless of leading whitespace
+- **Non-Destructive**: Preserves all blank lines, spacing, and Sproing format compatibility
+- **Location**: jsx/main.jsx lines 16107-16120 in mirrorKeysFromPanel function
+
+### 🎯 User Impact
+- **Before**: Mirrored spring markers included "Initial Velocity: [1000.0, 0.0]" from original
+- **After**: Mirrored markers only contain relevant spring physics parameters
+- **Compatibility**: Maintains full Sproing unbake compatibility for mirrored springs
+
+### 🔗 Associated Build
+- AirBoard-v4.16.67.zxp
+
 ## [4.16.66] - 2025-01-13 🎯 **SMART FOLDER ORGANIZATION**
 ### ✨ New Features - RESPECTS USER FOLDER DELETIONS
 - **Smart Folder Logic**: Plugin now respects user's intentional folder deletions (Specs, Lottie, etc.)
