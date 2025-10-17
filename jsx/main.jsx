@@ -11220,6 +11220,83 @@ function getOrCreateImportedProjectsFolder() {
     }
 }
 
+// Helper function to get or create Placeholder folder
+function getOrCreatePlaceholderFolder() {
+    try {
+        // First, get or create the zImported_projects folder
+        var importedFolder = getOrCreateImportedProjectsFolder();
+        if (!importedFolder) return null;
+
+        // Look for Placeholder folder inside zImported_projects
+        var placeholderFolder = null;
+        for (var i = 1; i <= importedFolder.items.length; i++) {
+            var item = importedFolder.items[i];
+            if (item instanceof FolderItem && item.name === "Placeholder") {
+                placeholderFolder = item;
+                break;
+            }
+        }
+
+        // Create Placeholder folder if it doesn't exist
+        if (!placeholderFolder) {
+            placeholderFolder = importedFolder.items.addFolder("Placeholder");
+        }
+
+        return placeholderFolder;
+    } catch(e) {
+        $.writeln("Could not create Placeholder folder: " + e.toString());
+        return null;
+    }
+}
+
+// Helper function to get or create placeholder composition
+function getOrCreatePlaceholderComp(baseWidth, baseHeight, multiplier) {
+    // Generate placeholder name based on dimensions and resolution
+    var placeholderName = "Placeholder - " + baseWidth + " @" + multiplier + "x";
+
+    // Check if placeholder already exists
+    for (var i = 1; i <= app.project.items.length; i++) {
+        var item = app.project.items[i];
+        if (item instanceof CompItem && item.name === placeholderName) {
+            // Found existing placeholder, return it
+            return item;
+        }
+    }
+
+    // Placeholder doesn't exist, create it
+    var actualWidth = baseWidth * multiplier;
+    var actualHeight = baseHeight * multiplier;
+    var duration = 10; // 10 seconds
+    var frameRate = 60;
+
+    // Create the placeholder composition
+    var placeholderComp = app.project.items.addComp(placeholderName, actualWidth, actualHeight, 1, duration, frameRate);
+
+    // Add a bright magenta shape layer as visual indicator
+    var shapeLayer = placeholderComp.layers.addShape();
+    shapeLayer.name = "Replace Me";
+
+    // Create rectangle shape
+    var shapeGroup = shapeLayer.property("Contents").addProperty("ADBE Vector Group");
+    shapeGroup.name = "Rectangle";
+    var rect = shapeGroup.property("Contents").addProperty("ADBE Vector Shape - Rect");
+    rect.property("Size").setValue([actualWidth, actualHeight]);
+
+    // Add magenta fill
+    var fill = shapeGroup.property("Contents").addProperty("ADBE Vector Graphic - Fill");
+    fill.property("Color").setValue([1, 0, 1, 1]); // Magenta
+
+    // Center the shape
+    shapeLayer.transform.position.setValue([actualWidth/2, actualHeight/2]);
+
+    // Move placeholder to Placeholder folder
+    var placeholderFolder = getOrCreatePlaceholderFolder();
+    if (placeholderFolder) {
+        placeholderComp.parentFolder = placeholderFolder;
+    }
+
+    return placeholderComp;
+}
 
 
 // Device Templates functionality
@@ -11417,7 +11494,13 @@ function createDeviceComposition(deviceType, multiplier) {
                                     debugInfo.push("--- Processing layer " + layerIndex + " ---");
                                     var sourceLayer = templateComp.layers[layerIndex];
                                     debugInfo.push("Copying layer " + layerIndex + ": '" + sourceLayer.name + "'");
-                                    
+
+                                    // Skip "Web - 1440" layer for web-chrome (we'll add placeholder instead)
+                                    if (deviceType === "web-chrome" && sourceLayer.name.indexOf("Web - 1440") !== -1) {
+                                        debugInfo.push("Skipping Web - 1440 layer (will be replaced with placeholder)");
+                                        continue;
+                                    }
+
                                     // Copy layer to the new composition
                                     sourceLayer.copyToComp(comp);
                                     debugInfo.push("Layer copied, comp now has " + comp.layers.length + " layers");
@@ -11571,57 +11654,48 @@ function createDeviceComposition(deviceType, multiplier) {
                             }
                             debugInfo.push("=== " + deviceName + " Layer Copying Complete ===");
                             
-                            // Step 2: Add iPhone UI - 393 as base layer for iPhone 15 and iPhone Simple
+                            // Step 2: Add Placeholder comp as base layer for iPhone 15 and iPhone Simple
                             if (deviceType === "iphone15" || deviceType === "iphone-simple") {
-                                debugInfo.push("=== Adding iPhone UI - 393 Base Layer ===");
-                                
-                                // Find iPhone UI - 393 comp in the project
-                                var iPhoneUIComp = null;
-                                for (var k = 1; k <= app.project.items.length; k++) {
-                                    var item = app.project.items[k];
-                                    if (item instanceof CompItem && item.name === "iPhone UI - 393") {
-                                        iPhoneUIComp = item;
-                                        debugInfo.push("✓ Found iPhone UI - 393 comp");
-                                        break;
-                                    }
-                                }
-                                
-                                if (iPhoneUIComp) {
-                                    // Add iPhone UI - 393 as precomp layer
-                                    var iPhoneUILayer = comp.layers.add(iPhoneUIComp);
-                                    iPhoneUILayer.name = "iPhone UI";
-                                    
-                                    // Apply proper scaling (same as regular iPhone UI)
-                                    var scaleFactor = (multiplier / 2) * 100;
-                                    iPhoneUILayer.transform.scale.setValue([scaleFactor, scaleFactor]);
-                                    debugInfo.push("iPhone UI scaled to " + scaleFactor + "%");
-                                    
+                                debugInfo.push("=== Adding Placeholder Base Layer ===");
+
+                                // Get or create placeholder comp (393px base width for iPhone, 852px base height)
+                                var placeholderComp = getOrCreatePlaceholderComp(393, 852, multiplier);
+
+                                if (placeholderComp) {
+                                    // Add placeholder as precomp layer
+                                    var placeholderLayer = comp.layers.add(placeholderComp);
+                                    placeholderLayer.name = "Replace Me";
+
+                                    // Always scale to 100% (this is the key difference!)
+                                    placeholderLayer.transform.scale.setValue([100, 100]);
+                                    debugInfo.push("Placeholder scaled to 100%");
+
                                     // Center the layer
-                                    iPhoneUILayer.transform.position.setValue([comp.width/2, comp.height/2]);
-                                    
+                                    placeholderLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+
                                     // Set start time to playhead position
-                                    iPhoneUILayer.startTime = comp.time;
-                                    
+                                    placeholderLayer.startTime = comp.time;
+
                                     // Enable collapse transformations for crisp rendering
-                                    iPhoneUILayer.collapseTransformation = true;
-                                    
-                                    // Position iPhone UI layer based on device type
+                                    placeholderLayer.collapseTransformation = true;
+
+                                    // Position placeholder layer based on device type
                                     if (deviceType === "iphone-simple") {
-                                        // For iPhone Simple: iPhone UI goes to top (above Shadow)
-                                        iPhoneUILayer.moveToBeginning();
-                                        debugInfo.push("iPhone UI moved to top (above Shadow)");
+                                        // For iPhone Simple: Placeholder goes to top (above Shadow)
+                                        placeholderLayer.moveToBeginning();
+                                        debugInfo.push("Placeholder moved to top (above Shadow)");
                                     } else {
-                                        // For iPhone 15: iPhone UI goes to bottom (behind Frame)
-                                        iPhoneUILayer.moveToEnd();
-                                        debugInfo.push("iPhone UI moved to bottom (behind Frame)");
+                                        // For iPhone 15: Placeholder goes to bottom (behind Frame)
+                                        placeholderLayer.moveToEnd();
+                                        debugInfo.push("Placeholder moved to bottom (behind Frame)");
                                     }
                                     
-                                    debugInfo.push("✓ iPhone UI - 393 added as base layer");
-                                    
+                                    debugInfo.push("✓ Placeholder added as base layer");
+
                                     // Step 3: Find Screen Matte layer and set up track matte
                                     debugInfo.push("=== Setting up Screen Matte ===");
                                     var screenMatteLayer = null;
-                                    
+
                                     // Look for Screen Matte layer in the composition
                                     for (var m = 1; m <= comp.layers.length; m++) {
                                         if (comp.layer(m).name === "Screen Matte") {
@@ -11630,54 +11704,92 @@ function createDeviceComposition(deviceType, multiplier) {
                                             break;
                                         }
                                     }
-                                    
+
                                     if (screenMatteLayer) {
-                                        // Set up track matte for iPhone UI layer
+                                        // Set up track matte for placeholder layer
                                         try {
-                                            // Make sure Screen Matte is positioned directly above iPhone UI in layer stack
+                                            // Make sure Screen Matte is positioned directly above placeholder in layer stack
                                             // The matte layer needs to be right above the layer it's matting
-                                            
+
                                             // Find current positions
-                                            var iPhoneUIIndex = iPhoneUILayer.index;
+                                            var placeholderIndex = placeholderLayer.index;
                                             var screenMatteIndex = screenMatteLayer.index;
-                                            
-                                            debugInfo.push("iPhone UI at index: " + iPhoneUIIndex);
+
+                                            debugInfo.push("Placeholder at index: " + placeholderIndex);
                                             debugInfo.push("Screen Matte at index: " + screenMatteIndex);
-                                            
-                                            // Screen Matte needs to be at iPhone UI index - 1 (above it)
-                                            if (screenMatteIndex !== iPhoneUIIndex - 1) {
-                                                // Move Screen Matte to be right above iPhone UI
-                                                if (screenMatteIndex > iPhoneUIIndex) {
+
+                                            // Screen Matte needs to be at placeholder index - 1 (above it)
+                                            if (screenMatteIndex !== placeholderIndex - 1) {
+                                                // Move Screen Matte to be right above placeholder
+                                                if (screenMatteIndex > placeholderIndex) {
                                                     // Screen Matte is below, move it above
-                                                    screenMatteLayer.moveBefore(iPhoneUILayer);
+                                                    screenMatteLayer.moveBefore(placeholderLayer);
                                                 } else {
                                                     // Screen Matte is too far above, move it to right above
-                                                    screenMatteLayer.moveAfter(iPhoneUILayer);
-                                                    screenMatteLayer.moveBefore(iPhoneUILayer);
+                                                    screenMatteLayer.moveAfter(placeholderLayer);
+                                                    screenMatteLayer.moveBefore(placeholderLayer);
                                                 }
-                                                debugInfo.push("Repositioned Screen Matte to be above iPhone UI");
+                                                debugInfo.push("Repositioned Screen Matte to be above placeholder");
                                             }
-                                            
+
                                             // Set the track matte
-                                            iPhoneUILayer.setTrackMatte(screenMatteLayer, TrackMatteType.ALPHA);
-                                            debugInfo.push("✓ Track matte set: iPhone UI using Screen Matte as Alpha");
+                                            placeholderLayer.setTrackMatte(screenMatteLayer, TrackMatteType.ALPHA);
+                                            debugInfo.push("✓ Track matte set: Placeholder using Screen Matte as Alpha");
                                             
                                         } catch(matteError) {
                                             debugInfo.push("❌ Error setting up track matte: " + matteError.toString());
                                             // Try alternate method
                                             try {
-                                                iPhoneUILayer.trackMatteType = TrackMatteType.ALPHA;
+                                                placeholderLayer.trackMatteType = TrackMatteType.ALPHA;
                                                 debugInfo.push("✓ Track matte set using alternate method");
                                             } catch(altError) {
                                                 debugInfo.push("❌ Alternate method also failed: " + altError.toString());
                                             }
                                         }
                                     } else {
-                                        debugInfo.push("⚠️ Screen Matte layer not found - iPhone UI will not be masked");
+                                        debugInfo.push("⚠️ Screen Matte layer not found - Placeholder will not be masked");
                                     }
-                                    
+
                                 } else {
-                                    debugInfo.push("❌ iPhone UI - 393 comp not found");
+                                    debugInfo.push("❌ Could not create placeholder comp");
+                                }
+                            }
+
+                            // Step 2b: Add Placeholder comp for Web Chrome
+                            if (deviceType === "web-chrome") {
+                                debugInfo.push("=== Adding Placeholder Base Layer for Web Chrome ===");
+
+                                // Get or create placeholder comp (1440×1028 base dimensions, same as desktop)
+                                var placeholderComp = getOrCreatePlaceholderComp(1440, 1028, multiplier);
+
+                                if (placeholderComp) {
+                                    // Add placeholder as precomp layer
+                                    var placeholderLayer = comp.layers.add(placeholderComp);
+                                    placeholderLayer.name = "Replace Me";
+
+                                    // Always scale to 100% (this is the key difference!)
+                                    placeholderLayer.transform.scale.setValue([100, 100]);
+                                    debugInfo.push("Placeholder scaled to 100%");
+
+                                    // Center the layer with Y offset for Web Chrome
+                                    var targetX = comp.width/2;
+                                    var targetY = comp.height/2 + (multiplier * 40); // Y offset
+                                    placeholderLayer.transform.position.setValue([targetX, targetY]);
+                                    debugInfo.push("Placeholder positioned with Web Chrome Y offset");
+
+                                    // Set start time to playhead position
+                                    placeholderLayer.startTime = comp.time;
+
+                                    // Enable collapse transformations for crisp rendering
+                                    placeholderLayer.collapseTransformation = true;
+
+                                    // Move to top (where Web - 1440 was)
+                                    placeholderLayer.moveToBeginning();
+                                    debugInfo.push("Placeholder moved to top (where Web - 1440 was)");
+
+                                    debugInfo.push("✓ Placeholder added as base layer for Web Chrome");
+                                } else {
+                                    debugInfo.push("❌ Could not create placeholder comp for Web Chrome");
                                 }
                             }
                         } else {
