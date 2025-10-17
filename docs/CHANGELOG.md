@@ -5,6 +5,24 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.68] - 2025-01-13 ✨ **PLACEHOLDER SYSTEM & SNAP ENHANCEMENTS**
+### ✨ New Features
+- **Smart Placeholders**: Device comps now include "Replace Me" placeholder layers always scaled to 100% (no manual rescaling when swapping content)
+- **Auto-Reuse**: Placeholders automatically shared across same-resolution comps (e.g., all @3x iPhone comps share "Placeholder - 393 @3x")
+- **Snap Preserve Delays**: Shift+click Snap to Playhead preserves relative delays between properties (normal click = per-property snapping)
+
+### 🎨 UI/UX
+- Changed dropdown "iPhone UI - 393" to "iPhone - 393"
+- Magenta placeholder comps in `Placeholder` folder for easy identification
+
+### 🔧 Technical
+- Created `getOrCreatePlaceholderComp()` with reuse detection
+- Skips "Web - 1440" layer during Web Chrome copying (replaced with placeholder)
+- Shift+click calculates global offset from absolute earliest keyframe
+
+### 🔗 Associated Build
+- AirBoard-v4.16.68.zxp
+
 ## [4.16.67] - 2025-01-13 🔧 **MIRROR KEYS VELOCITY CLEANUP**
 ### 🔧 Fixed - INITIAL VELOCITY REMOVAL
 - **Spring Mirroring Cleanup**: Mirror Keys now removes "Initial Velocity:" lines from mirrored spring markers
