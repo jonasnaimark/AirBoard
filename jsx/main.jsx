@@ -10533,7 +10533,8 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, is
 }
 
 // Snap selected keyframes to playhead - per-property snapping with marker movement
-function snapToPlayheadFromPanel() {
+// preserveDelays: if true (shift+click), maintains relative delays between properties
+function snapToPlayheadFromPanel(preserveDelays) {
     try {
         app.beginUndoGroup("Snap to Playhead");
 
@@ -10641,6 +10642,31 @@ function snapToPlayheadFromPanel() {
             return "error|No selected keyframes found";
         }
 
+        // PHASE 1.5: If preserveDelays is true, calculate global offset from absolute earliest keyframe
+        var globalTimeOffset = null;
+        if (preserveDelays) {
+            var globalEarliestTime = null;
+
+            // Find the absolute earliest keyframe across ALL properties
+            for (var propDataIdx = 0; propDataIdx < allPropertyData.length; propDataIdx++) {
+                var propData = allPropertyData[propDataIdx];
+                var prop = propData.property;
+                var selectedKeys = propData.selectedKeyIndices;
+
+                for (var k = 0; k < selectedKeys.length; k++) {
+                    var keyTime = prop.keyTime(selectedKeys[k]);
+                    if (globalEarliestTime === null || keyTime < globalEarliestTime) {
+                        globalEarliestTime = keyTime;
+                    }
+                }
+            }
+
+            if (globalEarliestTime !== null) {
+                // Calculate single offset to snap the absolute earliest keyframe to playhead
+                globalTimeOffset = playheadTime - globalEarliestTime;
+            }
+        }
+
         // PHASE 2: Process each property independently
         for (var propDataIdx = 0; propDataIdx < allPropertyData.length; propDataIdx++) {
             var propData = allPropertyData[propDataIdx];
@@ -10668,8 +10694,15 @@ function snapToPlayheadFromPanel() {
 
             if (earliestKeyTime === null) continue;
 
-            // Calculate offset to snap earliest keyframe to playhead
-            var timeOffset = playheadTime - earliestKeyTime;
+            // Calculate offset to snap keyframes
+            var timeOffset;
+            if (preserveDelays && globalTimeOffset !== null) {
+                // Shift+click: Use global offset (preserves relative delays)
+                timeOffset = globalTimeOffset;
+            } else {
+                // Normal click: Use per-property offset (each property's earliest → playhead)
+                timeOffset = playheadTime - earliestKeyTime;
+            }
 
             // Skip if already at playhead
             if (Math.abs(timeOffset) < 0.001) continue;

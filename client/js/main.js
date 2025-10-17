@@ -1389,17 +1389,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Snap to Playhead button handler
     if (snapToPlayheadBtn) {
-        snapToPlayheadBtn.addEventListener('click', function() {
-            console.log('Snap to Playhead clicked');
+        snapToPlayheadBtn.addEventListener('click', function(event) {
+            var isShiftHeld = event.shiftKey;
+            console.log('Snap to Playhead clicked' + (isShiftHeld ? ' [SHIFT - Preserve Delays]' : ' [Normal - Per-Property]'));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
 
-            // Call ExtendScript function to snap keyframes to playhead
-            csInterface.evalScript('snapToPlayheadFromPanel()', function(result) {
-                console.log('Snap to playhead result:', result);
+            // Call ExtendScript function with shift state
+            // Normal: per-property snapping (each property's earliest → playhead)
+            // Shift: global offset (preserve all relative delays)
+            var script = 'snapToPlayheadFromPanel(' + isShiftHeld + ')';
+            csInterface.evalScript(script, function(result) {
+                console.log('Snap to playhead result' + (isShiftHeld ? ' [PRESERVE DELAYS]' : ' [PER-PROPERTY]') + ':', result);
 
                 if (result && result.indexOf('success') === 0) {
                     // Parse result: "success|Snapped 5 keyframes across 2 properties to playhead (moved 1 markers)"
