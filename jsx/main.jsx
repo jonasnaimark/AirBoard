@@ -14248,7 +14248,6 @@ function createFinderFoldersFromPanel() {
             {
                 name: "01 - Assets",
                 subfolders: [
-                    { name: "Figma" },
                     {
                         name: "Images",
                         subfolders: [
@@ -14276,8 +14275,7 @@ function createFinderFoldersFromPanel() {
             },
             { name: "03 - AE" },
             { name: "04 - C4D" },
-            { name: "05 - Prototypes" },
-            { name: "06 - Decks" }
+            { name: "05 - Prototypes" }
         ];
         
         // Create the folder structure in file system
