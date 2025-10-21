@@ -5,6 +5,33 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.70] - 2025-10-21 🗂️ **FOLDER STRUCTURE CLEANUP**
+### 🎨 UI/UX
+- **Streamlined Folder Structure**: Removed unused folders from Finder folder creation
+- **Removed "Figma" folder** from 01 - Assets subfolder structure
+- **Removed "06 - Decks"** from root folder structure
+- **Cleaner Organization**: Simplified folder structure for better workflow
+
+### 🔧 Technical
+- Updated createFinderFolderStructure function to exclude Figma and Decks folders
+- Maintains existing folder hierarchy for other folders
+
+### 📊 Updated Structure
+```
+01 - Assets
+    ├── Images (Desktop, Native)
+    ├── Reference (Stills, Videos)
+    ├── Vector
+    └── Video
+02 - Exports (Video, Lottie)
+03 - AE
+04 - C4D
+05 - Prototypes
+```
+
+### 🔗 Associated Build
+- AirBoard-v4.16.70.zxp
+
 ## [4.16.69] - 2025-10-21 ✨ **GESTURE POSITIONING & GLOBAL DELAY CONTROL**
 ### ✨ New Features
 - **iPhone UI Positioning**: Gesture compositions now automatically position under "iPhone UI" layer when present (maintains top-of-stack behavior when not found)
