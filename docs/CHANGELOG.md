@@ -5,6 +5,30 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.69] - 2025-10-21 ✨ **GESTURE POSITIONING & GLOBAL DELAY CONTROL**
+### ✨ New Features
+- **iPhone UI Positioning**: Gesture compositions now automatically position under "iPhone UI" layer when present (maintains top-of-stack behavior when not found)
+- **Shift+Click Skip Precomps**: Shift+click on delay buttons with no selection now skips precomp processing (moves only main comp layers, doesn't touch nested content)
+
+### 🎨 UI/UX
+- Gestures intelligently integrate with device mockup workflows
+- More precise control over global delay operations with shift modifier
+
+### 🔧 Technical
+- Added automatic "iPhone UI" layer detection in gesture placement
+- Added skipPrecomps parameter to nudgeFromPlayhead() function
+- Modified precomp processing logic to respect skipPrecomps flag
+- Leverages existing shift+click routing for seamless integration
+
+### 📊 Behavior Matrix
+- Normal click (no selection): Moves main comp + processes all precomp contents (recursive)
+- Shift+click (no selection): Moves main comp only, skips all precomp contents
+- Normal click (with selection): Timeline mode - all keyframes move together (unchanged)
+- Shift+click (with selection): Baseline mode - baseline stays fixed (unchanged)
+
+### 🔗 Associated Build
+- AirBoard-v4.16.69.zxp
+
 ## [4.16.68] - 2025-01-13 ✨ **PLACEHOLDER SYSTEM & SNAP ENHANCEMENTS**
 ### ✨ New Features
 - **Smart Placeholders**: Device comps now include "Replace Me" placeholder layers always scaled to 100% (no manual rescaling when swapping content)
