@@ -12079,10 +12079,30 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         // The new layer is always at index 1 per AE scripting behavior; no need for name check to avoid false errors
         var gestureLayer = comp.layers[1];
-        
+
+        // Check if there's an "iPhone UI" layer and position gesture layer right under it
+        try {
+            var iPhoneUILayer = null;
+            for (var i = 1; i <= comp.numLayers; i++) {
+                if (comp.layers[i].name === "iPhone UI") {
+                    iPhoneUILayer = comp.layers[i];
+                    break;
+                }
+            }
+
+            if (iPhoneUILayer) {
+                // Move gesture layer to right after iPhone UI layer
+                gestureLayer.moveAfter(iPhoneUILayer);
+                $.writeln("Positioned gesture layer under iPhone UI");
+            }
+        } catch(positionError) {
+            $.writeln("Layer positioning failed: " + positionError.toString());
+            // Non-critical - gesture layer will stay at top if positioning fails
+        }
+
         // Keep the original layer names so expressions work properly
         // Don't rename the layer since expressions depend on the original name
-        
+
         // Apply scaling based on resolution multiplier
         // 1=50%, 2=100%, 3=150%, 4=200%, 5=250%, 6=300%
         var scalePercentage;
