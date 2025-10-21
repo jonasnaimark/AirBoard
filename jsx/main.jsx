@@ -5424,11 +5424,12 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset) {
 var GLOBAL_OPERATION_ID = 0;
 
 // GLOBAL DELAY FUNCTIONS - Move everything after playhead when nothing is selected
-function nudgeFromPlayhead(direction, frames) {
+// skipPrecomps: if true (shift+click), don't process precomp contents (main comp layers only)
+function nudgeFromPlayhead(direction, frames, skipPrecomps) {
     try {
         DEBUG_JSX.clear(); // Clear previous debug messages
         GLOBAL_OPERATION_ID++; // Increment operation ID for this run
-        DEBUG_JSX.log("GD#" + GLOBAL_OPERATION_ID + ": " + (direction > 0 ? "+" : "-") + frames + "f");
+        DEBUG_JSX.log("GD#" + GLOBAL_OPERATION_ID + ": " + (direction > 0 ? "+" : "-") + frames + "f" + (skipPrecomps ? " [SKIP PCs]" : ""));
         
         var comp = app.project.activeItem;
         if (comp && comp instanceof CompItem) {
@@ -5606,13 +5607,14 @@ function nudgeFromPlayhead(direction, frames) {
             
             // Process precomps (5 levels deep)
             // Only process precomp contents if the playhead is over the ACTIVE content area
-            if (layer.source && layer.source instanceof CompItem) {
+            // SKIP if shift+click (skipPrecomps = true)
+            if (layer.source && layer.source instanceof CompItem && !skipPrecomps) {
                 DEBUG_JSX.log("  PC: " + layer.source.name.substring(0, 15));
-                
+
                 // CRITICAL: Use the same content boundaries we calculated above!
                 // contentStartTime and contentEndTime already account for trimmed vs natural layers
                 DEBUG_JSX.log("    PC@" + contentStartTime.toFixed(2) + "-" + contentEndTime.toFixed(2) + "s");
-                
+
                 // Only process if playhead is within the active content area
                 if (playheadTime >= contentStartTime && playheadTime < contentEndTime) {
                     DEBUG_JSX.log("    →Process PC (playhead in active area)");
@@ -5627,6 +5629,8 @@ function nudgeFromPlayhead(direction, frames) {
                 } else {
                     DEBUG_JSX.log("    Skip PC (playhead not in active area)");
                 }
+            } else if (layer.source && layer.source instanceof CompItem && skipPrecomps) {
+                DEBUG_JSX.log("  PC: " + layer.source.name.substring(0, 15) + " [SKIPPED - Shift+click]");
             }
             
             // Re-lock layer if it was locked
@@ -6561,7 +6565,8 @@ function nudgeDelayWithFrames(direction, frames) {
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
             DEBUG_JSX.log("No layers selected - triggering global delay with " + frames + " frames, direction " + direction);
-            return nudgeFromPlayhead(direction, frames);
+            // Shift+click baseline mode function -> Skip precomps when no selection
+            return nudgeFromPlayhead(direction, frames, true);
         }
         
         var frameRate = comp.frameRate || 30;
@@ -6768,9 +6773,10 @@ function nudgeDelayTimelineMode(direction, frames) {
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
             // GLOBAL DELAY: When nothing is selected, nudge everything after playhead
+            // Pass false for skipPrecomps (normal behavior - process precomps)
             app.endUndoGroup();
             DEBUG_JSX.log("GLOBAL DELAY: No selection, nudging from playhead with " + frames + " frames");
-            return nudgeFromPlayhead(direction, frames);
+            return nudgeFromPlayhead(direction, frames, false);
         }
         
         // STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
