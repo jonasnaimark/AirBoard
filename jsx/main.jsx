@@ -12609,7 +12609,25 @@ function applyFitToShape(mode) {
     try {
         // Make shape layer visible
         shapeLayer.enabled = true;
-        
+
+        // CRITICAL: Clear existing relationships from content layers FIRST
+        // This prevents "hidden property" errors when re-applying to already configured layers
+        for (var i = 0; i < otherLayers.length; i++) {
+            var contentLayer = otherLayers[i];
+            try {
+                if (contentLayer.parent !== null) {
+                    DEBUG_JSX.log("Pre-clearing parent from: " + contentLayer.name);
+                    contentLayer.parent = null;
+                }
+                if (contentLayer.trackMatteType !== TrackMatteType.NO_TRACK_MATTE) {
+                    DEBUG_JSX.log("Pre-clearing track matte from: " + contentLayer.name);
+                    contentLayer.trackMatteType = TrackMatteType.NO_TRACK_MATTE;
+                }
+            } catch(preClearError) {
+                DEBUG_JSX.log("Could not pre-clear relationships from " + contentLayer.name + ": " + preClearError.toString());
+            }
+        }
+
         // Check if there's already an existing mask layer for this shape layer
         // Mask layer characteristics:
         // - Parented to the shape layer
@@ -12637,14 +12655,40 @@ function applyFitToShape(mode) {
             // Create the mask layer by duplicating the shape layer
             maskLayer = shapeLayer.duplicate();
             maskLayer.name = shapeLayer.name + " - Mask";
-            
+
+            // Clear any inherited parent or track matte from the duplicated layer
+            try {
+                if (maskLayer.parent !== null) {
+                    DEBUG_JSX.log("Clearing inherited parent from mask layer");
+                    maskLayer.parent = null;
+                }
+                if (maskLayer.trackMatteType !== TrackMatteType.NO_TRACK_MATTE) {
+                    DEBUG_JSX.log("Clearing inherited track matte from mask layer");
+                    maskLayer.trackMatteType = TrackMatteType.NO_TRACK_MATTE;
+                }
+            } catch(maskClearError) {
+                DEBUG_JSX.log("Could not clear inherited relationships from mask layer: " + maskClearError.toString());
+            }
+
             // Move mask layer above the original shape layer (index - 1)
             maskLayer.moveBefore(shapeLayer);
-            
-            // Clean up keyframes from mask layer FIRST - remove all keyframes from transform properties
+
+            // Clean up mask layer - clear expressions and keyframes from transform properties
+            // CRITICAL: Must clear expressions BEFORE trying to remove keyframes or set values
             try {
                 var transform = maskLayer.property("Transform");
                 var transformProps = ["Position", "Scale", "Rotation", "Opacity", "Anchor Point"];
+
+                // First pass: Clear all expressions
+                for (var p = 0; p < transformProps.length; p++) {
+                    var prop = transform.property(transformProps[p]);
+                    if (prop && prop.expression !== "") {
+                        DEBUG_JSX.log("Clearing expression from mask layer: " + transformProps[p]);
+                        prop.expression = "";
+                    }
+                }
+
+                // Second pass: Remove keyframes
                 for (var p = 0; p < transformProps.length; p++) {
                     var prop = transform.property(transformProps[p]);
                     if (prop && prop.numKeys > 0) {
@@ -12656,15 +12700,19 @@ function applyFitToShape(mode) {
                     }
                 }
             } catch(keyframeError) {
-                DEBUG_JSX.log("Could not remove keyframes from mask layer: " + keyframeError.toString());
+                DEBUG_JSX.log("Could not clean up mask layer properties: " + keyframeError.toString());
             }
 
             // Parent mask layer to original shape layer
             maskLayer.parent = shapeLayer;
 
-            // CRITICAL: Reset position to [0, 0] since it's now parented
-            // This ensures the mask layer aligns perfectly with the parent shape layer
-            maskLayer.property("Transform").property("Position").setValue([0, 0]);
+            // Reset position to [0, 0] after parenting
+            try {
+                maskLayer.property("Transform").property("Position").setValue([0, 0]);
+                DEBUG_JSX.log("Reset mask position to [0, 0] relative to parent");
+            } catch(relPosError) {
+                DEBUG_JSX.log("Could not reset relative position: " + relPosError.toString());
+            }
 
             // Shy the mask layer to reduce clutter
             maskLayer.shy = true;
@@ -12672,6 +12720,33 @@ function applyFitToShape(mode) {
             // Link opacity and anchor point to original shape layer using expressions
             maskLayer.property("Transform").property("Opacity").expression = "thisComp.layer(index + 1).opacity";
             maskLayer.property("Transform").property("Anchor Point").expression = "thisComp.layer(index + 1).anchorPoint";
+
+            // CRITICAL: Clear expressions from shape path BEFORE removing effects
+            // The path may have an expression that references the Squircle effect
+            try {
+                var maskContents = maskLayer.property("Contents");
+                if (maskContents) {
+                    for (var i = 1; i <= maskContents.numProperties; i++) {
+                        var maskGroup = maskContents.property(i);
+                        if (maskGroup && maskGroup.property("Contents")) {
+                            var maskGroupContents = maskGroup.property("Contents");
+                            for (var j = 1; j <= maskGroupContents.numProperties; j++) {
+                                var maskProp = maskGroupContents.property(j);
+                                // Clear expression from Path property
+                                if (maskProp && maskProp.property("Path")) {
+                                    var pathProp = maskProp.property("Path");
+                                    if (pathProp && pathProp.expression !== "") {
+                                        DEBUG_JSX.log("Clearing path expression from mask layer: " + maskProp.name);
+                                        pathProp.expression = "";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch(pathExprError) {
+                DEBUG_JSX.log("Could not clear path expressions: " + pathExprError.toString());
+            }
 
             // Clean up mask layer effects - remove ALL effects including Squircle
             var maskEffects = maskLayer.property("Effects");
