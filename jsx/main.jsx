@@ -12497,6 +12497,69 @@ function applyFitToShape(mode) {
         
         DEBUG_JSX.log("applyFitToShape called with mode: " + mode);
         
+        function getLayerPositionComponents(layer) {
+            try {
+                var transformGroup = layer.property("Transform");
+                var positionProp = transformGroup.property("Position");
+                var xVal, yVal, zVal;
+                if (positionProp.dimensionsSeparated) {
+                    xVal = transformGroup.property("X Position").value;
+                    yVal = transformGroup.property("Y Position").value;
+                    var zProp = transformGroup.property("Z Position");
+                    zVal = zProp ? zProp.value : 0;
+                } else {
+                    var posVal = positionProp.value;
+                    xVal = (posVal.length > 0) ? posVal[0] : 0;
+                    yVal = (posVal.length > 1) ? posVal[1] : 0;
+                    zVal = (posVal.length > 2) ? posVal[2] : 0;
+                }
+                return [xVal, yVal, zVal];
+            } catch(positionError) {
+                DEBUG_JSX.log("getLayerPositionComponents failure for " + layer.name + ": " + positionError.toString());
+                return [0, 0, 0];
+            }
+        }
+        
+        function setLayerPositionComponents(layer, xVal, yVal, zVal) {
+            var transformGroup = layer.property("Transform");
+            var positionProp = transformGroup.property("Position");
+            if (positionProp.dimensionsSeparated) {
+                try { transformGroup.property("X Position").setValue(xVal); } catch(xErr) {}
+                try { transformGroup.property("Y Position").setValue(yVal); } catch(yErr) {}
+                var zProp = transformGroup.property("Z Position");
+                if (zProp) {
+                    try { zProp.setValue(zVal); } catch(zErr) {}
+                }
+            } else {
+                var newPos = positionProp.value;
+                if (!(newPos instanceof Array)) {
+                    newPos = [0, 0, 0];
+                }
+                if (newPos.length < 2) {
+                    newPos = [0, 0];
+                }
+                newPos[0] = xVal;
+                newPos[1] = yVal;
+                if (newPos.length > 2) {
+                    newPos[2] = zVal;
+                }
+                try {
+                    positionProp.setValue(newPos);
+                } catch(setErr) {
+                    // As a fallback, attempt to set explicitly sized array
+                    try {
+                        if (positionProp.value.length === 3) {
+                            positionProp.setValue([xVal, yVal, zVal]);
+                        } else {
+                            positionProp.setValue([xVal, yVal]);
+                        }
+                    } catch(setErr2) {
+                        DEBUG_JSX.log("setLayerPositionComponents fallback failed for " + layer.name + ": " + setErr2.toString());
+                    }
+                }
+            }
+        }
+        
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             DEBUG_JSX.error("No active composition selected");
@@ -12853,6 +12916,50 @@ function applyFitToShape(mode) {
             // Not critical - mask layer will still work as a duplicate
         }
         
+        var fitNoneData = null;
+        if (mode === "fitNone") {
+            try {
+                var fnShapeBounds = shapeLayer.sourceRectAtTime(comp.time, false);
+                var fnShapeWidth = Math.abs(fnShapeBounds.width);
+                var fnShapeHeight = Math.abs(fnShapeBounds.height);
+                if (fnShapeWidth === 0) { fnShapeWidth = 1; }
+                if (fnShapeHeight === 0) { fnShapeHeight = 1; }
+                
+                var fnCenterLocalX = fnShapeBounds.left + fnShapeBounds.width / 2;
+                var fnCenterLocalY = fnShapeBounds.top + fnShapeBounds.height / 2;
+                
+                var fnShapeAnchor = shapeLayer.anchorPoint.value;
+                if (!fnShapeAnchor || fnShapeAnchor.length < 2) {
+                    fnShapeAnchor = [0, 0, 0];
+                }
+                
+                var fnShapePosComponents = getLayerPositionComponents(shapeLayer);
+                var fnCenterCompX = fnShapePosComponents[0] + fnCenterLocalX - fnShapeAnchor[0];
+                var fnCenterCompY = fnShapePosComponents[1] + fnCenterLocalY - fnShapeAnchor[1];
+                var fnCenterCompZ = fnShapePosComponents[2];
+                
+                DEBUG_JSX.log("fitNone bounds - left: " + fnShapeBounds.left + ", top: " + fnShapeBounds.top + ", width: " + fnShapeBounds.width + ", height: " + fnShapeBounds.height);
+                DEBUG_JSX.log("fitNone center in shape space - x: " + fnCenterLocalX + ", y: " + fnCenterLocalY);
+                DEBUG_JSX.log("fitNone shape center comp - x: " + fnCenterCompX + ", y: " + fnCenterCompY);
+                
+                fitNoneData = {
+                    shapeBounds: fnShapeBounds,
+                    shapeWidth: fnShapeWidth,
+                    shapeHeight: fnShapeHeight,
+                    shapeCenterLocalX: fnCenterLocalX,
+                    shapeCenterLocalY: fnCenterLocalY,
+                    shapeAnchor: fnShapeAnchor,
+                    shapeCenterCompX: fnCenterCompX,
+                    shapeCenterCompY: fnCenterCompY,
+                    shapeCenterCompZ: fnCenterCompZ,
+                    layerData: [],
+                    idPrefix: "__AB_FIT_PAD__" + (new Date().getTime()) + "_" + Math.floor(Math.random() * 100000)
+                };
+            } catch(fnError) {
+                DEBUG_JSX.log("fitNone setup failed: " + fnError.toString());
+            }
+        }
+        
         // Process each other layer (content layers only, not the shape layer)
         for (var layerIndex = 0; layerIndex < otherLayers.length; layerIndex++) {
             var otherLayer = otherLayers[layerIndex];
@@ -12862,6 +12969,28 @@ function applyFitToShape(mode) {
             // Skip individual layer processing for fitNone - we'll handle everything after precomp
             if (mode === "fitNone") {
                 DEBUG_JSX.log("Skipping individual processing for fitNone mode");
+                if (fitNoneData) {
+                    try {
+                        var originalComponents = getLayerPositionComponents(otherLayer);
+                        var uniqueId = fitNoneData.idPrefix + "_" + layerIndex;
+                        var originalComment = "";
+                        try {
+                            originalComment = otherLayer.comment || "";
+                            otherLayer.comment = uniqueId;
+                        } catch(commentError) {
+                            DEBUG_JSX.log("fitNone could not tag comment for '" + otherLayer.name + "': " + commentError.toString());
+                        }
+                        fitNoneData.layerData.push({
+                            id: uniqueId,
+                            name: otherLayer.name,
+                            position: originalComponents,
+                            originalComment: originalComment
+                        });
+                        DEBUG_JSX.log("fitNone recorded '" + otherLayer.name + "' comp position: " + Math.round(originalComponents[0]) + ", " + Math.round(originalComponents[1]));
+                    } catch(prePosError) {
+                        DEBUG_JSX.log("fitNone could not log position for '" + otherLayer.name + "': " + prePosError.toString());
+                    }
+                }
                 continue;
             }
             
@@ -13146,11 +13275,33 @@ function applyFitToShape(mode) {
         if (mode === "fitNone" && otherLayers.length > 0) {
             // Get shape info
             var shapeBounds = shapeLayer.sourceRectAtTime(comp.time, false);
-            var shapeWidth = shapeBounds.width;
-            var shapeHeight = shapeBounds.height;
+            DEBUG_JSX.log("fitNone bounds - left: " + shapeBounds.left + ", top: " + shapeBounds.top + ", width: " + shapeBounds.width + ", height: " + shapeBounds.height);
             
-            // Collect all other layers for precomposing
+            var shapeWidth = Math.abs(shapeBounds.width);
+            var shapeHeight = Math.abs(shapeBounds.height);
+            if (shapeWidth === 0) { shapeWidth = 1; }
+            if (shapeHeight === 0) { shapeHeight = 1; }
+            
+            // Determine the visual center of the squircle in layer space (relative to the shape anchor)
+            var shapeCenterLocalX = shapeBounds.left + shapeBounds.width/2;
+            var shapeCenterLocalY = shapeBounds.top + shapeBounds.height/2;
+            DEBUG_JSX.log("fitNone center in shape space - x: " + shapeCenterLocalX + ", y: " + shapeCenterLocalY);
+            
+            var shapeAnchorVal = shapeLayer.anchorPoint.value;
+            if (!shapeAnchorVal || shapeAnchorVal.length < 2) {
+                shapeAnchorVal = [0, 0, 0];
+            }
+            
+            var shapePosComponents = getLayerPositionComponents(shapeLayer);
+            var shapeCenterCompX = shapePosComponents[0] + shapeCenterLocalX - shapeAnchorVal[0];
+            var shapeCenterCompY = shapePosComponents[1] + shapeCenterLocalY - shapeAnchorVal[1];
+            var shapeCenterCompZ = shapePosComponents[2];
+            DEBUG_JSX.log("fitNone shape center comp - x: " + shapeCenterCompX + ", y: " + shapeCenterCompY);
+            
+            // Collect all other layers for precomposing and capture original positions
             var validLayers = otherLayers;
+            var precomposeLayerData = [];
+            var precomposeIdPrefix = "__AB_FIT_PAD__" + (new Date().getTime()) + "_" + Math.floor(Math.random() * 100000);
             
             if (validLayers.length === 0) {
                 alert("No layers to precompose");
@@ -13181,50 +13332,68 @@ function applyFitToShape(mode) {
             
             // Make sure precomp was created and resize its composition
             if (precomp && precomp.source) {
-                // Get the precomp composition
                 var precompComp = precomp.source;
-                
-                // Calculate positioning
-                var shapePos = shapeLayer.position.value;
-                var shapeCenterX = shapePos[0] + shapeBounds.left + shapeBounds.width/2;
-                var shapeCenterY = shapePos[1] + shapeBounds.top + shapeBounds.height/2;
                 
                 // Resize the precomp to match the shape size
                 precompComp.width = Math.ceil(shapeWidth);
                 precompComp.height = Math.ceil(shapeHeight);
+                DEBUG_JSX.log("fitNone precomp resized - w: " + precompComp.width + ", h: " + precompComp.height);
                 
-                // Calculate the offset needed to center content in the resized precomp
-                var offsetX = precompComp.width/2 - shapeCenterX;
-                var offsetY = precompComp.height/2 - shapeCenterY;
+                // Prepare lookup for stored layer data
+                var layerDataMap = {};
+                for (var dataIdx = 0; dataIdx < fitNoneData.layerData.length; dataIdx++) {
+                    var entry = fitNoneData.layerData[dataIdx];
+                    layerDataMap[entry.id] = entry;
+                }
                 
-                // Move all layers in the precomp by this offset
+                // Set precomp anchor to center of new size
+                precomp.anchorPoint.setValue([precompComp.width/2, precompComp.height/2]);
+                
+                // Recenter each content layer inside the precomp to match original comp-space positions
                 for (var j = 1; j <= precompComp.numLayers; j++) {
+                    var innerLayer = precompComp.layer(j);
+                    if (!innerLayer) { continue; }
+                    
+                    var lookupId = innerLayer.comment || "";
+                    var storedInfo = layerDataMap[lookupId];
+                    if (!storedInfo) {
+                        DEBUG_JSX.log("fitNone no stored data for layer '" + innerLayer.name + "' (comment: " + lookupId + ")");
+                        continue;
+                    }
+                    
+                    var storedPos = storedInfo.position;
+                    var newX = (precompComp.width / 2) + (storedPos[0] - shapeCenterCompX);
+                    var newY = (precompComp.height / 2) + (storedPos[1] - shapeCenterCompY);
+                    var newZ = storedPos[2];
+                    
+                    setLayerPositionComponents(innerLayer, newX, newY, newZ);
+                    DEBUG_JSX.log("fitNone recentered '" + innerLayer.name + "' to: " + Math.round(newX) + ", " + Math.round(newY));
+                    
+                    // Restore original comment
                     try {
-                        var layer = precompComp.layer(j);
-                        if (!layer.locked) {
-                            var pos = layer.position.value;
-                            layer.position.setValue([pos[0] + offsetX, pos[1] + offsetY]);
-                        }
-                    } catch (e) {
-                        // Skip if error
+                        innerLayer.comment = storedInfo.originalComment || "";
+                    } catch(commentRestoreError) {
+                        // Ignore if comment restoration fails
+                    }
+                    
+                    delete layerDataMap[lookupId];
+                }
+                
+                for (var remainingId in layerDataMap) {
+                    if (layerDataMap.hasOwnProperty(remainingId)) {
+                        DEBUG_JSX.log("fitNone warning: unmatched precompose data id " + remainingId);
                     }
                 }
                 
-                // Set precomp anchor to center
-                precomp.anchorPoint.setValue([precompComp.width/2, precompComp.height/2]);
-                
-                // Position the precomp at the shape center
-                precomp.position.setValue([shapeCenterX, shapeCenterY]);
-                
-                // Parent the precomp to the shape layer
+                // Parent the precomp to the shape layer and position it so the visual content stays put
                 precomp.parent = shapeLayer;
                 
-                // Convert position to parent space
                 var parentSpacePos = [
-                    shapeCenterX - shapeLayer.position.value[0],
-                    shapeCenterY - shapeLayer.position.value[1]
+                    shapeCenterLocalX - shapeAnchorVal[0],
+                    shapeCenterLocalY - shapeAnchorVal[1]
                 ];
-                precomp.position.setValue(parentSpacePos);
+                DEBUG_JSX.log("fitNone parent space position - x: " + parentSpacePos[0] + ", y: " + parentSpacePos[1]);
+                setLayerPositionComponents(precomp, parentSpacePos[0], parentSpacePos[1], shapeCenterCompZ);
                 
                 // Set collapse transformations
                 precomp.collapseTransformation = true;

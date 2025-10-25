@@ -5,6 +5,14 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.71] - 2025-01-24 🔧 **FIT TO SQUIRCLE FIX**
+### 🔧 Fixed
+- **Fit to Squircle Error**: Fixed "hidden property" error that occurred when using Fit to Squircle operation
+- **Property Access**: Improved error handling for shape layer property access
+
+### 🔗 Associated Build
+- AirBoard-v4.16.71.zxp
+
 ## [4.16.70] - 2025-10-21 🗂️ **FOLDER STRUCTURE CLEANUP**
 ### 🎨 UI/UX
 - **Streamlined Folder Structure**: Removed unused folders from Finder folder creation
