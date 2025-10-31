@@ -6265,7 +6265,27 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
         if (layer.audio && layer.audio.numProperties > 0) {
             processPropertyGroup(layer.audio);
         }
-        
+
+        // 7.5. Light Options (for light layers)
+        try {
+            if (layer.lightOption && layer.lightOption.numProperties > 0) {
+                DEBUG_JSX.log("🔍 Processing Light properties for " + layer.name);
+                processPropertyGroup(layer.lightOption);
+            }
+        } catch(e) {
+            // Not a light layer or light options not accessible
+        }
+
+        // 7.6. Camera Options (for camera layers)
+        try {
+            if (layer.cameraOption && layer.cameraOption.numProperties > 0) {
+                DEBUG_JSX.log("🔍 Processing Camera properties for " + layer.name);
+                processPropertyGroup(layer.cameraOption);
+            }
+        } catch(e) {
+            // Not a camera layer or camera options not accessible
+        }
+
         // 8. Time Remap - special layer property (not in any property group)
         // Must be handled separately at the layer level
         try {

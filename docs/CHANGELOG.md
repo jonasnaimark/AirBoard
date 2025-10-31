@@ -5,6 +5,15 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.72] - 2025-01-31 🔧 **LIGHT & CAMERA SUPPORT**
+### 🔧 Fixed
+- **Global Delay on Lights**: Fixed bug where global delay nudging wasn't processing light layer keyframes (Intensity, Color, Cone Angle, etc.)
+- **Global Delay on Cameras**: Added support for camera layer keyframes (Zoom, Depth of Field, Focus Distance, etc.)
+- **Property Group Coverage**: Extended `moveKeyframesAfterTime` function to process `lightOption` and `cameraOption` property groups
+
+### 🔗 Associated Build
+- AirBoard-v4.16.72.zxp
+
 ## [4.16.71] - 2025-01-24 🔧 **FIT TO SQUIRCLE FIX**
 ### 🔧 Fixed
 - **Fit to Squircle Error**: Fixed "hidden property" error that occurred when using Fit to Squircle operation
