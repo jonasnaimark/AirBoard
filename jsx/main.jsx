@@ -2136,42 +2136,22 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                 var lastTime = keyData[keyData.length - 1].time;
                 var duration = lastTime - firstTime;
                 
-                // SMART SNAPPING: Snap to nearest interval based on frame input
+                // SMART SNAPPING: Apply frame delta then snap to nearest 50ms
                 var durationMs = duration * 1000;
-                var snapInterval = framesToMs; // The interval to snap to (e.g., 50ms for 3 frames at 60fps)
-                var newDurationMs;
-                
-                // Check if duration is already snapped to the interval
-                var remainder = durationMs % snapInterval;
-                var isAlreadySnapped = remainder < 1 || remainder > (snapInterval - 1); // Within 1ms tolerance
-                
-                if (direction > 0) {
-                    // Expand duration - snap to next interval up
-                    if (isAlreadySnapped) {
-                        // Already snapped, go to next interval
-                        newDurationMs = durationMs + snapInterval;
-                    } else {
-                        // Not snapped, snap up to next interval
-                        newDurationMs = Math.ceil(durationMs / snapInterval) * snapInterval;
-                    }
-                } else {
-                    // Contract duration - snap to next interval down
-                    if (isAlreadySnapped) {
-                        // Already snapped, go to previous interval
-                        newDurationMs = durationMs - snapInterval;
-                    } else {
-                        // Not snapped, snap down to previous interval
-                        newDurationMs = Math.floor(durationMs / snapInterval) * snapInterval;
-                    }
-                }
-                
-                // Ensure we don't go below one frame duration
+
+                // Step 1: Apply the frame delta (add or subtract)
+                var targetDurationMs = durationMs + (direction * framesToMs);
+
+                // Step 2: Snap to nearest 50ms increment
+                var newDurationMs = Math.round(targetDurationMs / 50) * 50;
+
+                // Step 3: Ensure we don't go below one frame duration
                 var minDurationMs = frameDuration * 1000;
                 if (newDurationMs < minDurationMs) {
                     newDurationMs = minDurationMs;
                 }
-                
-                DEBUG_JSX.log("Smart snap: " + durationMs + "ms -> " + newDurationMs + "ms (interval: " + snapInterval + "ms, was snapped: " + isAlreadySnapped + ")");
+
+                DEBUG_JSX.log("Smart snap: " + durationMs + "ms -> " + targetDurationMs + "ms (target) -> " + newDurationMs + "ms (snapped to 50ms)");
                 
                 // Convert back to seconds
                 var newDuration = newDurationMs / 1000;

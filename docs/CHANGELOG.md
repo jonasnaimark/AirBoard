@@ -5,6 +5,16 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.73] - 2025-02-01 🔧 **DURATION STRETCH FIX**
+### 🔧 Fixed
+- **Duration Stretch Snapping**: Fixed bug where duration stretch was using frame input as snapping interval instead of applying it as a delta
+- **Correct Behavior**: Now properly applies frame delta (e.g., ±40 frames) then snaps result to nearest 50ms increment
+- **Previous Bug**: 40 frame input would snap to 40-frame intervals instead of moving duration by 40 frames
+- **Impact**: Duration operations now move keyframes by the exact frame amount specified in the input field
+
+### 🔗 Associated Build
+- AirBoard-v4.16.73.zxp
+
 ## [4.16.72] - 2025-01-31 🔧 **LIGHT & CAMERA SUPPORT**
 ### 🔧 Fixed
 - **Global Delay on Lights**: Fixed bug where global delay nudging wasn't processing light layer keyframes (Intensity, Color, Cone Angle, etc.)
