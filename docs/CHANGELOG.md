@@ -5,6 +5,41 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.74] - 2025-11-05 🔧 **FIT TO SQUIRCLE & FOLDER STRUCTURE V2**
+### 🔧 Fixed
+- **Fit to Squircle with Parented Shape Layers**: Fixed bug where content layers were positioned incorrectly (bottom-right corner) when shape layer had a parent
+- **Parent Transform Chain**: Implemented proper layer space to composition space conversion that handles entire parent transform chain (position, scale, rotation)
+- **Impact**: Fit to Squircle now works correctly whether shape layer has a parent or not
+
+### 🎨 UI/UX
+- **AE Folder Structure V2**: Updated project folder structure to simplified two-folder system
+- **Renamed Folders**: `01 - Compositions` → `01 - Comps`, `03 - Assets` → `02 - Assets`
+- **Removed**: `02 - Precomps` folder (precomps now nested within Desktop/Native folders)
+- **Added**: `03_Precomps` subfolder to Desktop and Native in `01 - Comps`
+- **Updated Assets**: Changed `zImported_projects` → `Projects`, removed Vector folder
+
+### 🔧 Technical
+- **Placeholder Organization**: Placeholder comps now properly nested in `02 - Assets > Projects > AirBoard Templates.aep > Device Templates > _Pre-comps > Placeholder`
+- **Template Import Location**: All imported AE templates now go to `02 - Assets > Projects`
+- **Folder Detection**: Updated all folder lookup logic to use new folder names
+
+### 📊 New Folder Structure
+```
+01 - Comps
+  ├── Desktop (01_Specs, 02_Lottie, 03_Precomps)
+  ├── Native (01_Specs, 02_Lottie, 03_Precomps)
+  └── zArchive
+02 - Assets
+  ├── Images
+  ├── Projects
+  ├── Reference
+  ├── Renders
+  └── Video
+```
+
+### 🔗 Associated Build
+- AirBoard-v4.16.74.zxp
+
 ## [4.16.73] - 2025-02-01 🔧 **DURATION STRETCH FIX**
 ### 🔧 Fixed
 - **Duration Stretch Snapping**: Fixed bug where duration stretch was using frame input as snapping interval instead of applying it as a delta

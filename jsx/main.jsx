@@ -11144,24 +11144,24 @@ function moveCompositionToFolder(comp, deviceType) {
 
         // SMART LOGIC: Try to find existing folders first, only create minimal structure if needed
 
-        // Step 1: Look for "01 - Compositions" folder in root
+        // Step 1: Look for "01 - Comps" folder in root
         var compositionsFolder = null;
         for (var i = 1; i <= app.project.items.length; i++) {
             var item = app.project.items[i];
-            if (item instanceof FolderItem && item.name === "01 - Compositions") {
+            if (item instanceof FolderItem && item.name === "01 - Comps") {
                 compositionsFolder = item;
                 break;
             }
         }
 
-        // Step 2: If "01 - Compositions" exists, look for Native/Desktop subfolder
+        // Step 2: If "01 - Comps" exists, look for Native/Desktop subfolder
         var targetFolder = null;
         if (compositionsFolder) {
             for (var j = 1; j <= compositionsFolder.items.length; j++) {
                 var subItem = compositionsFolder.items[j];
                 if (subItem instanceof FolderItem && subItem.name === subfolderName) {
                     targetFolder = subItem;
-                    $.writeln("Found existing folder: 01 - Compositions > " + subfolderName);
+                    $.writeln("Found existing folder: 01 - Comps > " + subfolderName);
                     break;
                 }
             }
@@ -11169,14 +11169,14 @@ function moveCompositionToFolder(comp, deviceType) {
             // If subfolder doesn't exist but main folder does, use main folder
             if (!targetFolder) {
                 targetFolder = compositionsFolder;
-                $.writeln("Using existing folder: 01 - Compositions (subfolder " + subfolderName + " doesn't exist)");
+                $.writeln("Using existing folder: 01 - Comps (subfolder " + subfolderName + " doesn't exist)");
             }
         }
 
-        // Step 3: If no "01 - Compositions" folder exists, create minimal structure
+        // Step 3: If no "01 - Comps" folder exists, create minimal structure
         if (!targetFolder) {
-            $.writeln("No existing Compositions folder found, creating minimal structure: 01 - Compositions > " + subfolderName);
-            compositionsFolder = app.project.items.addFolder("01 - Compositions");
+            $.writeln("No existing Comps folder found, creating minimal structure: 01 - Comps > " + subfolderName);
+            compositionsFolder = app.project.items.addFolder("01 - Comps");
             targetFolder = compositionsFolder.items.addFolder(subfolderName);
         }
 
@@ -11218,43 +11218,43 @@ function moveCompositionToFolder(comp, deviceType) {
     }
 }
 
-// Helper function to find or create the zImported_projects folder
+// Helper function to find or create the Projects folder
 function getOrCreateImportedProjectsFolder() {
     try {
-        // Look for 03 - Assets folder first
+        // Look for 02 - Assets folder first
         var assetsFolder = null;
         for (var i = 1; i <= app.project.items.length; i++) {
             var item = app.project.items[i];
-            if (item instanceof FolderItem && item.name === "03 - Assets") {
+            if (item instanceof FolderItem && item.name === "02 - Assets") {
                 assetsFolder = item;
                 break;
             }
         }
-        
+
         // If no Assets folder exists, create it
         if (!assetsFolder) {
-            assetsFolder = app.project.items.addFolder("03 - Assets");
+            assetsFolder = app.project.items.addFolder("02 - Assets");
         }
-        
-        // Look for zImported_projects folder inside Assets
+
+        // Look for Projects folder inside Assets
         var importedFolder = null;
         for (var j = 1; j <= assetsFolder.items.length; j++) {
             var item = assetsFolder.items[j];
-            if (item instanceof FolderItem && item.name === "zImported_projects") {
+            if (item instanceof FolderItem && item.name === "Projects") {
                 importedFolder = item;
                 break;
             }
         }
-        
-        // If no zImported_projects folder exists, create it
+
+        // If no Projects folder exists, create it
         if (!importedFolder) {
-            importedFolder = assetsFolder.items.addFolder("zImported_projects");
+            importedFolder = assetsFolder.items.addFolder("Projects");
         }
-        
+
         return importedFolder;
     } catch(e) {
         // If we can't create the folder structure, return null (import will go to root)
-        $.writeln("Could not create zImported_projects folder: " + e.toString());
+        $.writeln("Could not create Projects folder: " + e.toString());
         return null;
     }
 }
@@ -11262,23 +11262,69 @@ function getOrCreateImportedProjectsFolder() {
 // Helper function to get or create Placeholder folder
 function getOrCreatePlaceholderFolder() {
     try {
-        // First, get or create the zImported_projects folder
+        // First, get or create the Projects folder
         var importedFolder = getOrCreateImportedProjectsFolder();
         if (!importedFolder) return null;
 
-        // Look for Placeholder folder inside zImported_projects
-        var placeholderFolder = null;
+        // Look for AirBoard Templates.aep folder inside Projects
+        var templatesFolder = null;
         for (var i = 1; i <= importedFolder.items.length; i++) {
             var item = importedFolder.items[i];
-            if (item instanceof FolderItem && item.name === "Placeholder") {
-                placeholderFolder = item;
+            if (item instanceof FolderItem && item.name === "AirBoard Templates.aep") {
+                templatesFolder = item;
+                break;
+            }
+        }
+
+        // If AirBoard Templates.aep doesn't exist, we can't create placeholders yet
+        if (!templatesFolder) {
+            $.writeln("AirBoard Templates.aep not found in Projects folder");
+            return null;
+        }
+
+        // Look for Device Templates folder inside AirBoard Templates.aep
+        var deviceTemplatesFolder = null;
+        for (var j = 1; j <= templatesFolder.items.length; j++) {
+            var subItem = templatesFolder.items[j];
+            if (subItem instanceof FolderItem && subItem.name === "Device Templates") {
+                deviceTemplatesFolder = subItem;
+                break;
+            }
+        }
+
+        // If Device Templates doesn't exist, create it
+        if (!deviceTemplatesFolder) {
+            deviceTemplatesFolder = templatesFolder.items.addFolder("Device Templates");
+        }
+
+        // Look for _Pre-comps folder inside Device Templates
+        var precompsFolder = null;
+        for (var k = 1; k <= deviceTemplatesFolder.items.length; k++) {
+            var preItem = deviceTemplatesFolder.items[k];
+            if (preItem instanceof FolderItem && preItem.name === "_Pre-comps") {
+                precompsFolder = preItem;
+                break;
+            }
+        }
+
+        // If _Pre-comps doesn't exist, create it
+        if (!precompsFolder) {
+            precompsFolder = deviceTemplatesFolder.items.addFolder("_Pre-comps");
+        }
+
+        // Look for Placeholder folder inside _Pre-comps
+        var placeholderFolder = null;
+        for (var m = 1; m <= precompsFolder.items.length; m++) {
+            var placeItem = precompsFolder.items[m];
+            if (placeItem instanceof FolderItem && placeItem.name === "Placeholder") {
+                placeholderFolder = placeItem;
                 break;
             }
         }
 
         // Create Placeholder folder if it doesn't exist
         if (!placeholderFolder) {
-            placeholderFolder = importedFolder.items.addFolder("Placeholder");
+            placeholderFolder = precompsFolder.items.addFolder("Placeholder");
         }
 
         return placeholderFolder;
@@ -11475,7 +11521,7 @@ function createDeviceComposition(deviceType, multiplier) {
                         var importedItems = app.project.importFile(importOptions);
                         debugInfo.push("Import complete, organizing items...");
                         
-                        // Move imported items to the zImported_projects folder
+                        // Move imported items to the Projects folder
                         var importedFolder = getOrCreateImportedProjectsFolder();
                         if (importedFolder && importedItems) {
                             // Handle both single item and array of items
@@ -11863,59 +11909,52 @@ function createDeviceComposition(deviceType, multiplier) {
         // Open the composition in the viewer
         comp.openInViewer();
         
-        // Check if "01 - Compositions" folder already exists
+        // Check if "01 - Comps" folder already exists
         var compositionsFolderExists = false;
         for (var i = 1; i <= app.project.items.length; i++) {
             var item = app.project.items[i];
-            if (item instanceof FolderItem && item.name === "01 - Compositions") {
+            if (item instanceof FolderItem && item.name === "01 - Comps") {
                 compositionsFolderExists = true;
-                $.writeln("Found existing 01 - Compositions folder, respecting user's folder structure");
+                $.writeln("Found existing 01 - Comps folder, respecting user's folder structure");
                 break;
             }
         }
 
-        // Only create full folder structure if starting fresh (no 01 - Compositions folder)
+        // Only create full folder structure if starting fresh (no 01 - Comps folder)
         if (!compositionsFolderExists) {
             $.writeln("No existing folder structure found, creating fresh complete structure");
             try {
                 var folderStructure = [
                     {
-                        name: "01 - Compositions",
+                        name: "01 - Comps",
                         subfolders: [
                             {
                                 name: "Desktop",
                                 subfolders: [
                                     { name: "01_Specs" },
-                                    { name: "02_Lottie" }
+                                    { name: "02_Lottie" },
+                                    { name: "03_Precomps" }
                                 ]
                             },
                             {
                                 name: "Native",
                                 subfolders: [
                                     { name: "01_Specs" },
-                                    { name: "02_Lottie" }
+                                    { name: "02_Lottie" },
+                                    { name: "03_Precomps" }
                                 ]
                             },
                             { name: "zArchive" }
                         ]
                     },
                     {
-                        name: "02 - Precomps",
-                        subfolders: [
-                            { name: "Desktop" },
-                            { name: "Native" },
-                            { name: "zArchive" }
-                        ]
-                    },
-                    {
-                        name: "03 - Assets",
+                        name: "02 - Assets",
                         subfolders: [
                             { name: "Images" },
+                            { name: "Projects" },
                             { name: "Reference" },
                             { name: "Renders" },
-                            { name: "Vector" },
-                            { name: "Video" },
-                            { name: "zImported_projects" }
+                            { name: "Video" }
                         ]
                     }
                 ];
@@ -12015,7 +12054,7 @@ function addGestureFromPanel(gestureType, multiplier) {
             var importOptions = new ImportOptions(templateFile);
             var importedItems = app.project.importFile(importOptions);
             
-            // Move imported items to the zImported_projects folder
+            // Move imported items to the Projects folder
             var importedFolder = getOrCreateImportedProjectsFolder();
             if (importedFolder && importedItems) {
                 // Handle both single item and array of items
@@ -12264,7 +12303,7 @@ function addComponentFromPanel(componentType, multiplier) {
             var importOptions = new ImportOptions(templateFile);
             var importedItems = app.project.importFile(importOptions);
             
-            // Move imported items to the zImported_projects folder
+            // Move imported items to the Projects folder
             var importedFolder = getOrCreateImportedProjectsFolder();
             if (importedFolder && importedItems) {
                 // Handle both single item and array of items
@@ -12517,6 +12556,53 @@ function applyFitToShape(mode) {
             } catch(positionError) {
                 DEBUG_JSX.log("getLayerPositionComponents failure for " + layer.name + ": " + positionError.toString());
                 return [0, 0, 0];
+            }
+        }
+
+        // Convert a point from layer space to composition space (handles parent transforms)
+        function layerSpaceToCompSpace(layer, pointInLayerSpace, currentTime) {
+            try {
+                var x = pointInLayerSpace[0];
+                var y = pointInLayerSpace[1];
+                var z = pointInLayerSpace.length > 2 ? pointInLayerSpace[2] : 0;
+
+                var currentLayer = layer;
+
+                // Walk up the parent chain
+                while (currentLayer) {
+                    var pos = getLayerPositionComponents(currentLayer);
+                    var anchor = currentLayer.anchorPoint.value;
+                    var scale = currentLayer.scale.value;
+                    var rotation = currentLayer.rotation ? currentLayer.rotation.value : 0;
+
+                    // Apply scale
+                    x *= (scale[0] / 100);
+                    y *= (scale[1] / 100);
+
+                    // Apply rotation (convert degrees to radians)
+                    if (rotation !== 0) {
+                        var rad = rotation * Math.PI / 180;
+                        var cosR = Math.cos(rad);
+                        var sinR = Math.sin(rad);
+                        var newX = x * cosR - y * sinR;
+                        var newY = x * sinR + y * cosR;
+                        x = newX;
+                        y = newY;
+                    }
+
+                    // Translate by (position - anchor)
+                    x += pos[0] - anchor[0];
+                    y += pos[1] - anchor[1];
+                    z += pos[2] - (anchor.length > 2 ? anchor[2] : 0);
+
+                    // Move to parent
+                    currentLayer = currentLayer.parent;
+                }
+
+                return [x, y, z];
+            } catch(e) {
+                DEBUG_JSX.log("layerSpaceToCompSpace error: " + e.toString());
+                return pointInLayerSpace;
             }
         }
         
@@ -12932,11 +13018,13 @@ function applyFitToShape(mode) {
                 if (!fnShapeAnchor || fnShapeAnchor.length < 2) {
                     fnShapeAnchor = [0, 0, 0];
                 }
-                
-                var fnShapePosComponents = getLayerPositionComponents(shapeLayer);
-                var fnCenterCompX = fnShapePosComponents[0] + fnCenterLocalX - fnShapeAnchor[0];
-                var fnCenterCompY = fnShapePosComponents[1] + fnCenterLocalY - fnShapeAnchor[1];
-                var fnCenterCompZ = fnShapePosComponents[2];
+
+                // Convert shape center from layer space to comp space (handles parent transforms)
+                var shapeCenterInLayerSpace = [fnCenterLocalX, fnCenterLocalY, 0];
+                var shapeCenterInCompSpace = layerSpaceToCompSpace(shapeLayer, shapeCenterInLayerSpace, comp.time);
+                var fnCenterCompX = shapeCenterInCompSpace[0];
+                var fnCenterCompY = shapeCenterInCompSpace[1];
+                var fnCenterCompZ = shapeCenterInCompSpace[2];
                 
                 DEBUG_JSX.log("fitNone bounds - left: " + fnShapeBounds.left + ", top: " + fnShapeBounds.top + ", width: " + fnShapeBounds.width + ", height: " + fnShapeBounds.height);
                 DEBUG_JSX.log("fitNone center in shape space - x: " + fnCenterLocalX + ", y: " + fnCenterLocalY);
@@ -13291,11 +13379,13 @@ function applyFitToShape(mode) {
             if (!shapeAnchorVal || shapeAnchorVal.length < 2) {
                 shapeAnchorVal = [0, 0, 0];
             }
-            
-            var shapePosComponents = getLayerPositionComponents(shapeLayer);
-            var shapeCenterCompX = shapePosComponents[0] + shapeCenterLocalX - shapeAnchorVal[0];
-            var shapeCenterCompY = shapePosComponents[1] + shapeCenterLocalY - shapeAnchorVal[1];
-            var shapeCenterCompZ = shapePosComponents[2];
+
+            // Convert shape center from layer space to comp space (handles parent transforms)
+            var shapeCenterInLayerSpace = [shapeCenterLocalX, shapeCenterLocalY, 0];
+            var shapeCenterInCompSpace = layerSpaceToCompSpace(shapeLayer, shapeCenterInLayerSpace, comp.time);
+            var shapeCenterCompX = shapeCenterInCompSpace[0];
+            var shapeCenterCompY = shapeCenterInCompSpace[1];
+            var shapeCenterCompZ = shapeCenterInCompSpace[2];
             DEBUG_JSX.log("fitNone shape center comp - x: " + shapeCenterCompX + ", y: " + shapeCenterCompY);
             
             // Collect all other layers for precomposing and capture original positions
@@ -14357,7 +14447,7 @@ function createAEFoldersFromPanel() {
         }
         
         // Check if the main folders already exist
-        var mainFolders = ["01 - Compositions", "02 - Precomps", "03 - Assets"];
+        var mainFolders = ["01 - Comps", "02 - Assets"];
         var existingFolders = 0;
 
         for (var i = 1; i <= app.project.items.length; i++) {
@@ -14374,46 +14464,39 @@ function createAEFoldersFromPanel() {
 
         // Always proceed to create/restore folder structure
         // This will create missing main folders and restore missing subfolders
-        
+
         // Define the folder structure
         var folderStructure = [
             {
-                name: "01 - Compositions",
+                name: "01 - Comps",
                 subfolders: [
                     {
                         name: "Desktop",
                         subfolders: [
                             { name: "01_Specs" },
-                            { name: "02_Lottie" }
+                            { name: "02_Lottie" },
+                            { name: "03_Precomps" }
                         ]
                     },
                     {
-                        name: "Native", 
+                        name: "Native",
                         subfolders: [
                             { name: "01_Specs" },
-                            { name: "02_Lottie" }
+                            { name: "02_Lottie" },
+                            { name: "03_Precomps" }
                         ]
                     },
                     { name: "zArchive" }
                 ]
             },
             {
-                name: "02 - Precomps",
-                subfolders: [
-                    { name: "Desktop" },
-                    { name: "Native" },
-                    { name: "zArchive" }
-                ]
-            },
-            {
-                name: "03 - Assets",
+                name: "02 - Assets",
                 subfolders: [
                     { name: "Images" },
+                    { name: "Projects" },
                     { name: "Reference" },
                     { name: "Renders" },
-                    { name: "Vector" },
-                    { name: "Video" },
-                    { name: "zImported_projects" }
+                    { name: "Video" }
                 ]
             }
         ];
