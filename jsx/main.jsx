@@ -12794,10 +12794,19 @@ function applyFitToShape(mode) {
                 layer.name.indexOf(" - Mask") !== -1) {
                 maskLayer = layer;
                 DEBUG_JSX.log("Found existing mask layer: " + maskLayer.name);
+
+                // Reset scale on existing mask layer to fix any compound transform issues
+                try {
+                    maskLayer.property("Transform").property("Scale").setValue([100, 100]);
+                    DEBUG_JSX.log("Reset existing mask scale to [100, 100]");
+                } catch(scaleError) {
+                    DEBUG_JSX.log("Could not reset existing mask scale: " + scaleError.toString());
+                }
+
                 break;
             }
         }
-        
+
         // Create new mask layer only if none exists
         if (!maskLayer) {
             DEBUG_JSX.log("No existing mask layer found, creating new one");
@@ -12855,12 +12864,13 @@ function applyFitToShape(mode) {
             // Parent mask layer to original shape layer
             maskLayer.parent = shapeLayer;
 
-            // Reset position to [0, 0] after parenting
+            // Reset position and scale after parenting (fixes compound transform issue)
             try {
                 maskLayer.property("Transform").property("Position").setValue([0, 0]);
-                DEBUG_JSX.log("Reset mask position to [0, 0] relative to parent");
+                maskLayer.property("Transform").property("Scale").setValue([100, 100]);
+                DEBUG_JSX.log("Reset mask position to [0, 0] and scale to [100, 100] relative to parent");
             } catch(relPosError) {
-                DEBUG_JSX.log("Could not reset relative position: " + relPosError.toString());
+                DEBUG_JSX.log("Could not reset relative position/scale: " + relPosError.toString());
             }
 
             // Shy the mask layer to reduce clutter

@@ -5,6 +5,16 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.75] - 2025-11-05 🔧 **FIT TO SQUIRCLE MASK SCALE FIX**
+### 🔧 Fixed
+- **Mask Layer Scale**: Fixed bug where mask layer was created at incorrect scale (60% instead of 100%) when using Fit to Squircle with Padding
+- **Compound Transform Issue**: Mask layer now properly resets scale to [100, 100] after parenting to avoid compound transforms
+- **Existing Mask Layers**: Also resets scale on existing mask layers to fix any previous compound transform issues
+- **Impact**: Mask layer now matches shape layer size exactly in all scenarios
+
+### 🔗 Associated Build
+- AirBoard-v4.16.75.zxp
+
 ## [4.16.74] - 2025-11-05 🔧 **FIT TO SQUIRCLE & FOLDER STRUCTURE V2**
 ### 🔧 Fixed
 - **Fit to Squircle with Parented Shape Layers**: Fixed bug where content layers were positioned incorrectly (bottom-right corner) when shape layer had a parent
