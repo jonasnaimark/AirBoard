@@ -16375,7 +16375,7 @@ function restoreTemporalFlagsSafely(prop, idx, inInterp, outInterp, temporalCont
 
 // Mirror selected keyframes: take first and last selected key per property, duplicate them starting at playhead,
 // reverse order, set second key at +30 frames, and remove easing and labels.
-function mirrorKeysFromPanel() {
+function mirrorKeysFromPanel(preserveDelays) {
     try {
         app.beginUndoGroup("Mirror Keys");
         var comp = app.project.activeItem;
@@ -16388,6 +16388,9 @@ function mirrorKeysFromPanel() {
         var frameRate = comp.frameRate || 60;
         var offsetSeconds = 30 / frameRate;
 
+        // Convert preserveDelays to boolean (handles undefined, "false", false, etc.)
+        preserveDelays = preserveDelays === true || preserveDelays === "true";
+
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
@@ -16397,7 +16400,7 @@ function mirrorKeysFromPanel() {
 
         var processedProps = 0;
         DEBUG_JSX.clear();
-        DEBUG_JSX.log("Mirror Keys: playhead=" + playheadTime.toFixed(3) + "s, offset=" + offsetSeconds.toFixed(3) + "s");
+        DEBUG_JSX.log("Mirror Keys: playhead=" + playheadTime.toFixed(3) + "s, preserveDelays=" + preserveDelays);
 
         function collectSelectedKeys(prop) {
             var sel = [];
@@ -16451,6 +16454,33 @@ function mirrorKeysFromPanel() {
             });
 
             DEBUG_JSX.log("  Found props to mirror: " + propertiesToProcess.length);
+
+            // SHIFT MODE: Find earliest and latest FIRST keyframes across all properties to calculate stagger range
+            var globalEarliestFirstKey = null;
+            var globalLatestFirstKey = null;
+            if (preserveDelays && propertiesToProcess.length > 0) {
+                for (var idx = 0; idx < propertiesToProcess.length; idx++) {
+                    var entry = propertiesToProcess[idx];
+                    var prop = entry.prop;
+                    var sel = entry.sel;
+                    var keyed = [];
+                    for (var ki = 0; ki < sel.length; ki++) {
+                        keyed.push({ idx: sel[ki], t: prop.keyTime(sel[ki]) });
+                    }
+                    keyed.sort(function(a,b){ return a.t - b.t; });
+                    var firstKeyTime = keyed[0].t;
+
+                    if (globalEarliestFirstKey === null || firstKeyTime < globalEarliestFirstKey) {
+                        globalEarliestFirstKey = firstKeyTime;
+                    }
+                    if (globalLatestFirstKey === null || firstKeyTime > globalLatestFirstKey) {
+                        globalLatestFirstKey = firstKeyTime;
+                    }
+                }
+                var staggerRange = globalLatestFirstKey - globalEarliestFirstKey;
+                DEBUG_JSX.log("  STAGGER TIMING: earliest first key=" + globalEarliestFirstKey.toFixed(3) + "s, latest first key=" + globalLatestFirstKey.toFixed(3) + "s, stagger range=" + staggerRange.toFixed(3) + "s");
+            }
+
             for (var idx = 0; idx < propertiesToProcess.length; idx++) {
                 var entry = propertiesToProcess[idx];
                 var prop = entry.prop;
@@ -16467,7 +16497,18 @@ function mirrorKeysFromPanel() {
                 keyed.sort(function(a,b){ return a.t - b.t; });
                 firstIdx = keyed[0].idx;
                 lastIdx = keyed[keyed.length - 1].idx;
-                DEBUG_JSX.log("    Prop: " + prop.name + " | firstIdx=" + firstIdx + " t=" + prop.keyTime(firstIdx).toFixed(3) + "s, lastIdx=" + lastIdx + " t=" + prop.keyTime(lastIdx).toFixed(3) + "s");
+                var firstKeyTime = prop.keyTime(firstIdx);
+
+                // Calculate this property's delay relative to earliest first key, and reverse it
+                var propertyDelay = 0;
+                var reversedDelay = 0;
+                if (preserveDelays && globalEarliestFirstKey !== null) {
+                    propertyDelay = firstKeyTime - globalEarliestFirstKey;
+                    reversedDelay = staggerRange - propertyDelay;
+                    DEBUG_JSX.log("    Prop: " + prop.name + " | firstIdx=" + firstIdx + " t=" + firstKeyTime.toFixed(3) + "s, delay=" + propertyDelay.toFixed(3) + "s → reversedDelay=" + reversedDelay.toFixed(3) + "s");
+                } else {
+                    DEBUG_JSX.log("    Prop: " + prop.name + " | firstIdx=" + firstIdx + " t=" + firstKeyTime.toFixed(3) + "s, lastIdx=" + lastIdx + " t=" + prop.keyTime(lastIdx).toFixed(3) + "s");
+                }
 
                 // Read values and labels of first and last
                 var firstVal = prop.keyValue(firstIdx);
@@ -16517,14 +16558,21 @@ function mirrorKeysFromPanel() {
                     var detectedPrecision = detectBakingPrecision(prop, sel, frameRate);
                     DEBUG_JSX.log("    Detected precision: " + detectedPrecision);
 
+                    // Calculate start time (apply reversed delay in shift mode)
+                    var springStartTime = playheadTime;
+                    if (preserveDelays && reversedDelay !== undefined) {
+                        springStartTime = playheadTime + reversedDelay;
+                        DEBUG_JSX.log("    Spring start time: playhead + reversedDelay = " + springStartTime.toFixed(3) + "s");
+                    }
+
                     // Generate reversed spring curve (swap start/end values)
                     var maxDuration = 3; // 3 seconds max
                     var maxFrames = Math.ceil(maxDuration * frameRate);
 
                     try {
                         var fullCurveData = generateFullSpringCurve(
-                            playheadTime,                    // t1
-                            playheadTime + maxDuration,      // t2
+                            springStartTime,                    // t1 (with reversed delay applied)
+                            springStartTime + maxDuration,      // t2
                             lastVal,                         // v1 (reversed - end becomes start)
                             firstVal,                        // v2 (reversed - start becomes end)
                             springParams.dampingRatio,
@@ -16597,8 +16645,8 @@ function mirrorKeysFromPanel() {
                             DEBUG_JSX.error("Failed to set blue labels: " + e.toString());
                         }
 
-                        // Create mirrored marker at first baked keyframe (playhead)
-                        var targetMarkerTime = playheadTime;
+                        // Create mirrored marker at first baked keyframe (with reversed delay applied)
+                        var targetMarkerTime = springStartTime;
                         var uniquePropId = getUniquePropertyId(prop);
                         // Prefer copying exact original block text for this property if available
                         var springBlock = originalSpringBlockTextForProperty || (function(){
@@ -16655,55 +16703,263 @@ function mirrorKeysFromPanel() {
                 // LINEAR MODE: Default behavior (no spring detected or error)
                 // =================================================================
 
-                // Create mirrored keys: preserve original duration between keys
-                var originalDuration = prop.keyTime(lastIdx) - prop.keyTime(firstIdx);
-                var newFirst = prop.addKey(playheadTime);
-                var newSecond = prop.addKey(playheadTime + Math.max(0, originalDuration));
+                if (preserveDelays) {
+                    // SHIFT MODE: Mirror ALL selected keys with REVERSED timing/delays
+                    DEBUG_JSX.log("    === SHIFT MODE: Mirroring with reversed delays ===");
+                    DEBUG_JSX.log("    Selected keys: " + sel.length);
+                    DEBUG_JSX.log("    Property delay offset: reversedDelay=" + reversedDelay.toFixed(3) + "s");
 
-                // Reverse order: the value at start becomes lastVal, and the second becomes firstVal
-                prop.setValueAtKey(newFirst, lastVal);
-                prop.setValueAtKey(newSecond, firstVal);
+                    // Collect all keyframe data
+                    var allKeyData = [];
+                    var firstKeyTime = prop.keyTime(firstIdx);
+                    var lastKeyTime = prop.keyTime(lastIdx);
+                    var totalDuration = lastKeyTime - firstKeyTime;
 
-                // Clear easing: set interpolation to LINEAR
-                try {
-                    prop.setInterpolationTypeAtKey(newFirst, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.LINEAR);
-                    prop.setInterpolationTypeAtKey(newSecond, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.LINEAR);
-                } catch(e) {}
-                try {
-                    // Remove temporal ease by setting empty arrays if supported
-                    prop.setTemporalEaseAtKey(newFirst, [], []);
-                    prop.setTemporalEaseAtKey(newSecond, [], []);
-                } catch(e) {}
-                try {
-                    // Clear temporal continuity/auto-bezier
-                    prop.setTemporalContinuousAtKey(newFirst, false);
-                    prop.setTemporalAutoBezierAtKey(newFirst, false);
-                    prop.setTemporalContinuousAtKey(newSecond, false);
-                    prop.setTemporalAutoBezierAtKey(newSecond, false);
-                } catch(e) {}
+                    DEBUG_JSX.log("    First key time: " + firstKeyTime.toFixed(3) + "s");
+                    DEBUG_JSX.log("    Last key time: " + lastKeyTime.toFixed(3) + "s");
+                    DEBUG_JSX.log("    Total duration: " + totalDuration.toFixed(3) + "s");
+                    DEBUG_JSX.log("    Playhead time: " + playheadTime.toFixed(3) + "s");
 
-                // Clear spatial settings for Position-like properties
-                if (prop.isSpatial) {
+                    for (var ki = 0; ki < keyed.length; ki++) {
+                        var keyIdx = keyed[ki].idx;
+                        var keyTime = keyed[ki].t;
+                        var keyVal = prop.keyValue(keyIdx);
+                        var keyLabel = prop.keyLabel(keyIdx);
+                        var relTime = keyTime - firstKeyTime;
+
+                        DEBUG_JSX.log("    Key " + (ki+1) + ": time=" + keyTime.toFixed(3) + "s, relTime=" + relTime.toFixed(3) + "s, value=" + keyVal);
+
+                        // Capture easing data
+                        var keyData = {
+                            originalIdx: keyIdx,
+                            originalTime: keyTime,
+                            relativeTime: relTime,
+                            value: keyVal,
+                            label: keyLabel,
+                            inInterp: prop.keyInInterpolationType(keyIdx),
+                            outInterp: prop.keyOutInterpolationType(keyIdx),
+                            temporalContinuous: false,
+                            temporalAutoBezier: false
+                        };
+
+                        // Capture temporal ease
+                        if (keyData.inInterp === KeyframeInterpolationType.BEZIER ||
+                            keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                            try {
+                                keyData.inEase = prop.keyInTemporalEase(keyIdx);
+                                keyData.outEase = prop.keyOutTemporalEase(keyIdx);
+                            } catch(e) {}
+                        }
+
+                        // Capture temporal continuity
+                        try {
+                            keyData.temporalContinuous = prop.keyTemporalContinuous(keyIdx);
+                            keyData.temporalAutoBezier = prop.keyTemporalAutoBezier(keyIdx);
+                        } catch(e) {}
+
+                        // Capture spatial properties
+                        if (prop.isSpatial) {
+                            try {
+                                keyData.spatialContinuous = prop.keySpatialContinuous(keyIdx);
+                                keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIdx);
+                                keyData.inTangent = prop.keyInSpatialTangent(keyIdx);
+                                keyData.outTangent = prop.keyOutSpatialTangent(keyIdx);
+                            } catch(e) {}
+                        }
+
+                        allKeyData.push(keyData);
+                    }
+
+                    // Create mirrored keys in reverse order with REVERSED delays
+                    DEBUG_JSX.log("    --- Creating mirrored keys ---");
+                    var newKeyIndices = [];
+                    for (var i = allKeyData.length - 1; i >= 0; i--) {
+                        var data = allKeyData[i];
+                        // Reverse the delay within this property
+                        var reversedRelativeTime = totalDuration - data.relativeTime;
+                        // Add the property's reversed delay offset (for cross-property delay mirroring)
+                        var newTime = playheadTime + reversedDelay + reversedRelativeTime;
+
+                        DEBUG_JSX.log("    Creating key: originalRelTime=" + data.relativeTime.toFixed(3) +
+                                     "s → reversedRelTime=" + reversedRelativeTime.toFixed(3) +
+                                     "s + propertyOffset=" + reversedDelay.toFixed(3) +
+                                     "s → newTime=" + newTime.toFixed(3) + "s, value=" + data.value);
+
+                        var newIdx = prop.addKey(newTime);
+
+                        // Set value (reversed - last value becomes first, etc.)
+                        prop.setValueAtKey(newIdx, data.value);
+
+                        // Apply easing (same pattern, not reversed)
+                        try {
+                            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                        } catch(e) {}
+
+                        if (data.inEase !== undefined && data.outEase !== undefined) {
+                            try {
+                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            } catch(e) {}
+                        }
+
+                        // Restore temporal properties
+                        try {
+                            prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                            prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                        } catch(e) {}
+
+                        // Restore spatial properties
+                        if (prop.isSpatial && data.spatialContinuous !== undefined) {
+                            try {
+                                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            } catch(e) {}
+                        }
+
+                        // Preserve label
+                        try {
+                            prop.setLabelAtKey(newIdx, data.label);
+                        } catch(e) {}
+
+                        newKeyIndices.push(newIdx);
+                    }
+
+                    // Reselect all new mirrored keys
+                    for (var rk = 1; rk <= prop.numKeys; rk++) {
+                        try { prop.setSelectedAtKey(rk, false); } catch(e) {}
+                    }
+                    for (var i = 0; i < newKeyIndices.length; i++) {
+                        try { prop.setSelectedAtKey(newKeyIndices[i], true); } catch(e) {}
+                    }
+
+                    DEBUG_JSX.log("    ✓ Shift mode complete: Created " + newKeyIndices.length + " mirrored keys")
+
+                } else {
+                    // NORMAL MODE: Mirror only first and last keys (original behavior)
+                    DEBUG_JSX.log("    Normal mode: Mirroring first and last keys only");
+
+                    // Capture easing data from original keyframes
+                    var firstKeyData = {
+                        inInterp: prop.keyInInterpolationType(firstIdx),
+                        outInterp: prop.keyOutInterpolationType(firstIdx),
+                        temporalContinuous: false,
+                        temporalAutoBezier: false
+                    };
+                    var lastKeyData = {
+                        inInterp: prop.keyInInterpolationType(lastIdx),
+                        outInterp: prop.keyOutInterpolationType(lastIdx),
+                        temporalContinuous: false,
+                        temporalAutoBezier: false
+                    };
+
+                    // Capture temporal ease for bezier keyframes
+                    if (firstKeyData.inInterp === KeyframeInterpolationType.BEZIER ||
+                        firstKeyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            firstKeyData.inEase = prop.keyInTemporalEase(firstIdx);
+                            firstKeyData.outEase = prop.keyOutTemporalEase(firstIdx);
+                        } catch(e) {}
+                    }
+                    if (lastKeyData.inInterp === KeyframeInterpolationType.BEZIER ||
+                        lastKeyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            lastKeyData.inEase = prop.keyInTemporalEase(lastIdx);
+                            lastKeyData.outEase = prop.keyOutTemporalEase(lastIdx);
+                        } catch(e) {}
+                    }
+
+                    // Capture temporal continuity/auto-bezier
                     try {
-                        prop.setSpatialContinuousAtKey(newFirst, false);
-                        prop.setSpatialAutoBezierAtKey(newFirst, false);
-                        prop.setSpatialContinuousAtKey(newSecond, false);
-                        prop.setSpatialAutoBezierAtKey(newSecond, false);
+                        firstKeyData.temporalContinuous = prop.keyTemporalContinuous(firstIdx);
+                        firstKeyData.temporalAutoBezier = prop.keyTemporalAutoBezier(firstIdx);
                     } catch(e) {}
-                }
+                    try {
+                        lastKeyData.temporalContinuous = prop.keyTemporalContinuous(lastIdx);
+                        lastKeyData.temporalAutoBezier = prop.keyTemporalAutoBezier(lastIdx);
+                    } catch(e) {}
 
-                // Preserve keyframe color labels (reversed to match mirrored values)
-                try {
-                    prop.setLabelAtKey(newFirst, lastLabel);
-                    prop.setLabelAtKey(newSecond, firstLabel);
-                } catch(e) {}
+                    // Capture spatial properties for Position-like properties
+                    if (prop.isSpatial) {
+                        try {
+                            firstKeyData.spatialContinuous = prop.keySpatialContinuous(firstIdx);
+                            firstKeyData.spatialAutoBezier = prop.keySpatialAutoBezier(firstIdx);
+                            firstKeyData.inTangent = prop.keyInSpatialTangent(firstIdx);
+                            firstKeyData.outTangent = prop.keyOutSpatialTangent(firstIdx);
+                        } catch(e) {}
+                        try {
+                            lastKeyData.spatialContinuous = prop.keySpatialContinuous(lastIdx);
+                            lastKeyData.spatialAutoBezier = prop.keySpatialAutoBezier(lastIdx);
+                            lastKeyData.inTangent = prop.keyInSpatialTangent(lastIdx);
+                            lastKeyData.outTangent = prop.keyOutSpatialTangent(lastIdx);
+                        } catch(e) {}
+                    }
 
-                // Reselect only the new mirrored keys
-                for (var rk = 1; rk <= prop.numKeys; rk++) {
-                    try { prop.setSelectedAtKey(rk, false); } catch(e) {}
+                    // Create mirrored keys: preserve original duration between keys
+                    var originalDuration = prop.keyTime(lastIdx) - prop.keyTime(firstIdx);
+                    var newFirst = prop.addKey(playheadTime);
+                    var newSecond = prop.addKey(playheadTime + Math.max(0, originalDuration));
+
+                    // Reverse order: the value at start becomes lastVal, and the second becomes firstVal
+                    prop.setValueAtKey(newFirst, lastVal);
+                    prop.setValueAtKey(newSecond, firstVal);
+
+                    // Apply preserved easing (same pattern, not reversed)
+                    try {
+                        prop.setInterpolationTypeAtKey(newFirst, firstKeyData.inInterp, firstKeyData.outInterp);
+                        prop.setInterpolationTypeAtKey(newSecond, lastKeyData.inInterp, lastKeyData.outInterp);
+                    } catch(e) {}
+
+                    // Restore temporal ease (same pattern)
+                    if (firstKeyData.inEase !== undefined && firstKeyData.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newFirst, firstKeyData.inEase, firstKeyData.outEase);
+                        } catch(e) {}
+                    }
+                    if (lastKeyData.inEase !== undefined && lastKeyData.outEase !== undefined) {
+                        try {
+                            prop.setTemporalEaseAtKey(newSecond, lastKeyData.inEase, lastKeyData.outEase);
+                        } catch(e) {}
+                    }
+
+                    // Restore temporal properties (same pattern)
+                    try {
+                        prop.setTemporalContinuousAtKey(newFirst, firstKeyData.temporalContinuous);
+                        prop.setTemporalAutoBezierAtKey(newFirst, firstKeyData.temporalAutoBezier);
+                        prop.setTemporalContinuousAtKey(newSecond, lastKeyData.temporalContinuous);
+                        prop.setTemporalAutoBezierAtKey(newSecond, lastKeyData.temporalAutoBezier);
+                    } catch(e) {}
+
+                    // Restore spatial settings for Position-like properties (same pattern)
+                    if (prop.isSpatial) {
+                        if (firstKeyData.spatialContinuous !== undefined) {
+                            try {
+                                prop.setSpatialContinuousAtKey(newFirst, firstKeyData.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newFirst, firstKeyData.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newFirst, firstKeyData.inTangent, firstKeyData.outTangent);
+                            } catch(e) {}
+                        }
+                        if (lastKeyData.spatialContinuous !== undefined) {
+                            try {
+                                prop.setSpatialContinuousAtKey(newSecond, lastKeyData.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newSecond, lastKeyData.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newSecond, lastKeyData.inTangent, lastKeyData.outTangent);
+                            } catch(e) {}
+                        }
+                    }
+
+                    // Preserve keyframe color labels (reversed to match mirrored values)
+                    try {
+                        prop.setLabelAtKey(newFirst, lastLabel);
+                        prop.setLabelAtKey(newSecond, firstLabel);
+                    } catch(e) {}
+
+                    // Reselect only the new mirrored keys
+                    for (var rk = 1; rk <= prop.numKeys; rk++) {
+                        try { prop.setSelectedAtKey(rk, false); } catch(e) {}
+                    }
+                    try { prop.setSelectedAtKey(newFirst, true); } catch(e) {}
+                    try { prop.setSelectedAtKey(newSecond, true); } catch(e) {}
                 }
-                try { prop.setSelectedAtKey(newFirst, true); } catch(e) {}
-                try { prop.setSelectedAtKey(newSecond, true); } catch(e) {}
 
                 processedProps++;
             }

@@ -5,6 +5,24 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.76] - 2025-01-06 ✨ **MIRROR KEYS ENHANCEMENTS**
+### ✨ Added
+- **Mirror Keys with Easing Preservation**: Non-spring keyframes now preserve their original easing curves when mirrored (previously all easing was cleared to linear)
+- **Shift+Click Mirror with Delay Preservation**: Hold Shift while clicking Mirror Keys to mirror all selected keyframes while preserving relative timing and delays
+- **Cross-Property Delay Mirroring**: Shift+click mirror now correctly reverses stagger delays between different properties (e.g., if Opacity starts first and Scale is delayed, the mirror will have Scale start first with Opacity delayed)
+
+### 🎨 UI/UX
+- **Debug Panel Support**: Mirror keys operations now output detailed debug information to the debug panel, showing timing calculations and delay reversals
+- **Tooltip System Update**: Changed tooltip `white-space` from `nowrap` to `pre-line` to support multi-line tooltips
+
+### 🔧 Technical
+- **Global Timing Calculation**: Mirror keys now finds earliest and latest first keyframes across all selected properties to calculate proper stagger ranges
+- **Spring Mirror with Delays**: Spring-based animations now respect reversed delays when using shift+click mirror
+- **Comprehensive Debug Logging**: Added detailed logging for property delays, reversed delays, and new keyframe placement times
+
+### 🔗 Associated Build
+- AirBoard-v4.16.76.zxp
+
 ## [4.16.75] - 2025-11-05 🔧 **FIT TO SQUIRCLE MASK SCALE FIX**
 ### 🔧 Fixed
 - **Mask Layer Scale**: Fixed bug where mask layer was created at incorrect scale (60% instead of 100%) when using Fit to Squircle with Padding

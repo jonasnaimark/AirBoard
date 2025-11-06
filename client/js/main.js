@@ -1299,7 +1299,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Global tooltip creation function (reusable across all inputs)
     function createTooltip(element, text) {
             var tooltip = null;
-            
+
             element.addEventListener('mouseenter', function() {
                 tooltip = document.createElement('div');
                 tooltip.textContent = text;
@@ -1311,7 +1311,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     border-radius: 4px;
                     font-size: 10px;
                     font-weight: 400;
-                    white-space: nowrap;
+                    white-space: pre-line;
                     border: 1px solid rgba(255, 255, 255, 0.12);
                     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
                     z-index: 1000;
@@ -1356,7 +1356,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Mirror Keys button handler
     if (mirrorKeysBtn) {
-        mirrorKeysBtn.addEventListener('click', function() {
+        mirrorKeysBtn.addEventListener('click', function(event) {
             console.log('Mirror Keys clicked');
 
             if (!csInterface) {
@@ -1364,16 +1364,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            // Detect shift key to preserve delays between keyframes
+            var preserveDelays = event.shiftKey;
+            if (preserveDelays) {
+                console.log('Shift+Click: Preserving delays between keyframes');
+            }
+
             // Call ExtendScript function to mirror keyframes
-            csInterface.evalScript('mirrorKeysFromPanel()', function(result) {
+            csInterface.evalScript('mirrorKeysFromPanel(' + preserveDelays + ')', function(result) {
                 console.log('Mirror keys result:', result);
 
                 if (result && result.indexOf('success') === 0) {
-                    // Parse result: "success|Mirrored X properties"
+                    // Parse result: "success|Mirrored X properties|debug messages..."
                     var parts = result.split('|');
                     if (parts.length >= 2) {
                         var message = parts[1];
                         console.log('✓ ' + message);
+                    }
+
+                    // Extract debug messages (starting from index 2)
+                    var debugMessages = [];
+                    for (var i = 2; i < parts.length; i++) {
+                        if (parts[i] && parts[i].trim()) {
+                            debugMessages.push(parts[i]);
+                        }
+                    }
+
+                    // Display debug messages in debug panel if it exists
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            var modeLabel = preserveDelays ? '(SHIFT MODE)' : '(NORMAL MODE)';
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #ff4a9e; font-weight: bold;">🪞 Mirror Keys Debug ' + modeLabel + ':</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin-left: 8px; color: #ccc; font-size: 9px;">' +
+                                    debugMessages[j] + '</div>';
+                            }
+                        }
                     }
                 } else if (result && result.indexOf('error') === 0) {
                     var errorMsg = result.split('|')[1] || 'Unknown error';
