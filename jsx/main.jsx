@@ -14295,6 +14295,9 @@ function replaceRectangle() {
                 if (destTransform.property("Anchor Point") && rectangleData.groupAnchor) {
                     try { destTransform.property("Anchor Point").setValue(rectangleData.groupAnchor); } catch(eAnch) {}
                 }
+                if (destTransform.property("Scale") && rectangleData.groupScale) {
+                    try { destTransform.property("Scale").setValue(rectangleData.groupScale); } catch(eScale) {}
+                }
             }
         } catch (e) {
             // Non-fatal if transform copy fails
@@ -14691,13 +14694,15 @@ function findRectangleData(layer) {
             if (group.matchName === "ADBE Vector Group") {
                 var groupContents = group.property("Contents");
                 
-                // Get the group's transform position and anchor
+                // Get the group's transform position, anchor, and scale
                 var groupTransform = group.property("Transform");
                 var groupPosition = [0, 0];
                 var groupAnchor = [0, 0];
+                var groupScale = [100, 100];
                 if (groupTransform) {
                     try { if (groupTransform.property("Position")) groupPosition = groupTransform.property("Position").value; } catch(ePos) {}
                     try { if (groupTransform.property("Anchor Point")) groupAnchor = groupTransform.property("Anchor Point").value; } catch(eAnc) {}
+                    try { if (groupTransform.property("Scale")) groupScale = groupTransform.property("Scale").value; } catch(eScale) {}
                 }
                 
                 // Variables to store visual properties
@@ -14748,6 +14753,7 @@ function findRectangleData(layer) {
                             roundness: roundness,
                             groupPosition: groupPosition,
                             groupAnchor: groupAnchor,
+                            groupScale: groupScale,
                             // Visual properties
                             fillColor: fillColor,
                             fillOpacity: fillOpacity,
@@ -14785,6 +14791,7 @@ function findRectangleData(layer) {
                                         roundness: 0, // Can't determine roundness from path
                                         groupPosition: groupPosition,
                                         groupAnchor: groupAnchor,
+                                        groupScale: groupScale,
                                         // Visual properties
                                         fillColor: fillColor,
                                         fillOpacity: fillOpacity,

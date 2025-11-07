@@ -5,6 +5,19 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.77] - 2025-01-06 🔧 **REPLACE SHAPE & UI IMPROVEMENTS**
+### 🔧 Fixed
+- **Replace Shape Scale Preservation**: Replace Shape now properly copies Rectangle Path Transform > Scale to the new squircle (previously only copied position and anchor point, causing size mismatches when original scale was not 100%)
+
+### 🎨 UI/UX
+- **Fit to Squircle Dropdown Labels**: Renamed dropdown options for clarity:
+  - "Layers" → "Selected Layers"
+  - "Layers + Padding" → "Selected Layers + Padding"
+  - "Vertex Nulls" → "Add Vertex Nulls"
+
+### 🔗 Associated Build
+- AirBoard-v4.16.77.zxp
+
 ## [4.16.76] - 2025-01-06 ✨ **MIRROR KEYS ENHANCEMENTS**
 ### ✨ Added
 - **Mirror Keys with Easing Preservation**: Non-spring keyframes now preserve their original easing curves when mirrored (previously all easing was cleared to linear)
