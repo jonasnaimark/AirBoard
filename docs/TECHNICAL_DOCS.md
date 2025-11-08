@@ -681,14 +681,393 @@ if (isBaseline) timeOffset = 0;
 
 After implementing this comprehensive easing preservation system:
 
-✅ **All keyframe operations preserve easing perfectly**  
-✅ **Baseline and non-baseline keyframes behave identically**  
-✅ **Mixed easing types (Ease In/Out) work correctly**  
-✅ **Position keyframes preserve spatial curves**  
-✅ **User experience is consistent across all operations**  
+✅ **All keyframe operations preserve easing perfectly**
+✅ **Baseline and non-baseline keyframes behave identically**
+✅ **Mixed easing types (Ease In/Out) work correctly**
+✅ **Position keyframes preserve spatial curves**
+✅ **User experience is consistent across all operations**
 
 ---
 
-*This technical documentation consolidates UI patterns, easing conversion methods, and keyframe preservation strategies developed for the AirBoard After Effects plugin.*
+## Advanced Easing Preservation: Duration Changes and Delay Operations
 
-*Last Updated: September 2024*
+### Deep Dive: Understanding KeyframeEase API
+
+The After Effects `KeyframeEase` object has two critical properties that work together to define bezier easing curves:
+
+```javascript
+KeyframeEase {
+    speed: Number,      // Value units per second (e.g., pixels/second, degrees/second)
+    influence: Number   // Percentage 0-100, defines handle length relative to time distance
+}
+```
+
+#### The Critical Insight: Speed Must Scale, Influence Must Not
+
+**Speed** represents the rate of change per unit time:
+- Formula: `speed = valueChange / timeChange`
+- Example: If a property changes 100 pixels over 0.5 seconds, speed = 200 px/s
+- **Must scale inversely with duration** to maintain the same visual curve shape
+- Formula: `newSpeed = oldSpeed × (oldDuration / newDuration)`
+
+**Influence** is already a percentage (0-100%):
+- Represents the handle length as a percentage of the time distance between keyframes
+- **Should NOT be scaled** when duration changes
+- Remains constant to maintain the same curve shape
+
+This is the fundamental insight that enables perfect easing preservation during timing changes.
+
+### Duration Stretch: The Mathematical Foundation
+
+When stretching keyframe duration (e.g., from 450ms to 950ms), the visual curve shape must remain identical. Here's why speed must scale inversely:
+
+```javascript
+// Original ease
+speed: 618.09 px/s
+influence: 22.40%
+duration: 450ms
+
+// Calculate scale factor (INVERSE relationship - this is critical!)
+scaleFactor = oldDuration / newDuration
+scaleFactor = 450ms / 950ms = 0.4737
+
+// Scale only the speed
+newSpeed = 618.09 × 0.4737 = 292.78 px/s
+newInfluence = 22.40%  // Unchanged!
+```
+
+**Why inverse scaling?**
+- When duration increases (more time), speed must decrease to maintain the same value change
+- Formula proof: `valueChange = speed × time`
+- If time doubles, speed must halve to maintain the same valueChange
+- Therefore: `newSpeed = oldSpeed × (oldDuration / newDuration)`
+
+#### Implementation
+
+```javascript
+function scaleEaseForDuration(easeArray, oldDuration, newDuration) {
+    if (!easeArray || easeArray.length < 1 || easeArray.length > 3) {
+        return easeArray;
+    }
+
+    var scaledEase = [];
+    var durationRatio = oldDuration / newDuration; // INVERSE!
+
+    for (var i = 0; i < easeArray.length; i++) {
+        var ease = easeArray[i];
+        var oldSpeed = ease.speed;
+        var newSpeed = oldSpeed * durationRatio; // Scale speed
+        var influence = ease.influence; // Keep unchanged
+
+        scaledEase.push(new KeyframeEase(newSpeed, influence));
+    }
+    return scaledEase;
+}
+```
+
+### Edge Cases: First and Last Selected Keyframes
+
+When changing duration of a selection, not all keyframe ease values should be scaled the same way:
+
+#### First Selected Keyframe
+```
+Previous Keyframe [====] First Selected Keyframe [====] Second Selected Keyframe
+```
+
+The **IN ease** of the first selected keyframe affects the curve FROM the previous (non-selected) keyframe:
+- This distance hasn't changed (previous keyframe didn't move)
+- **Preserve IN ease unchanged** (don't scale it)
+- **OUT ease** affects the curve TO the next selected keyframe - scale it normally
+
+```javascript
+var isFirstKey = (k === 0);
+var scaledInEase = isFirstKey ? data.inEase : scaleEaseForDuration(data.inEase, duration, newDuration);
+```
+
+#### Last Selected Keyframe
+```
+Second-to-Last Selected [====] Last Selected Keyframe [====] Next Keyframe
+```
+
+The **OUT ease** of the last selected keyframe affects the curve TO the next (non-selected) keyframe:
+- If there's a next keyframe, the distance to it HAS changed
+- **Scale OUT ease** based on distance change to next keyframe
+- **IN ease** affects the curve FROM the previous selected keyframe - scale it normally
+
+```javascript
+var isLastKey = (k === keyData.length - 1);
+
+if (isLastKey && nextKeyframeTime !== null) {
+    // Calculate distance to next keyframe
+    var originalDistanceToNext = nextKeyframeTime - data.time;
+    var newDistanceToNext = nextKeyframeTime - newTime;
+
+    // Scale OUT ease based on distance change to next keyframe
+    scaledOutEase = scaleEaseForDuration(data.outEase, originalDistanceToNext, newDistanceToNext);
+} else if (isLastKey) {
+    // No next keyframe, preserve OUT ease
+    scaledOutEase = data.outEase;
+} else {
+    // Middle keyframe, scale based on internal duration
+    scaledOutEase = scaleEaseForDuration(data.outEase, duration, newDuration);
+}
+```
+
+### Adjacent Keyframe Protection: The Cascade Problem
+
+**Critical Discovery**: After Effects recalculates adjacent keyframes when you:
+1. Modify selected keyframes
+2. Restore adjacent keyframes
+3. Re-select modified keyframes ← This triggers recalculation!
+
+This causes a cascade effect where restored values get modified again. The solution requires capturing original values and multiple restoration passes.
+
+#### The Multi-Pass Restoration Strategy
+
+```javascript
+// 1. Capture state BEFORE manipulation
+var allPrevKeyData = [];  // ALL keyframes before selection
+var allNextKeyData = [];  // ALL keyframes after selection
+
+// Capture ALL adjacent keyframes (not just immediately adjacent)
+for (var k = minSelectedIndex - 1; k >= 1; k--) {
+    var capturedKey = captureKeyframeState(prop, k);
+    if (capturedKey) {
+        capturedKey.index = k;
+        allPrevKeyData.push(capturedKey);
+    }
+}
+
+// 2. Capture CORRECT ease values from ORIGINAL data (not AE-modified values)
+var selectedKeyframesEase = [];
+for (var k = 0; k < newSelIndices.length; k++) {
+    var originalData = keyData[k];
+
+    // Use the exact ease we INTENDED to set (from original keyData)
+    var correctInEase = isFirstKey ? originalData.inEase : scaleEaseForDuration(originalData.inEase, duration, newDuration);
+    var correctOutEase = /* ... calculate based on edge cases ... */;
+
+    selectedKeyframesEase.push({
+        index: idx,
+        time: prop.keyTime(idx),
+        inEase: correctInEase,   // From ORIGINAL calculation, not from AE
+        outEase: correctOutEase
+    });
+}
+
+// 3. Perform manipulation (add/remove/move keyframes)
+manipulateKeyframes(prop, keyData);
+
+// 4. First restoration pass - restore adjacent keyframes with scaled ease
+restoreAdjacentKeyframes(prop, allPrevKeyData, distanceChanges);
+
+// 5. Restore selected keyframes' ease (AE may have modified them)
+for (var k = 0; k < selectedKeyframesEase.length; k++) {
+    var easeData = selectedKeyframesEase[k];
+    prop.setTemporalEaseAtKey(easeData.index, easeData.inEase, easeData.outEase);
+}
+
+// 6. Re-select keyframes (this can trigger AE recalculation)
+restoreSelection(prop, newIndices);
+
+// 7. Final restoration pass - fix anything AE modified during selection
+restoreAdjacentKeyframes(prop, allPrevKeyData, distanceChanges);
+restoreSelectedKeyframesEase(prop, selectedKeyframesEase);
+```
+
+**Why capture from ORIGINAL data, not AE's returned values?**
+
+When we set ease values, After Effects may slightly modify them. If we capture what AE gives back and restore that, we're restoring already-modified values. Instead, we calculate and store the exact values we intended from the original keyData, ensuring perfect preservation.
+
+### Delay Operations: Different Math
+
+For delay/nudge operations, internal distances between selected keyframes DON'T change. Only edge connections change:
+
+```
+Before: [Prev]---200ms---[First Selected]---450ms---[Last Selected]---300ms---[Next]
+After:  [Prev]---350ms---[First Selected]---450ms---[Last Selected]---150ms---[Next]
+                  ^                                                    ^
+                  Changed                                              Changed
+```
+
+Only scale ease at the edges:
+- **First selected IN ease**: Scale by `(oldDistFromPrev / newDistFromPrev)`
+- **Last selected OUT ease**: Scale by `(oldDistToNext / newDistToNext)`
+- **Previous keyframe OUT ease**: Scale by same factor
+- **Next keyframe IN ease**: Scale by same factor
+
+```javascript
+// Scale IN ease of first selected keyframe
+if (isFirstKey && prevKeyframeTime !== null) {
+    var originalDistanceFromPrev = data.oldTime - prevKeyframeTime;
+    var newDistanceFromPrev = data.newTime - prevKeyframeTime;
+    if (originalDistanceFromPrev > 0 && newDistanceFromPrev > 0) {
+        scaledInEase = scaleEaseForDuration(data.inEase, originalDistanceFromPrev, newDistanceFromPrev);
+    }
+}
+```
+
+### Property Dimensions: Handle All Cases
+
+After Effects properties can be 1D, 2D, or 3D:
+- **1D**: Opacity, Rotation - `easeArray.length === 1`
+- **2D**: Scale - `easeArray.length === 2`
+- **3D**: Position - `easeArray.length === 3`
+
+The ease scaling function must handle all dimensions:
+
+```javascript
+if (!easeArray || easeArray.length < 1 || easeArray.length > 3) {
+    return easeArray; // Invalid or unsupported
+}
+
+for (var i = 0; i < easeArray.length; i++) {
+    // Scale each dimension independently
+    scaledEase.push(new KeyframeEase(
+        easeArray[i].speed * durationRatio,
+        easeArray[i].influence
+    ));
+}
+```
+
+### Undo Group Timing: Critical for Correct Behavior
+
+**Critical**: `app.endUndoGroup()` must be called AFTER all operations complete:
+
+```javascript
+app.beginUndoGroup("Operation Name");
+
+// 1. Manipulate keyframes
+// 2. Restore adjacent keyframes
+// 3. Restore selected keyframes
+// 4. Restore selection
+// 5. Final restoration pass
+
+app.endUndoGroup(); // Must be at the very end!
+
+return "success|...";
+```
+
+If `endUndoGroup()` is called too early:
+- ❌ Operations after it won't be part of the undo
+- ❌ Ctrl+Z undo breaks
+- ❌ After Effects may recalculate curves outside the undo group
+- ❌ Adjacent keyframes get modified again
+
+### Order of API Calls: Sequence Matters
+
+The order of After Effects API calls is critical:
+
+```javascript
+// ✅ CORRECT ORDER:
+prop.setValueAtKey(idx, value);
+prop.setTemporalEaseAtKey(idx, inEase, outEase);  // Set ease FIRST
+prop.setInterpolationTypeAtKey(idx, inInterp, outInterp);  // Then interpolation
+prop.setTemporalContinuousAtKey(idx, continuous);
+prop.setTemporalAutoBezierAtKey(idx, autoBezier);
+
+// ❌ WRONG ORDER (will corrupt ease values):
+prop.setInterpolationTypeAtKey(idx, inInterp, outInterp);  // Setting this first...
+prop.setTemporalEaseAtKey(idx, inEase, outEase);  // ...can reset ease values!
+```
+
+### Common Pitfalls and Solutions
+
+#### Pitfall 1: Scaling Influence
+```javascript
+// ❌ WRONG: Don't scale influence!
+newInfluence = influence * durationRatio;
+
+// ✅ RIGHT: Keep influence unchanged
+newInfluence = influence;
+```
+
+#### Pitfall 2: Wrong Scale Direction
+```javascript
+// ❌ WRONG: Forward scaling
+scaleFactor = newDuration / oldDuration;
+
+// ✅ RIGHT: Inverse scaling
+scaleFactor = oldDuration / newDuration;
+```
+
+#### Pitfall 3: Capturing Modified Values
+```javascript
+// ❌ WRONG: Capture what AE gives back (already modified)
+var capturedEase = prop.keyInTemporalEase(idx);
+
+// ✅ RIGHT: Calculate from original keyData
+var correctEase = isFirstKey ? originalData.inEase : scaleEaseForDuration(...);
+```
+
+#### Pitfall 4: Single Restoration Pass
+```javascript
+// ❌ WRONG: Only restore once
+restoreAdjacentKeyframes();
+restoreSelection(); // This modifies adjacent keyframes again!
+
+// ✅ RIGHT: Multiple passes
+restoreAdjacentKeyframes();
+restoreSelectedKeyframes();
+restoreSelection();
+restoreAdjacentKeyframes(); // Final pass after selection
+restoreSelectedKeyframes();
+```
+
+### Debugging Tips
+
+Essential debug logging:
+
+```javascript
+DEBUG_JSX.log("🔧 Scaling ease for duration change:");
+DEBUG_JSX.log("Duration: " + oldDuration.toFixed(1) + "ms → " + newDuration.toFixed(1) + "ms");
+DEBUG_JSX.log("Speed scale factor: " + (oldDuration/newDuration).toFixed(4));
+DEBUG_JSX.log("Dimension " + i + ": speed " + oldSpeed.toFixed(2) +
+              " → " + newSpeed.toFixed(2) +
+              ", influence " + influence.toFixed(2) + "% (unchanged)");
+
+// For adjacent keyframes
+DEBUG_JSX.log("🔒 Captured keyframe " + k + " @ " + time.toFixed(3) + "s OUT:[speed=" +
+              ease.speed.toFixed(2) + ", inf=" + ease.influence.toFixed(2) + "%]");
+
+// Verification after restoration
+DEBUG_JSX.log("✓ Verified OUT:[speed=" + currentEase.speed.toFixed(2) +
+              ", inf=" + currentEase.influence.toFixed(2) + "%]");
+```
+
+### Testing Approach
+
+To verify perfect easing preservation:
+
+1. ✅ Check bezier values before operation (e.g., `0.45, 0.01, 0.20, 1.00`)
+2. ✅ Perform operation (duration change, delay, etc.)
+3. ✅ Check bezier values after - should be EXACTLY the same
+4. ✅ Test with keyframes before selection (should be unchanged)
+5. ✅ Test with keyframes after selection (should be unchanged)
+6. ✅ Test undo (Ctrl+Z should work perfectly)
+7. ✅ Test with 1D, 2D, and 3D properties
+8. ✅ Test with mixed easing (Ease In, Ease Out, one-sided linear)
+
+### Results and Impact
+
+With this advanced implementation:
+- ✅ **Duration stretch**: All easing preserved perfectly, before/during/after selection
+- ✅ **Delay/nudge**: All easing preserved perfectly, before/during/after selection
+- ✅ **Edge keyframes**: First/last keyframes handle correctly
+- ✅ **Adjacent keyframes**: Protected from cascade modifications
+- ✅ **Undo/redo**: Works correctly (undo group timing fixed)
+- ✅ **All property dimensions**: 1D, 2D, 3D all supported
+- ✅ **User experience**: Easing stays visually identical during timing changes
+
+### Implementation References
+
+- **Ease scaling function**: `main.jsx` lines 243-278 (`scaleEaseForDuration`)
+- **Duration stretch**: `main.jsx` lines 2498-2548 (edge case handling)
+- **Duration stretch restoration**: `main.jsx` lines 2581-2695 (adjacent keyframe protection)
+- **Delay operations**: `main.jsx` lines 7565-7773 (delay-specific ease scaling)
+
+---
+
+*This technical documentation consolidates UI patterns, easing conversion methods, and comprehensive keyframe preservation strategies developed for the AirBoard After Effects plugin.*
+
+*Last Updated: January 2025*
