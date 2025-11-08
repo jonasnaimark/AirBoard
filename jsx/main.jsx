@@ -7339,8 +7339,36 @@ function nudgeDelayTimelineMode(direction, frames) {
             var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
             DEBUG_JSX.log("Processing property " + (i+1) + "/" + cachedSelections.length + ": " + cached.propertyName + " on " + cached.layerName + " with " + selKeys.length + " keys");
 
-            // PROTECTION: Capture the next keyframe to prevent AE from modifying it
-            var nextKeyData = captureNextKeyframe(prop, selKeys);
+            // PROTECTION: Capture ALL adjacent keyframes to prevent AE from modifying them
+            var allPrevKeyData = [];
+            var minSelectedIndex = Math.min.apply(Math, selKeys);
+            for (var k = minSelectedIndex - 1; k >= 1; k--) {
+                try {
+                    var capturedKey = captureKeyframeState(prop, k);
+                    if (capturedKey) {
+                        capturedKey.index = k;
+                        allPrevKeyData.push(capturedKey);
+                        DEBUG_JSX.log("🔒 Captured keyframe " + k + " @ " + capturedKey.time.toFixed(3) + "s before selection");
+                    }
+                } catch(e) {
+                    break;
+                }
+            }
+
+            var allNextKeyData = [];
+            var maxSelectedIndex = Math.max.apply(Math, selKeys);
+            for (var k = maxSelectedIndex + 1; k <= prop.numKeys; k++) {
+                try {
+                    var capturedKey = captureKeyframeState(prop, k);
+                    if (capturedKey) {
+                        capturedKey.index = k;
+                        allNextKeyData.push(capturedKey);
+                        DEBUG_JSX.log("🔒 Captured keyframe " + k + " @ " + capturedKey.time.toFixed(3) + "s after selection");
+                    }
+                } catch(e) {
+                    break;
+                }
+            }
 
             // Collect complete keyframe data including easing
             var keyframesToMove = [];
@@ -7510,6 +7538,15 @@ function nudgeDelayTimelineMode(direction, frames) {
 
             } else {
                 // Normal handling for non-Time Remap properties
+                // Calculate distance changes for ease scaling
+                var firstOldTime = keyframesToMove[0].oldTime;
+                var firstNewTime = keyframesToMove[0].newTime;
+                var lastOldTime = keyframesToMove[keyframesToMove.length - 1].oldTime;
+                var lastNewTime = keyframesToMove[keyframesToMove.length - 1].newTime;
+
+                var prevKeyframeTime = allPrevKeyData.length > 0 ? allPrevKeyData[0].time : null;
+                var nextKeyframeTime = allNextKeyData.length > 0 ? allNextKeyData[0].time : null;
+
                 // Remove old keyframes (in reverse order to avoid index issues)
                 for (var k = keyframesToMove.length - 1; k >= 0; k--) {
                     prop.removeKey(keyframesToMove[k].index);
@@ -7524,10 +7561,35 @@ function nudgeDelayTimelineMode(direction, frames) {
                     prop.setValueAtKey(newIdx, data.value);
 
                     // CRITICAL: Apply temporal ease FIRST before setting interpolation type
-                    // Setting interpolation type can reset/modify ease curves
+                    // For delay operations, we need to scale IN/OUT ease based on distance changes
                     if (data.inEase !== undefined && data.outEase !== undefined) {
                         try {
-                            prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            var isFirstKey = (k === 0);
+                            var isLastKey = (k === keyframesToMove.length - 1);
+
+                            // Scale IN ease of first keyframe based on distance change from previous keyframe
+                            var scaledInEase = data.inEase;
+                            if (isFirstKey && prevKeyframeTime !== null) {
+                                var originalDistanceFromPrev = data.oldTime - prevKeyframeTime;
+                                var newDistanceFromPrev = data.newTime - prevKeyframeTime;
+                                if (originalDistanceFromPrev > 0 && newDistanceFromPrev > 0) {
+                                    scaledInEase = scaleEaseForDuration(data.inEase, originalDistanceFromPrev, newDistanceFromPrev);
+                                    DEBUG_JSX.log("  📊 First keyframe IN ease: scaled by distance from prev (" + (originalDistanceFromPrev*1000).toFixed(1) + "ms → " + (newDistanceFromPrev*1000).toFixed(1) + "ms)");
+                                }
+                            }
+
+                            // Scale OUT ease of last keyframe based on distance change to next keyframe
+                            var scaledOutEase = data.outEase;
+                            if (isLastKey && nextKeyframeTime !== null) {
+                                var originalDistanceToNext = nextKeyframeTime - data.oldTime;
+                                var newDistanceToNext = nextKeyframeTime - data.newTime;
+                                if (originalDistanceToNext > 0 && newDistanceToNext > 0) {
+                                    scaledOutEase = scaleEaseForDuration(data.outEase, originalDistanceToNext, newDistanceToNext);
+                                    DEBUG_JSX.log("  📊 Last keyframe OUT ease: scaled by distance to next (" + (originalDistanceToNext*1000).toFixed(1) + "ms → " + (newDistanceToNext*1000).toFixed(1) + "ms)");
+                                }
+                            }
+
+                            prop.setTemporalEaseAtKey(newIdx, scaledInEase, scaledOutEase);
                         } catch(e) {
                             // Some properties might not support temporal ease
                         }
@@ -7571,10 +7633,143 @@ function nudgeDelayTimelineMode(direction, frames) {
                     DEBUG_JSX.log("Moved keyframe from " + data.oldTime + "s to " + data.newTime + "s");
                 }
 
-                // PROTECTION: Restore the next keyframe
-                if (nextKeyData !== null) {
-                    var keysAdded = newIndices.length - keyframesToMove.length;
-                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                // PROTECTION: Restore ALL adjacent keyframes with ease scaling
+                var keysAdded = newIndices.length - keyframesToMove.length;
+
+                // Restore previous keyframes with OUT ease scaled
+                DEBUG_JSX.log("🔓 Restoring " + allPrevKeyData.length + " keyframes before selection");
+                for (var k = 0; k < allPrevKeyData.length; k++) {
+                    var keyState = allPrevKeyData[k];
+
+                    // Scale OUT ease if this is the immediately previous keyframe
+                    if (k === 0 && prevKeyframeTime !== null) {
+                        var originalDistanceToFirst = firstOldTime - keyState.time;
+                        var newDistanceToFirst = firstNewTime - keyState.time;
+
+                        if (originalDistanceToFirst > 0 && newDistanceToFirst > 0 && keyState.outEase) {
+                            var scaledOutEase = scaleEaseForDuration(keyState.outEase, originalDistanceToFirst, newDistanceToFirst);
+
+                            // Create modified keyState with scaled OUT ease
+                            var modifiedKeyState = {};
+                            for (var propName in keyState) {
+                                modifiedKeyState[propName] = keyState[propName];
+                            }
+                            modifiedKeyState.outEase = scaledOutEase;
+
+                            // Find and restore keyframe
+                            for (var i = 1; i <= prop.numKeys; i++) {
+                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, i, modifiedKeyState);
+                                    DEBUG_JSX.log("🔓 Restored prev keyframe @ " + keyState.time.toFixed(3) + "s (scaled OUT ease: " + (originalDistanceToFirst*1000).toFixed(1) + "ms → " + (newDistanceToFirst*1000).toFixed(1) + "ms)");
+                                    break;
+                                }
+                            }
+                        } else {
+                            // No scaling needed, restore as-is
+                            for (var i = 1; i <= prop.numKeys; i++) {
+                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, i, keyState);
+                                    DEBUG_JSX.log("🔓 Restored prev keyframe @ " + keyState.time.toFixed(3) + "s");
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // Not immediately previous, restore as-is
+                        for (var i = 1; i <= prop.numKeys; i++) {
+                            if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                restoreKeyframeState(prop, i, keyState);
+                                DEBUG_JSX.log("🔓 Restored prev keyframe @ " + keyState.time.toFixed(3) + "s");
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Restore next keyframes with IN ease scaled
+                DEBUG_JSX.log("🔓 Restoring " + allNextKeyData.length + " keyframes after selection");
+                for (var k = 0; k < allNextKeyData.length; k++) {
+                    var keyState = allNextKeyData[k];
+
+                    // Scale IN ease if this is the immediately next keyframe
+                    if (k === 0 && nextKeyframeTime !== null) {
+                        var originalDistanceFromLast = keyState.time - lastOldTime;
+                        var newDistanceFromLast = keyState.time - lastNewTime;
+
+                        if (originalDistanceFromLast > 0 && newDistanceFromLast > 0 && keyState.inEase) {
+                            var scaledInEase = scaleEaseForDuration(keyState.inEase, originalDistanceFromLast, newDistanceFromLast);
+
+                            // Create modified keyState with scaled IN ease
+                            var modifiedKeyState = {};
+                            for (var propName in keyState) {
+                                modifiedKeyState[propName] = keyState[propName];
+                            }
+                            modifiedKeyState.inEase = scaledInEase;
+
+                            // Find and restore keyframe
+                            for (var i = 1; i <= prop.numKeys; i++) {
+                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, i, modifiedKeyState);
+                                    DEBUG_JSX.log("🔓 Restored next keyframe @ " + keyState.time.toFixed(3) + "s (scaled IN ease: " + (originalDistanceFromLast*1000).toFixed(1) + "ms → " + (newDistanceFromLast*1000).toFixed(1) + "ms)");
+                                    break;
+                                }
+                            }
+                        } else {
+                            // No scaling needed, restore as-is
+                            for (var i = 1; i <= prop.numKeys; i++) {
+                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, i, keyState);
+                                    DEBUG_JSX.log("🔓 Restored next keyframe @ " + keyState.time.toFixed(3) + "s");
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // Not immediately next, restore as-is
+                        for (var i = 1; i <= prop.numKeys; i++) {
+                            if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                restoreKeyframeState(prop, i, keyState);
+                                DEBUG_JSX.log("🔓 Restored next keyframe @ " + keyState.time.toFixed(3) + "s");
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Restore selected keyframes' ease to ensure they stay correct
+                DEBUG_JSX.log("🔓 Restoring selected keyframes' ease after adjacent restoration");
+                for (var k = 0; k < newIndices.length; k++) {
+                    var idx = newIndices[k];
+                    var originalData = keyframesToMove[k];
+
+                    // Recalculate the correct ease values
+                    var isFirstKey = (k === 0);
+                    var isLastKey = (k === keyframesToMove.length - 1);
+
+                    var correctInEase = originalData.inEase;
+                    if (isFirstKey && prevKeyframeTime !== null) {
+                        var originalDistanceFromPrev = originalData.oldTime - prevKeyframeTime;
+                        var newDistanceFromPrev = originalData.newTime - prevKeyframeTime;
+                        if (originalDistanceFromPrev > 0 && newDistanceFromPrev > 0) {
+                            correctInEase = scaleEaseForDuration(originalData.inEase, originalDistanceFromPrev, newDistanceFromPrev);
+                        }
+                    }
+
+                    var correctOutEase = originalData.outEase;
+                    if (isLastKey && nextKeyframeTime !== null) {
+                        var originalDistanceToNext = nextKeyframeTime - originalData.oldTime;
+                        var newDistanceToNext = nextKeyframeTime - originalData.newTime;
+                        if (originalDistanceToNext > 0 && newDistanceToNext > 0) {
+                            correctOutEase = scaleEaseForDuration(originalData.outEase, originalDistanceToNext, newDistanceToNext);
+                        }
+                    }
+
+                    try {
+                        prop.setTemporalEaseAtKey(idx, correctInEase, correctOutEase);
+                        DEBUG_JSX.log("  ✓ Restored selected keyframe ease @ " + originalData.newTime.toFixed(3) + "s");
+                    } catch(e) {
+                        // Might fail for some properties
+                    }
                 }
             }
 
