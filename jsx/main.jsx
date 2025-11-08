@@ -4854,280 +4854,98 @@ function nudgeDelay(direction) {
             
             debugInfo.push("Total keyframes moved: " + movedCount);
             
-            // COMPOSITION MARKER SYNCING: Move markers that are at the same frame as ANY selected keyframes of properties
+            // SMART MARKER SYNCING: Split/merge spring markers when properties move independently
             try {
-                DEBUG_JSX.log("Starting composition marker sync check");
+                DEBUG_JSX.log("Starting smart marker sync (split/merge mode)");
                 var comp = app.project.activeItem;
-                var markersToMove = [];
-                
-                // COLLECT ALL SELECTED KEYFRAME TIMES (not just first keyframe) - same as forced timeline mode
-                var allSelectedKeyframeTimes = [];
+                var markerEpsilon = 0.01; // 10ms tolerance for finding markers at keyframe times
+
+                // Process each property independently
                 for (var i = 0; i < propertyDelays.length; i++) {
                     var propData = propertyDelays[i];
-                    if (propData.keyframes && propData.keyframes.length > 0) {
-                        for (var k = 0; k < propData.keyframes.length; k++) {
-                            var keyTime = propData.keyframes[k].time;
-                            // Check if this time is already in our array (avoid duplicates)
-                            var timeExists = false;
-                            for (var t = 0; t < allSelectedKeyframeTimes.length; t++) {
-                                if (Math.abs(allSelectedKeyframeTimes[t] - keyTime) < 0.001) {
-                                    timeExists = true;
-                                    break;
-                                }
-                            }
-                            if (!timeExists) {
-                                allSelectedKeyframeTimes.push(keyTime);
-                            }
-                        }
-                    }
-                }
-                
-                // Sort keyframe times and find the range
-                allSelectedKeyframeTimes.sort(function(a, b) { return a - b; });
-                var firstKeyframeTime = allSelectedKeyframeTimes[0];
-                var lastKeyframeTime = allSelectedKeyframeTimes[allSelectedKeyframeTimes.length - 1];
-                
-                DEBUG_JSX.log("Keyframe range for baseline marker sync: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s (" + allSelectedKeyframeTimes.length + " unique times)");
-                
-                // Check all composition markers for ones within the keyframe range
-                for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
-                    var markerTime = comp.markerProperty.keyTime(m);
-                    
-                    // Check if marker is within the keyframe range (between first and last keyframe)
-                    var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
-                    var correspondingPropData = null;
-                    
-                    if (markerInRange) {
-                        // Find the closest keyframe time for offset calculation
-                        var closestKeyframeTime = allSelectedKeyframeTimes[0];
-                        var minDistance = Math.abs(markerTime - closestKeyframeTime);
-                        
-                        for (var t = 1; t < allSelectedKeyframeTimes.length; t++) {
-                            var distance = Math.abs(markerTime - allSelectedKeyframeTimes[t]);
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                                closestKeyframeTime = allSelectedKeyframeTimes[t];
-                            }
-                        }
-                            
-                        // Find which property this keyframe belongs to for offset calculation
-                        for (var i = 0; i < propertyDelays.length; i++) {
-                            var propData = propertyDelays[i];
-                            if (propData.keyframes) {
-                                for (var k = 0; k < propData.keyframes.length; k++) {
-                                    if (Math.abs(propData.keyframes[k].time - closestKeyframeTime) < 0.001) {
-                                        correspondingPropData = propData;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (correspondingPropData) break;
-                        }
-                    }
-                    
-                    if (markerInRange && correspondingPropData) {
-                        var markerValue = comp.markerProperty.keyValue(m);
-                        var markerComment = markerValue.comment || "";
-                        
-                        DEBUG_JSX.log("Found comp marker '" + markerComment + "' within keyframe range " + markerTime + "s (range: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s)");
-                        
-                        // Calculate new marker time based on the same offset as the corresponding keyframe
-                        var currentTime = correspondingPropData.currentDelay;
-                        var newKeyframeTime;
-                        
-                        if (useIndividualDelays) {
-                            var targetDelaySeconds = correspondingPropData.targetDelay / 1000;
-                            newKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                    if (!propData.keyframes || propData.keyframes.length === 0) continue;
+
+                    // Get the property's OLD first keyframe time (before movement)
+                    var oldFirstKeyframeTime = propData.currentDelay;
+
+                    // Calculate NEW first keyframe time (after movement)
+                    var newFirstKeyframeTime;
+                    if (useIndividualDelays) {
+                        var targetDelaySeconds = propData.targetDelay / 1000;
+                        newFirstKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                    } else {
+                        if (propData.isOriginalBaseline) {
+                            newFirstKeyframeTime = originalEarliestTime; // Baseline stays at original time
                         } else {
-                            if (correspondingPropData.isOriginalBaseline) {
-                                newKeyframeTime = originalEarliestTime; // Baseline stays at original time
-                            } else {
-                                var targetDelaySeconds = targetDelayMs / 1000;
-                                newKeyframeTime = originalEarliestTime + targetDelaySeconds;
-                            }
+                            var targetDelaySeconds = targetDelayMs / 1000;
+                            newFirstKeyframeTime = originalEarliestTime + targetDelaySeconds;
                         }
-                        
-                        // Calculate the time offset applied to the keyframe
-                        var keyframeOffset = newKeyframeTime - currentTime;
-                        var newMarkerTime = markerTime + keyframeOffset;
-                        
-                        // Ensure marker doesn't go to negative time
-                        newMarkerTime = Math.max(0, newMarkerTime);
-                        
-                        DEBUG_JSX.log("Comp marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
-                        
-                        // Store marker info for movement (avoid duplicate moves)
-                        var alreadyQueued = false;
-                        for (var q = 0; q < markersToMove.length; q++) {
-                            if (markersToMove[q].type === "comp" && markersToMove[q].markerIndex === m) {
-                                alreadyQueued = true;
+                    }
+
+                    // Skip if property didn't actually move
+                    if (Math.abs(newFirstKeyframeTime - oldFirstKeyframeTime) < markerEpsilon) {
+                        DEBUG_JSX.log("SMART MARKER: Property " + propData.property + " didn't move, skipping marker check");
+                        continue;
+                    }
+
+                    // Get the property's unique ID for marker block identification
+                    // Need to get the actual property object from the layer
+                    var uniquePropId = null;
+                    var markerProp = null;
+                    var selectedLayers = comp.selectedLayers;
+
+                    // Find the actual property object to get its uniquePropId
+                    for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                        var layer = selectedLayers[layerIdx];
+                        var selectedProps = layer.selectedProperties;
+
+                        for (var j = 0; j < selectedProps.length; j++) {
+                            var prop = selectedProps[j];
+                            if (!prop || !prop.canVaryOverTime) continue;
+
+                            // Match property by name (stored as "LayerName:PropertyPath")
+                            var propFullPath = layer.name + ":" + getFullPropertyPath(prop);
+                            if (propFullPath === propData.property) {
+                                uniquePropId = getUniquePropertyId(prop);
+
+                                // Determine if we should use layer markers or comp markers
+                                // Use layer markers if available, otherwise comp markers
+                                if (layer.marker && layer.marker.numKeys > 0) {
+                                    markerProp = layer.marker;
+                                    DEBUG_JSX.log("SMART MARKER: Using layer markers for " + uniquePropId);
+                                } else {
+                                    markerProp = comp.markerProperty;
+                                    DEBUG_JSX.log("SMART MARKER: Using comp markers for " + uniquePropId);
+                                }
+
                                 break;
                             }
                         }
-                        
-                        if (!alreadyQueued) {
-                            markersToMove.push({
-                                type: "comp",
-                                markerIndex: m,
-                                oldTime: markerTime,
-                                newTime: newMarkerTime,
-                                markerValue: markerValue,
-                                property: correspondingPropData.property,
-                                comment: markerComment
-                            });
-                        }
+                        if (uniquePropId) break;
                     }
-                }
-                        
-                // Check for layer markers on selected layers
-                var selectedLayers = comp.selectedLayers;
-                for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
-                    var layer = selectedLayers[layerIdx];
-                    
-                    if (layer.marker && layer.marker.numKeys > 0) {
-                        DEBUG_JSX.log("Checking layer '" + layer.name + "' with " + layer.marker.numKeys + " markers");
-                        
-                        for (var m = 1; m <= layer.marker.numKeys; m++) {
-                            try {
-                                var markerTime = layer.marker.keyTime(m);
-                                
-                                DEBUG_JSX.log("Checking layer marker " + m + " at time " + markerTime + "s");
-                                
-                                // Check if marker is within the keyframe range (between first and last keyframe)
-                                var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
-                                var correspondingPropData = null;
-                                
-                                if (markerInRange) {
-                                    // Find the closest keyframe time for offset calculation
-                                    var closestKeyframeTime = allSelectedKeyframeTimes[0];
-                                    var minDistance = Math.abs(markerTime - closestKeyframeTime);
-                                    
-                                    for (var t = 1; t < allSelectedKeyframeTimes.length; t++) {
-                                        var distance = Math.abs(markerTime - allSelectedKeyframeTimes[t]);
-                                        if (distance < minDistance) {
-                                            minDistance = distance;
-                                            closestKeyframeTime = allSelectedKeyframeTimes[t];
-                                        }
-                                    }
-                                        
-                                    // Find which property this keyframe belongs to for offset calculation
-                                    for (var i = 0; i < propertyDelays.length; i++) {
-                                        var propData = propertyDelays[i];
-                                        if (propData.keyframes) {
-                                            for (var k = 0; k < propData.keyframes.length; k++) {
-                                                if (Math.abs(propData.keyframes[k].time - closestKeyframeTime) < 0.001) {
-                                                    correspondingPropData = propData;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        if (correspondingPropData) break;
-                                    }
-                                }
-                                
-                                if (markerInRange && correspondingPropData) {
-                                    var markerValue = layer.marker.keyValue(m);
-                                    var markerComment = markerValue.comment || "";
-                                    
-                                    DEBUG_JSX.log("Found layer marker '" + markerComment + "' within keyframe range " + markerTime + "s (range: " + firstKeyframeTime + "s to " + lastKeyframeTime + "s) on layer " + layer.name);
-                                    
-                                    // Calculate new marker time based on the same offset as the corresponding keyframe
-                                    var currentTime = correspondingPropData.currentDelay;
-                                    var newKeyframeTime;
-                                    
-                                    if (useIndividualDelays) {
-                                        var targetDelaySeconds = correspondingPropData.targetDelay / 1000;
-                                        newKeyframeTime = originalEarliestTime + targetDelaySeconds;
-                                    } else {
-                                        if (correspondingPropData.isOriginalBaseline) {
-                                            newKeyframeTime = originalEarliestTime; // Baseline stays at original time
-                                        } else {
-                                            var targetDelaySeconds = targetDelayMs / 1000;
-                                            newKeyframeTime = originalEarliestTime + targetDelaySeconds;
-                                        }
-                                    }
-                                    
-                                    // Calculate the time offset applied to the keyframe
-                                    var keyframeOffset = newKeyframeTime - currentTime;
-                                    var newMarkerTime = markerTime + keyframeOffset;
-                                    
-                                    // Ensure marker doesn't go to negative time
-                                    newMarkerTime = Math.max(0, newMarkerTime);
-                                    
-                                    DEBUG_JSX.log("Layer marker will move from " + markerTime + "s to " + newMarkerTime + "s (offset: " + keyframeOffset + "s)");
-                                    
-                                    // Store marker info for movement (avoid duplicate moves)
-                                    var alreadyQueued = false;
-                                    for (var q = 0; q < markersToMove.length; q++) {
-                                        if (markersToMove[q].type === "layer" && 
-                                            markersToMove[q].layer === layer && 
-                                            markersToMove[q].markerIndex === m) {
-                                            alreadyQueued = true;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    if (!alreadyQueued) {
-                                        markersToMove.push({
-                                            type: "layer",
-                                            layer: layer,
-                                            markerIndex: m,
-                                            oldTime: markerTime,
-                                            newTime: newMarkerTime,
-                                            markerValue: markerValue,
-                                            property: correspondingPropData.property,
-                                            comment: markerComment
-                                        });
-                                    }
-                                }
-                            } catch(layerMarkerError) {
-                                DEBUG_JSX.log("Error checking layer marker " + m + " on layer " + layer.name + ": " + layerMarkerError.toString());
-                            }
-                        }
+
+                    if (!uniquePropId || !markerProp) {
+                        DEBUG_JSX.log("SMART MARKER: Could not find property object for " + propData.property);
+                        continue;
                     }
+
+                    // Call smartSplitMergeMarker for this property
+                    var result = smartSplitMergeMarker(
+                        markerProp,
+                        oldFirstKeyframeTime,
+                        newFirstKeyframeTime,
+                        uniquePropId,
+                        markerEpsilon
+                    );
+
+                    DEBUG_JSX.log("SMART MARKER: " + propData.property + " result: " + result);
+                    debugInfo.push("Marker: " + uniquePropId.split("|").pop() + " - " + result);
                 }
-                
-                // Move the markers that were found to be synchronized with any selected keyframes
-                if (markersToMove.length > 0) {
-                    DEBUG_JSX.log("Moving " + markersToMove.length + " synchronized markers:");
-                    
-                    // Sort markers by index in reverse order to avoid index shifts when removing
-                    markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
-                    
-                    for (var m = 0; m < markersToMove.length; m++) {
-                        var markerInfo = markersToMove[m];
-                        
-                        try {
-                            if (markerInfo.type === "comp") {
-                                // Remove the old composition marker
-                                comp.markerProperty.removeKey(markerInfo.markerIndex);
-                                
-                                // Add new marker at the new time with same properties
-                                var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
-                                comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                                
-                                DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms (synced with " + markerInfo.property + ")");
-                                debugInfo.push("Synced comp marker '" + markerInfo.comment + "' with " + markerInfo.property);
-                            } else if (markerInfo.type === "layer") {
-                                // Remove the old layer marker
-                                markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
-                                
-                                // Add new marker at the new time with same properties
-                                var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
-                                markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                                
-                            }
-                            
-                        } catch(markerMoveError) {
-                            DEBUG_JSX.log("MK_ERR:" + markerMoveError.toString());
-                        }
-                    }
-                } else {
-                }
-                
+
             } catch(markerSyncError) {
                 // Don't fail the entire operation if marker syncing fails
-                DEBUG_JSX.log("MK_SYNC_ERR:" + markerSyncError.toString());
+                DEBUG_JSX.log("SMART_MARKER_ERR:" + markerSyncError.toString());
+                debugInfo.push("Marker sync error: " + markerSyncError.toString());
             }
             
         } catch(moveError) {
@@ -6955,127 +6773,66 @@ function nudgeDelayTimelineMode(direction, frames) {
         var processedSelections = [];
         
         // MOVE MARKERS FIRST (before keyframe operations to avoid selection interference)
-        DEBUG_JSX.log("STEP 2A: Moving markers BEFORE keyframe operations to avoid selection interference");
-        
-        // Collect ALL selected keyframe times for range-based marker syncing
-        var allSelectedKeyframeTimes = [];
+        DEBUG_JSX.log("STEP 2A: SMART marker split/merge BEFORE keyframe operations");
+
+        // Process each property individually for smart marker split/merge
+        var markerEpsilon = 0.01;
+        var markersSplitMerged = 0;
+
         for (var i = 0; i < cachedSelections.length; i++) {
             var cached = cachedSelections[i];
             var prop = cached.property;
             var selKeys = cached.selectedIndices;
-            
-            // Collect ALL selected keyframe times for this property
-            for (var k = 0; k < selKeys.length; k++) {
-                var keyTime = prop.keyTime(selKeys[k]);
-                // Check if this time is already in our array (avoid duplicates)
-                var timeExists = false;
-                for (var t = 0; t < allSelectedKeyframeTimes.length; t++) {
-                    if (Math.abs(allSelectedKeyframeTimes[t] - keyTime) < 0.001) {
-                        timeExists = true;
-                        break;
-                    }
-                }
-                if (!timeExists) {
-                    allSelectedKeyframeTimes.push(keyTime);
-                }
-            }
-            
-            DEBUG_JSX.log("Cached " + cached.propertyName + " (" + selKeys.length + " keys)");
-        }
-        
-        // Sort keyframe times and find the range
-        allSelectedKeyframeTimes.sort(function(a, b) { return a - b; });
-        var firstKeyframeTime = allSelectedKeyframeTimes[0];
-        var lastKeyframeTime = allSelectedKeyframeTimes[allSelectedKeyframeTimes.length - 1];
-        
-        DEBUG_JSX.log("Marker sync range: " + firstKeyframeTime.toFixed(2) + "s to " + lastKeyframeTime.toFixed(2) + "s");
-        
-        // Collect markers that need to move with the keyframes
-        var markersToMove = [];
-        
-        // Check composition markers for ones within the keyframe range
-        if (comp.markerProperty && comp.markerProperty.numKeys > 0) {
-            for (var m = 1; m <= comp.markerProperty.numKeys; m++) {
-                var markerTime = comp.markerProperty.keyTime(m);
-                var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
-                
-                if (markerInRange) {
-                    var markerValue = comp.markerProperty.keyValue(m);
-                    var markerComment = markerValue.comment || "";
-                    
-                    DEBUG_JSX.log("Found comp marker '" + markerComment + "' at " + markerTime.toFixed(2) + "s");
-                    
-                    markersToMove.push({
-                        type: "comp",
-                        markerIndex: m,
-                        oldTime: markerTime,
-                        newTime: markerTime + timeOffset,
-                        markerValue: markerValue,
-                        comment: markerComment
-                    });
-                }
-            }
-        }
-        
-        // Check layer markers on all selected layers
-        var selectedLayers = comp.selectedLayers;
-        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
-            var layer = selectedLayers[layerIdx];
-            
+            var layer = cached.layer;
+
+            if (selKeys.length === 0) continue;
+
+            // Get the OLD first keyframe time (before movement)
+            var oldFirstKeyTime = prop.keyTime(selKeys[0]);
+
+            // Calculate NEW first keyframe time (after movement)
+            var newFirstKeyTime = oldFirstKeyTime + timeOffset;
+            if (newFirstKeyTime < 0) newFirstKeyTime = 0;
+
+            // Skip if no actual movement
+            if (Math.abs(timeOffset) < markerEpsilon) continue;
+
+            // Get unique property ID for marker block identification
+            var uniquePropId = getUniquePropertyId(prop);
+
+            // Determine marker property to use (layer or comp)
+            var markerProp = null;
             if (layer.marker && layer.marker.numKeys > 0) {
-                for (var m = 1; m <= layer.marker.numKeys; m++) {
-                    var markerTime = layer.marker.keyTime(m);
-                    var markerInRange = (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime);
-                    
-                    if (markerInRange) {
-                        var markerValue = layer.marker.keyValue(m);
-                        var markerComment = markerValue.comment || "";
-                        
-                        DEBUG_JSX.log("Found layer marker '" + markerComment + "' at " + markerTime.toFixed(2) + "s on " + layer.name);
-                        
-                        markersToMove.push({
-                            type: "layer",
-                            layer: layer,
-                            markerIndex: m,
-                            oldTime: markerTime,
-                            newTime: markerTime + timeOffset,
-                            markerValue: markerValue,
-                            comment: markerComment
-                        });
-                    }
+                markerProp = layer.marker;
+                DEBUG_JSX.log("SMART MARKER: Using layer markers for " + cached.propertyName + " (" + uniquePropId + ")");
+            } else if (comp.markerProperty && comp.markerProperty.numKeys > 0) {
+                markerProp = comp.markerProperty;
+                DEBUG_JSX.log("SMART MARKER: Using comp markers for " + cached.propertyName + " (" + uniquePropId + ")");
+            }
+
+            if (!markerProp) continue;
+
+            // Call smart split/merge for this property
+            try {
+                var result = smartSplitMergeMarker(
+                    markerProp,
+                    oldFirstKeyTime,
+                    newFirstKeyTime,
+                    uniquePropId,
+                    markerEpsilon
+                );
+
+                if (result !== "no marker at old time" && result !== "no spring block for property") {
+                    markersSplitMerged++;
+                    DEBUG_JSX.log("SMART MARKER: " + cached.propertyName + " - " + result);
                 }
+            } catch(smartMarkerError) {
+                DEBUG_JSX.log("SMART MARKER ERROR: " + cached.propertyName + " - " + smartMarkerError.toString());
             }
         }
-        
-        // MOVE MARKERS NOW (before keyframe operations)
-        if (markersToMove.length > 0) {
-            DEBUG_JSX.log("Moving " + markersToMove.length + " markers BEFORE keyframe operations");
-            
-            for (var i = markersToMove.length - 1; i >= 0; i--) {
-                var markerInfo = markersToMove[i];
-                
-                try {
-                    if (markerInfo.type === "comp") {
-                        // Move composition marker
-                        comp.markerProperty.removeKey(markerInfo.markerIndex);
-                        if (markerInfo.newTime >= 0) { // Only add if new time is valid
-                            var newMarkerIndex = comp.markerProperty.addKey(markerInfo.newTime);
-                            comp.markerProperty.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                            DEBUG_JSX.log("Moved comp marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
-                        }
-                    } else if (markerInfo.type === "layer") {
-                        // Move layer marker
-                        markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
-                        if (markerInfo.newTime >= 0) { // Only add if new time is valid
-                            var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
-                            markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                            DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' to " + markerInfo.newTime.toFixed(2) + "s");
-                        }
-                    }
-                } catch(markerError) {
-                    DEBUG_JSX.log("Failed to move marker: " + markerError.toString());
-                }
-            }
+
+        if (markersSplitMerged > 0) {
+            DEBUG_JSX.log("SMART MARKER: Processed " + markersSplitMerged + " markers with split/merge logic");
         }
         
         // STEP 2: PROCESS USING CACHED SELECTIONS
@@ -9927,110 +9684,70 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         // This prevents selection interference and eliminates extra selection steps
         DEBUG_JSX.log("STEP 1: Moving markers BEFORE keyframe operations to avoid selection interference");
         
-        // Store marker movement info for all layers before keyframe operations
-        var allMarkersToMove = [];
+        // SMART marker split/merge for each property being staggered
+        var markerEpsilon = 0.01;
+        var staggerMarkersSplitMerged = 0;
+
         for (var layerIdx = 0; layerIdx < layerGroups.length; layerIdx++) {
             var layerGroup = layerGroups[layerIdx];
             var layer = layerGroup.layer;
-            
+
             // Calculate the stagger offset this layer will receive
             var layerStaggerOffset = layerIdx * direction * staggerMs / 1000; // Convert to seconds
-            
+
             if (Math.abs(layerStaggerOffset) < 0.001) {
                 continue; // Skip layers with no offset
             }
-            
-            // Collect layer markers that need to be moved with keyframes
-            if (layer.marker && layer.marker.numKeys > 0) {
-                DEBUG_JSX.log("Collecting markers from layer " + layer.name + " for offset " + (layerStaggerOffset * 1000).toFixed(1) + "ms");
 
-                // Collect all original keyframe times from this layer to find the range
-                var originalKeyframeTimes = [];
-                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
-                    var propData = layerGroup.keyframes[propIdx];
-                    var prop = propData.property;
-                    var selectedKeys = propData.selectedKeys;
+            // Check if layer has markers
+            if (!layer.marker || layer.marker.numKeys === 0) continue;
 
-                    for (var k = 0; k < selectedKeys.length; k++) {
-                        var keyIndex = selectedKeys[k];
-                        var originalKeyTime = prop.keyTime(keyIndex);
-                        // Check if time already exists (avoid duplicates)
-                        var timeExists = false;
-                        for (var t = 0; t < originalKeyframeTimes.length; t++) {
-                            if (Math.abs(originalKeyframeTimes[t] - originalKeyTime) < 0.001) {
-                                timeExists = true;
-                                break;
-                            }
-                        }
-                        if (!timeExists) {
-                            originalKeyframeTimes.push(originalKeyTime);
-                        }
+            DEBUG_JSX.log("SMART STAGGER: Processing layer " + layer.name + " with offset " + (layerStaggerOffset * 1000).toFixed(1) + "ms");
+
+            // Process each property on this layer individually for smart split/merge
+            for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+                var propData = layerGroup.keyframes[propIdx];
+                var prop = propData.property;
+                var selectedKeys = propData.selectedKeys;
+
+                if (selectedKeys.length === 0) continue;
+
+                // Get the OLD first keyframe time (before stagger)
+                var oldFirstKeyTime = prop.keyTime(selectedKeys[0]);
+
+                // Calculate NEW first keyframe time (after stagger)
+                var newFirstKeyTime = Math.max(0, oldFirstKeyTime + layerStaggerOffset);
+
+                // Skip if no actual movement
+                if (Math.abs(layerStaggerOffset) < markerEpsilon) continue;
+
+                // Get unique property ID for marker block identification
+                var uniquePropId = getUniquePropertyId(prop);
+
+                // Call smart split/merge for this property
+                try {
+                    var result = smartSplitMergeMarker(
+                        layer.marker,
+                        oldFirstKeyTime,
+                        newFirstKeyTime,
+                        uniquePropId,
+                        markerEpsilon
+                    );
+
+                    if (result !== "no marker at old time" && result !== "no spring block for property") {
+                        staggerMarkersSplitMerged++;
+                        DEBUG_JSX.log("SMART STAGGER: " + propData.propertyName + " on " + layer.name + " - " + result);
                     }
-                }
-
-                // Sort times and find the range of selected keyframes
-                originalKeyframeTimes.sort(function(a, b) { return a - b; });
-                var firstKeyTime = originalKeyframeTimes[0];
-                var lastKeyTime = originalKeyframeTimes[originalKeyframeTimes.length - 1];
-
-                DEBUG_JSX.log("Layer keyframe range: " + (firstKeyTime * 1000).toFixed(1) + "ms to " + (lastKeyTime * 1000).toFixed(1) + "ms");
-
-                // Check each marker - if it's within the keyframe range, move it
-                for (var m = 1; m <= layer.marker.numKeys; m++) {
-                    var markerTime = layer.marker.keyTime(m);
-                    var markerInRange = (markerTime >= firstKeyTime && markerTime <= lastKeyTime);
-
-                    if (markerInRange) {
-                        var markerValue = layer.marker.keyValue(m);
-                        var markerComment = markerValue.comment || "";
-                        var newMarkerTime = Math.max(0, markerTime + layerStaggerOffset);
-
-                        DEBUG_JSX.log("Found marker '" + markerComment + "' in range at " + (markerTime * 1000).toFixed(1) + "ms, will move to " + (newMarkerTime * 1000).toFixed(1) + "ms");
-
-                        allMarkersToMove.push({
-                            layer: layer,
-                            markerIndex: m,
-                            oldTime: markerTime,
-                            newTime: newMarkerTime,
-                            markerValue: markerValue,
-                            comment: markerComment
-                        });
-                    }
+                } catch(smartMarkerError) {
+                    DEBUG_JSX.log("SMART STAGGER ERROR: " + propData.propertyName + " - " + smartMarkerError.toString());
                 }
             }
         }
-        
-        // Execute marker movements BEFORE keyframe operations
-        if (allMarkersToMove.length > 0) {
-            DEBUG_JSX.log("STEP 1: Moving " + allMarkersToMove.length + " markers BEFORE keyframe operations");
-            
-            // Sort markers in reverse order to avoid index shifting during removal
-            allMarkersToMove.sort(function(a, b) { 
-                if (a.layer.index !== b.layer.index) {
-                    return b.layer.index - a.layer.index; // Sort by layer first
-                }
-                return b.markerIndex - a.markerIndex; // Then by marker index
-            });
-            
-            for (var m = 0; m < allMarkersToMove.length; m++) {
-                var markerInfo = allMarkersToMove[m];
-                
-                try {
-                    // Remove the old marker
-                    markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
-                    
-                    // Add new marker at the new time with same properties
-                    var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
-                    markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                    
-                    DEBUG_JSX.log("STEP 1: Moved marker '" + markerInfo.comment + "' from " + (markerInfo.oldTime * 1000).toFixed(1) + "ms to " + (markerInfo.newTime * 1000).toFixed(1) + "ms on layer " + markerInfo.layer.name);
-                    
-                } catch(markerMoveError) {
-                    DEBUG_JSX.log("STEP 1: Failed to move marker '" + markerInfo.comment + "': " + markerMoveError.toString());
-                }
-            }
+
+        if (staggerMarkersSplitMerged > 0) {
+            DEBUG_JSX.log("STEP 1: Processed " + staggerMarkersSplitMerged + " markers with smart split/merge");
         } else {
-            DEBUG_JSX.log("STEP 1: No markers to move");
+            DEBUG_JSX.log("STEP 1: No markers to process");
         }
         
         // STEP 2: Now perform keyframe operations after markers are positioned
@@ -10092,50 +9809,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             
             DEBUG_JSX.log("Layer " + layerGroup.layer.index + ": applying cumulative offset " + (staggerOffset * 1000) + "ms");
             
-            // Collect layer markers that need to be moved with keyframes
-            var markersToMove = [];
-            if (layer.marker && layer.marker.numKeys > 0) {
-                DEBUG_JSX.log("Checking " + layer.marker.numKeys + " markers on layer " + layer.name + " for sync");
-                
-                // Collect all original keyframe times from this layer
-                var originalKeyframeTimes = [];
-                for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
-                    var propData = layerGroup.keyframes[propIdx];
-                    var prop = propData.property;
-                    var selectedKeys = propData.selectedKeys;
-                    
-                    for (var k = 0; k < selectedKeys.length; k++) {
-                        var keyIndex = selectedKeys[k];
-                        var keyTime = prop.keyTime(keyIndex);
-                        originalKeyframeTimes.push(keyTime);
-                    }
-                }
-                
-                // Check each marker to see if it's at the same time as any keyframe
-                for (var m = 1; m <= layer.marker.numKeys; m++) {
-                    var markerTime = layer.marker.keyTime(m);
-                    
-                    // Check if this marker is at the same time as any of the keyframes being moved
-                    for (var t = 0; t < originalKeyframeTimes.length; t++) {
-                        if (Math.abs(markerTime - originalKeyframeTimes[t]) < (0.5 / frameRate)) {
-                            var markerValue = layer.marker.keyValue(m);
-                            var markerComment = markerValue.comment || "";
-                            var newMarkerTime = Math.max(0, markerTime + staggerOffset);
-                            
-                            DEBUG_JSX.log("Found synced marker '" + markerComment + "' at " + roundMs(markerTime) + "ms, will move to " + roundMs(newMarkerTime) + "ms");
-                            
-                            markersToMove.push({
-                                markerIndex: m,
-                                oldTime: markerTime,
-                                newTime: newMarkerTime,
-                                markerValue: markerValue,
-                                comment: markerComment
-                            });
-                            break; // Only need to match once per marker
-                        }
-                    }
-                }
-            }
+            // NOTE: Marker split/merge is now handled in STEP 1 (before keyframe operations)
+            // This prevents selection interference and uses smart split/merge logic
+            // No additional marker processing needed here
             
             // Move all keyframes in this layer by the cumulative offset (no clamping needed since pre-checked)
             var layerHadMovement = false; // Track if any keyframes in this layer actually moved
@@ -10338,31 +10014,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 }
             }
             
-            // Move the layer markers that were synced with keyframes
-            if (markersToMove.length > 0) {
-                DEBUG_JSX.log("Moving " + markersToMove.length + " synced markers on layer " + layer.name);
-                
-                // Sort markers in reverse order to avoid index shifting
-                markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
-                
-                for (var m = 0; m < markersToMove.length; m++) {
-                    var markerInfo = markersToMove[m];
-                    
-                    try {
-                        // Remove the old marker
-                        layer.marker.removeKey(markerInfo.markerIndex);
-                        
-                        // Add new marker at the new time with same properties
-                        var newMarkerIndex = layer.marker.addKey(markerInfo.newTime);
-                        layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                        
-                        DEBUG_JSX.log("Moved marker '" + markerInfo.comment + "' from " + roundMs(markerInfo.oldTime) + "ms to " + roundMs(markerInfo.newTime) + "ms");
-                        
-                    } catch(markerMoveError) {
-                        DEBUG_JSX.log("Failed to move marker '" + markerInfo.comment + "': " + markerMoveError.toString());
-                    }
-                }
-            }
+            // NOTE: Marker processing removed - already handled by smart split/merge in STEP 1
             
             // Track layers with actual movement
             if (layerHadMovement) {
@@ -11009,7 +10661,7 @@ function snapToPlayheadFromPanel(preserveDelays) {
             keyframesProcessed += keyframesToMove.length;
         }
 
-        // PHASE 3: Move markers for processed properties (only markers within selected keyframe ranges)
+        // PHASE 3: Smart marker split/merge for processed properties
         for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
             var layer = selectedLayers[layerIdx];
             var markerProp = layer.property("Marker");
@@ -11018,48 +10670,34 @@ function snapToPlayheadFromPanel(preserveDelays) {
             if (!layerMarkerOffsets[layer.index]) continue;
 
             var propertyOffsets = layerMarkerOffsets[layer.index];
+            var epsilon = 0.01; // Ultra-precise for 1-frame accuracy at 60fps (matches Sproing)
 
-            // Process each marker
-            for (var m = 1; m <= markerProp.numKeys; m++) {
-                var marker = markerProp.keyValue(m);
-                if (!marker || !marker.comment) continue;
-                var markerTime = markerProp.keyTime(m);
+            // Process each property that moved on this layer
+            for (var propId in propertyOffsets) {
+                var propData = propertyOffsets[propId];
+                var oldFirstKeyTime = propData.minTime; // Use minTime as old first keyframe time
+                var timeOffset = propData.offset;
+                var newFirstKeyTime = Math.max(0, oldFirstKeyTime + timeOffset);
 
-                // Check which properties this marker belongs to
-                for (var propId in propertyOffsets) {
-                    if (marker.comment.indexOf("| Property: " + propId) !== -1) {
-                        var propData = propertyOffsets[propId];
-                        var epsilon = 0.01; // Ultra-precise for 1-frame accuracy at 60fps (matches Sproing)
+                // Skip if no actual movement
+                if (Math.abs(timeOffset) < 0.001) continue;
 
-                        // Only move marker if it's within the selected keyframe time range
-                        if (markerTime >= propData.minTime - epsilon &&
-                            markerTime <= propData.maxTime + epsilon) {
+                // Call smart split/merge for this property
+                try {
+                    var result = smartSplitMergeMarker(
+                        markerProp,
+                        oldFirstKeyTime,
+                        newFirstKeyTime,
+                        propId,
+                        epsilon
+                    );
 
-                            var timeOffset = propData.offset;
-                            var oldMarkerTime = markerTime;
-                            var newMarkerTime = Math.max(0, oldMarkerTime + timeOffset);
-
-                            // Recreate marker at new time
-                            markerProp.setValueAtTime(newMarkerTime, marker);
-
-                            // Remove old marker if time changed
-                            if (Math.abs(timeOffset) > 0.001) {
-                                // Find and remove old marker by time
-                                for (var removeIdx = markerProp.numKeys; removeIdx >= 1; removeIdx--) {
-                                    if (Math.abs(markerProp.keyTime(removeIdx) - oldMarkerTime) < 0.001) {
-                                        // Make sure this isn't the new marker
-                                        if (Math.abs(markerProp.keyTime(removeIdx) - newMarkerTime) > 0.001) {
-                                            markerProp.removeKey(removeIdx);
-                                            break;
-                                        }
-                                    }
-                                }
-                                markersProcessed++;
-                            }
-                        }
-
-                        break; // Found matching property, no need to check others
+                    if (result !== "no marker at old time" && result !== "no spring block for property") {
+                        markersProcessed++;
+                        $.writeln("SNAP: Smart marker " + propId + " - " + result);
                     }
+                } catch(smartMarkerError) {
+                    $.writeln("SNAP: Smart marker error for " + propId + ": " + smartMarkerError.toString());
                 }
             }
         }
@@ -16317,6 +15955,174 @@ function createOrUpdateMirroredMarker(markerProp, targetTime, springBlock, uniqu
         var newMarker = new MarkerValue(newBlockWithSep);
         markerProp.setValueAtTime(targetTime, newMarker);
         DEBUG_JSX.log("Created new marker at time " + targetTime.toFixed(3));
+    }
+}
+
+/**
+ * extractSpringBlockFromMarker - Extract spring block for specific property from marker comment
+ * Returns the spring block text (without separator) or null if not found
+ */
+function extractSpringBlockFromMarker(markerComment, uniquePropId) {
+    if (!markerComment || markerComment === "") return null;
+
+    var separator = "=======================================";
+    var blocks = markerComment.split(separator);
+
+    for (var i = 0; i < blocks.length; i++) {
+        var block = blocks[i];
+        var trimmedBlock = block.replace(/^\s+/,'').replace(/\s+$/,'');
+        if (trimmedBlock && trimmedBlock.indexOf("| Property: " + uniquePropId) !== -1) {
+            return trimmedBlock;
+        }
+    }
+    return null;
+}
+
+/**
+ * removeSpringBlockFromMarker - Remove spring block for specific property from marker comment
+ * Returns updated comment with block removed, or null if all blocks were removed
+ */
+function removeSpringBlockFromMarker(markerComment, uniquePropId) {
+    if (!markerComment || markerComment === "") return null;
+
+    var separator = "=======================================";
+    var blocks = markerComment.split(separator);
+    var rebuilt = "";
+
+    for (var i = 0; i < blocks.length; i++) {
+        var block = blocks[i];
+        var trimmedBlock = block.replace(/^\s+/,'').replace(/\s+$/,'');
+
+        // Skip empty blocks and blocks matching this property
+        if (!trimmedBlock || trimmedBlock.indexOf("| Property: " + uniquePropId) !== -1) {
+            continue;
+        }
+
+        // Keep this block
+        rebuilt += trimmedBlock + "\n\n" + separator + "\n";
+    }
+
+    // Return null if no blocks remain (marker should be deleted)
+    return rebuilt === "" ? null : rebuilt;
+}
+
+/**
+ * countSpringBlocksInMarker - Count number of spring blocks in marker comment
+ */
+function countSpringBlocksInMarker(markerComment) {
+    if (!markerComment || markerComment === "") return 0;
+
+    var separator = "=======================================";
+    var blocks = markerComment.split(separator);
+    var count = 0;
+
+    for (var i = 0; i < blocks.length; i++) {
+        var block = blocks[i];
+        var trimmedBlock = block.replace(/^\s+/,'').replace(/\s+$/,'');
+        // Count blocks that contain "| Property:" line
+        if (trimmedBlock && trimmedBlock.indexOf("| Property:") !== -1) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+/**
+ * smartSplitMergeMarker - Intelligently split or merge spring blocks when moving properties
+ *
+ * This handles:
+ * - SPLIT: When moving one property away from a multi-property marker
+ * - MERGE: When moving a property to a time where another marker exists
+ * - CLEANUP: Deletes markers when all blocks are removed
+ *
+ * @param markerProp - The marker property (layer.marker or comp.markerProperty)
+ * @param oldTime - Original time of the property's first keyframe
+ * @param newTime - New time of the property's first keyframe
+ * @param uniquePropId - Unique property identifier (from getUniquePropertyId)
+ * @param epsilon - Time tolerance for finding markers
+ * @returns {string} - Debug status message
+ */
+function smartSplitMergeMarker(markerProp, oldTime, newTime, uniquePropId, epsilon) {
+    if (!markerProp) return "no marker property";
+
+    var separator = "=======================================";
+    var statusMsg = "";
+
+    try {
+        // Find marker at OLD time
+        var oldMarkerData = findMarkerAtTime(markerProp, oldTime, epsilon);
+        if (!oldMarkerData) {
+            return "no marker at old time"; // No marker to split/move
+        }
+
+        var oldMarkerIdx = oldMarkerData.index;
+        var oldMarkerValue = markerProp.keyValue(oldMarkerIdx);
+        var oldMarkerComment = oldMarkerValue.comment || "";
+
+        // Extract the spring block for this property
+        var springBlock = extractSpringBlockFromMarker(oldMarkerComment, uniquePropId);
+        if (!springBlock) {
+            return "no spring block for property"; // This property isn't in the marker
+        }
+
+        DEBUG_JSX.log("SMART MARKER: Found spring block for " + uniquePropId + " at " + oldTime.toFixed(3) + "s");
+
+        // Remove this property's block from the old marker
+        var oldMarkerUpdated = removeSpringBlockFromMarker(oldMarkerComment, uniquePropId);
+
+        if (oldMarkerUpdated === null) {
+            // No blocks left - delete the old marker entirely
+            markerProp.removeKey(oldMarkerIdx);
+            DEBUG_JSX.log("SMART MARKER: Deleted old marker (no blocks remaining)");
+            statusMsg = "deleted old marker";
+        } else {
+            // Update the old marker with remaining blocks
+            oldMarkerValue.comment = oldMarkerUpdated;
+            markerProp.setValueAtKey(oldMarkerIdx, oldMarkerValue);
+            DEBUG_JSX.log("SMART MARKER: Split - removed block from old marker");
+            statusMsg = "split from old marker";
+        }
+
+        // Find or create marker at NEW time
+        var newMarkerData = findMarkerAtTime(markerProp, newTime, epsilon);
+
+        if (newMarkerData) {
+            // Marker exists at new time - MERGE
+            var newMarkerIdx = newMarkerData.index;
+            var newMarkerValue = markerProp.keyValue(newMarkerIdx);
+            var newMarkerComment = newMarkerValue.comment || "";
+
+            // Check if this property already has a block at new time (avoid duplicates)
+            var existingBlock = extractSpringBlockFromMarker(newMarkerComment, uniquePropId);
+            if (existingBlock) {
+                // Replace existing block for this property
+                var tempComment = removeSpringBlockFromMarker(newMarkerComment, uniquePropId);
+                newMarkerComment = tempComment || "";
+            }
+
+            // Add the spring block to new marker
+            newMarkerComment += springBlock + "\n\n" + separator + "\n";
+            newMarkerValue.comment = newMarkerComment;
+            markerProp.setValueAtKey(newMarkerIdx, newMarkerValue);
+
+            DEBUG_JSX.log("SMART MARKER: Merged into existing marker at " + newTime.toFixed(3) + "s");
+            statusMsg += ", merged to existing";
+        } else {
+            // No marker at new time - CREATE
+            var newMarkerComment = springBlock + "\n\n" + separator + "\n";
+            var newMarkerValue = new MarkerValue(newMarkerComment);
+            markerProp.setValueAtTime(newTime, newMarkerValue);
+
+            DEBUG_JSX.log("SMART MARKER: Created new marker at " + newTime.toFixed(3) + "s");
+            statusMsg += ", created new marker";
+        }
+
+        return statusMsg;
+
+    } catch(e) {
+        DEBUG_JSX.log("SMART MARKER ERROR: " + e.toString());
+        return "error: " + e.toString();
     }
 }
 
