@@ -234,6 +234,187 @@ function restoreKeyframeState(prop, currentIndex, keyData) {
 }
 
 /**
+ * Scales KeyframeEase speed to maintain visual curve shape when duration changes
+ * @param {Array} easeArray - Array of KeyframeEase objects
+ * @param {number} oldDuration - Original duration between keyframes (seconds)
+ * @param {number} newDuration - New duration between keyframes (seconds)
+ * @returns {Array} - New array of scaled KeyframeEase objects
+ */
+function scaleEaseForDuration(easeArray, oldDuration, newDuration) {
+    if (!easeArray || easeArray.length < 1 || easeArray.length > 3) {
+        return easeArray;
+    }
+
+    if (oldDuration <= 0 || newDuration <= 0 || Math.abs(oldDuration - newDuration) < 0.001) {
+        return easeArray;
+    }
+
+    var scaledEase = [];
+    var durationRatio = oldDuration / newDuration;
+
+    DEBUG_JSX.log("🔧 Scaling ease for duration change:");
+    DEBUG_JSX.log("  Duration: " + (oldDuration * 1000).toFixed(1) + "ms → " + (newDuration * 1000).toFixed(1) + "ms");
+    DEBUG_JSX.log("  Speed scale factor: " + durationRatio.toFixed(4));
+
+    for (var i = 0; i < easeArray.length; i++) {
+        var ease = easeArray[i];
+        if (!ease) {
+            scaledEase.push(ease);
+            continue;
+        }
+
+        // CRITICAL: Scale speed inversely with duration
+        // speed = value_change / time, so to maintain same value_change over longer time, reduce speed
+        var oldSpeed = ease.speed;
+        var newSpeed = oldSpeed * durationRatio;
+        var influence = ease.influence; // Keep influence unchanged
+
+        DEBUG_JSX.log("  Dimension " + i + ": speed " + oldSpeed.toFixed(2) + " → " + newSpeed.toFixed(2) + ", influence " + influence.toFixed(2) + "% (unchanged)");
+
+        scaledEase.push(new KeyframeEase(newSpeed, influence));
+    }
+
+    return scaledEase;
+}
+
+/**
+ * Captures the keyframe immediately before a set of selected keyframes
+ * This is used to protect adjacent keyframes from AE's automatic modifications
+ * @param {Property} prop - The property to check
+ * @param {Array} selectedKeyIndices - Array of selected keyframe indices (1-based)
+ * @returns {Object|null} - Captured keyframe state or null if no previous key exists
+ */
+function capturePreviousKeyframe(prop, selectedKeyIndices) {
+    if (!prop || !selectedKeyIndices || selectedKeyIndices.length === 0) {
+        return null;
+    }
+
+    // Find the lowest selected key index
+    var minSelectedIndex = selectedKeyIndices[0];
+    for (var i = 1; i < selectedKeyIndices.length; i++) {
+        if (selectedKeyIndices[i] < minSelectedIndex) {
+            minSelectedIndex = selectedKeyIndices[i];
+        }
+    }
+
+    // Capture the keyframe before the first selected one
+    var prevKeyIndex = minSelectedIndex - 1;
+    DEBUG_JSX.log("🎯 CAPTURE PREV KEY: minSelected=" + minSelectedIndex + ", prevIndex=" + prevKeyIndex + ", totalKeys=" + prop.numKeys);
+
+    if (prevKeyIndex < 1) {
+        DEBUG_JSX.log("⚠️ No previous key to capture (first key selected)");
+        return null;
+    }
+
+    try {
+        var keyData = {
+            index: prevKeyIndex,
+            time: prop.keyTime(prevKeyIndex),
+            value: prop.keyValue(prevKeyIndex),
+            inInterp: prop.keyInInterpolationType(prevKeyIndex),
+            outInterp: prop.keyOutInterpolationType(prevKeyIndex),
+            temporalContinuous: prop.keyTemporalContinuous(prevKeyIndex),
+            temporalAutoBezier: prop.keyTemporalAutoBezier(prevKeyIndex),
+            label: prop.keyLabel(prevKeyIndex)
+        };
+
+        // Collect temporal ease (even for LINEAR - they have ease with speed=0)
+        try {
+            keyData.inEase = prop.keyInTemporalEase(prevKeyIndex);
+            keyData.outEase = prop.keyOutTemporalEase(prevKeyIndex);
+        } catch(e) {
+            // Ease might not be available for some property types
+        }
+
+        // Collect spatial properties if applicable
+        if (prop.isSpatial) {
+            try {
+                keyData.spatialContinuous = prop.keySpatialContinuous(prevKeyIndex);
+                keyData.spatialAutoBezier = prop.keySpatialAutoBezier(prevKeyIndex);
+                keyData.inTangent = prop.keyInSpatialTangent(prevKeyIndex);
+                keyData.outTangent = prop.keyOutSpatialTangent(prevKeyIndex);
+            } catch(e) {
+                // Spatial properties might not be available
+            }
+        }
+
+        DEBUG_JSX.log("✅ Captured previous key at index " + prevKeyIndex + ", time=" + keyData.time);
+        return keyData;
+    } catch(e) {
+        DEBUG_JSX.log("❌ Failed to capture previous key: " + e.toString());
+        return null;
+    }
+}
+
+/**
+ * Restores a previously captured previous keyframe with duration-aware ease scaling
+ * @param {Property} prop - The property to restore on
+ * @param {Object} prevKeyData - Captured keyframe state
+ * @param {number} keysAdded - Number of keys added (can be negative if removed)
+ * @param {number} oldDurationToNext - Original duration to next keyframe (seconds)
+ * @param {number} newDurationToNext - New duration to next keyframe (seconds)
+ * @returns {boolean} - True if successful
+ */
+function restorePreviousKeyframe(prop, prevKeyData, keysAdded, oldDurationToNext, newDurationToNext) {
+    if (!prop || !prevKeyData) {
+        return false;
+    }
+
+    try {
+        // Calculate new index after keys were added/removed
+        var newIndex = prevKeyData.index + keysAdded;
+
+        DEBUG_JSX.log("🔧 RESTORE PREV KEY: Original index=" + prevKeyData.index + ", keysAdded=" + keysAdded + ", newIndex=" + newIndex);
+
+        // Previous keyframe time shouldn't change, so check calculated index
+        var targetIndex = -1;
+        if (newIndex > 0 && newIndex <= prop.numKeys) {
+            var currentTime = prop.keyTime(newIndex);
+            if (Math.abs(currentTime - prevKeyData.time) < 0.001) {
+                targetIndex = newIndex;
+            }
+        }
+
+        // Fallback: try to find by time
+        if (targetIndex === -1) {
+            for (var i = 1; i <= prop.numKeys; i++) {
+                if (Math.abs(prop.keyTime(i) - prevKeyData.time) < 0.001) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (targetIndex === -1) {
+            DEBUG_JSX.log("❌ Failed to find previous keyframe");
+            return false;
+        }
+
+        // CRITICAL: Scale OUT ease if duration to next keyframe changed
+        var restoredData = prevKeyData;
+        if (oldDurationToNext && newDurationToNext && Math.abs(oldDurationToNext - newDurationToNext) > 0.001) {
+            DEBUG_JSX.log("🔧 Scaling previous keyframe OUT ease (duration to next: " + (oldDurationToNext * 1000).toFixed(1) + "ms → " + (newDurationToNext * 1000).toFixed(1) + "ms)");
+
+            // Clone the data and scale only OUT ease
+            restoredData = {};
+            for (var key in prevKeyData) {
+                restoredData[key] = prevKeyData[key];
+            }
+
+            if (prevKeyData.outEase) {
+                restoredData.outEase = scaleEaseForDuration(prevKeyData.outEase, oldDurationToNext, newDurationToNext);
+            }
+        }
+
+        DEBUG_JSX.log("✅ Restoring previous keyframe at index " + targetIndex);
+        return restoreKeyframeState(prop, targetIndex, restoredData);
+    } catch(e) {
+        DEBUG_JSX.log("❌ Error restoring previous keyframe: " + e.toString());
+        return false;
+    }
+}
+
+/**
  * Captures the keyframe immediately after a set of selected keyframes
  * This is used to protect adjacent keyframes from AE's automatic modifications
  * @param {Property} prop - The property to check
@@ -2087,8 +2268,43 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
             // Sort selected key indices
             selKeys.sort(function(a, b) { return a - b; });
 
-            // PROTECTION: Capture the next keyframe to prevent AE from modifying it
-            var nextKeyData = captureNextKeyframe(prop, selKeys);
+            // PROTECTION: Capture ALL adjacent keyframes to prevent AE from modifying them
+            // We need to capture all keyframes before and after the selection to protect the entire curve
+            var allPrevKeyData = [];
+            var minSelectedIndex = selKeys[0];
+            for (var k = minSelectedIndex - 1; k >= 1; k--) {
+                try {
+                    var capturedKey = captureKeyframeState(prop, k);
+                    if (capturedKey) {
+                        capturedKey.index = k; // Store original index for reference
+                        allPrevKeyData.push(capturedKey);
+
+                        // Log detailed ease values
+                        var easeInfo = "";
+                        if (capturedKey.outEase && capturedKey.outEase.length > 0) {
+                            easeInfo = " OUT:[speed=" + capturedKey.outEase[0].speed.toFixed(2) +
+                                      ", inf=" + capturedKey.outEase[0].influence.toFixed(2) + "%]";
+                        }
+                        DEBUG_JSX.log("🔒 Captured keyframe " + k + " @ " + capturedKey.time.toFixed(3) + "s" + easeInfo);
+                    }
+                } catch(e) {
+                    break;
+                }
+            }
+
+            var allNextKeyData = [];
+            var maxSelectedIndex = selKeys[selKeys.length - 1];
+            for (var k = maxSelectedIndex + 1; k <= prop.numKeys; k++) {
+                try {
+                    var capturedKey = captureKeyframeState(prop, k);
+                    if (capturedKey) {
+                        allNextKeyData.push(capturedKey);
+                        DEBUG_JSX.log("🔒 Captured keyframe " + k + " after selection");
+                    }
+                } catch(e) {
+                    break;
+                }
+            }
 
                 // Collect keyframe data, sorted by time (same as original)
                 var keyData = [];
@@ -2135,7 +2351,13 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                 var firstTime = keyData[0].time;
                 var lastTime = keyData[keyData.length - 1].time;
                 var duration = lastTime - firstTime;
-                
+
+                // Capture next keyframe time if it exists (for OUT ease scaling)
+                var nextKeyframeTime = null;
+                if (allNextKeyData.length > 0) {
+                    nextKeyframeTime = allNextKeyData[0].time;
+                }
+
                 // SMART SNAPPING: Apply frame delta then snap to nearest 50ms
                 var durationMs = duration * 1000;
 
@@ -2230,9 +2452,12 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                             allProcessedKeyframeTimes.push(newKeyTimes[t]);
                         }
 
-                        // PROTECTION: Restore the next keyframe
+                        // PROTECTION: Restore adjacent keyframes
+                        var keysAdded = processedIndices.length - selKeys.length;
+                        if (prevKeyData !== null) {
+                            restorePreviousKeyframe(prop, prevKeyData, keysAdded);
+                        }
                         if (nextKeyData !== null) {
-                            var keysAdded = processedIndices.length - selKeys.length;
                             restoreNextKeyframe(prop, nextKeyData, keysAdded);
                         }
 
@@ -2276,12 +2501,49 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         try {
                             prop.setValueAtKey(newIdx, data.value);
 
-                            // Apply temporal ease first to avoid flipping linear sides
+                            // CRITICAL: Scale ease speed to maintain visual curve shape
                             if (data.inEase !== undefined && data.outEase !== undefined) {
                                 try {
-                                    prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                                    // Determine if we should scale IN or OUT ease:
+                                    // - First keyframe: DON'T scale IN ease (affects curve from previous non-selected keyframe)
+                                    // - Last keyframe: Check if there's a next keyframe
+                                    //   - If NO next keyframe: DON'T scale OUT ease (no curve to affect)
+                                    //   - If YES next keyframe: Scale OUT ease based on distance change to next keyframe
+                                    // - Middle keyframes: scale both IN and OUT ease
+                                    var isFirstKey = (k === 0);
+                                    var isLastKey = (k === keyData.length - 1);
+
+                                    var scaledInEase = isFirstKey ? data.inEase : scaleEaseForDuration(data.inEase, duration, newDuration);
+
+                                    var scaledOutEase;
+                                    if (isLastKey && nextKeyframeTime !== null) {
+                                        // Calculate distance to next keyframe
+                                        var originalDistanceToNext = nextKeyframeTime - data.time;
+                                        var newDistanceToNext = nextKeyframeTime - newTime;
+
+                                        // Scale OUT ease based on distance change to next keyframe
+                                        scaledOutEase = scaleEaseForDuration(data.outEase, originalDistanceToNext, newDistanceToNext);
+                                        DEBUG_JSX.log("  📊 Last keyframe OUT ease: scaled by distance to next keyframe (" + (originalDistanceToNext*1000).toFixed(1) + "ms → " + (newDistanceToNext*1000).toFixed(1) + "ms)");
+                                    } else if (isLastKey) {
+                                        // No next keyframe, preserve OUT ease
+                                        scaledOutEase = data.outEase;
+                                    } else {
+                                        // Middle keyframe, scale based on internal duration
+                                        scaledOutEase = scaleEaseForDuration(data.outEase, duration, newDuration);
+                                    }
+
+                                    prop.setTemporalEaseAtKey(newIdx, scaledInEase, scaledOutEase);
+
+                                    if (isFirstKey) {
+                                        DEBUG_JSX.log("  ✅ Applied scaled ease (preserved IN ease for first keyframe)");
+                                    } else if (isLastKey && nextKeyframeTime === null) {
+                                        DEBUG_JSX.log("  ✅ Applied scaled ease (preserved OUT ease for last keyframe - no next keyframe)");
+                                    } else {
+                                        DEBUG_JSX.log("  ✅ Applied scaled ease");
+                                    }
                                 } catch(e) {
                                     // Some properties might not support temporal ease
+                                    DEBUG_JSX.log("  ❌ Failed to set ease: " + e.toString());
                                 }
                             }
 
@@ -2316,10 +2578,138 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         newSelIndices.push(newIdx);
                     }
 
-                    // PROTECTION: Restore the next keyframe
-                    if (nextKeyData !== null) {
-                        var keysAdded = newSelIndices.length - selKeys.length;
-                        restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                    // Capture the selected keyframes' ease values using ORIGINAL ease from keyData
+                    // This ensures we restore the exact original values, not AE-modified versions
+                    var selectedKeyframesEase = [];
+                    for (var k = 0; k < newSelIndices.length; k++) {
+                        var idx = newSelIndices[k];
+                        var originalData = keyData[k]; // Corresponding original keyframe data
+
+                        try {
+                            var isFirstKey = (k === 0);
+                            var isLastKey = (k === keyData.length - 1);
+
+                            // Use the exact ease we INTENDED to set (scaled or preserved)
+                            var correctInEase = isFirstKey ? originalData.inEase : scaleEaseForDuration(originalData.inEase, duration, newDuration);
+
+                            var correctOutEase;
+                            if (isLastKey && nextKeyframeTime !== null) {
+                                var originalDistanceToNext = nextKeyframeTime - originalData.time;
+                                var newDistanceToNext = nextKeyframeTime - (firstTime + (keyData[k].time - firstTime) * (newDuration / duration));
+                                correctOutEase = scaleEaseForDuration(originalData.outEase, originalDistanceToNext, newDistanceToNext);
+                            } else if (isLastKey) {
+                                correctOutEase = originalData.outEase;
+                            } else {
+                                correctOutEase = scaleEaseForDuration(originalData.outEase, duration, newDuration);
+                            }
+
+                            selectedKeyframesEase.push({
+                                index: idx,
+                                time: prop.keyTime(idx),
+                                inEase: correctInEase,
+                                outEase: correctOutEase
+                            });
+                        } catch(e) {
+                            // Ease might not be available
+                        }
+                    }
+
+                    // PROTECTION: Restore ALL adjacent keyframes
+                    var keysAdded = newSelIndices.length - selKeys.length;
+
+                    DEBUG_JSX.log("🔓 Restoring " + allPrevKeyData.length + " keyframes before selection");
+                    for (var k = 0; k < allPrevKeyData.length; k++) {
+                        var keyState = allPrevKeyData[k];
+                        var newIndex = keyState.index + keysAdded;
+
+                        // Find keyframe by time since index may have shifted
+                        for (var i = 1; i <= prop.numKeys; i++) {
+                            if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                // Log what we're restoring
+                                var restoreInfo = "";
+                                if (keyState.outEase && keyState.outEase.length > 0) {
+                                    restoreInfo = " OUT:[speed=" + keyState.outEase[0].speed.toFixed(2) +
+                                                ", inf=" + keyState.outEase[0].influence.toFixed(2) + "%]";
+                                }
+                                DEBUG_JSX.log("🔓 Restoring keyframe #" + keyState.index + " @ " + keyState.time.toFixed(3) + "s" + restoreInfo);
+
+                                restoreKeyframeState(prop, i, keyState);
+
+                                // Verify it was restored correctly
+                                try {
+                                    var currentOutEase = prop.keyOutTemporalEase(i);
+                                    if (currentOutEase && currentOutEase.length > 0) {
+                                        var verifyInfo = " VERIFY OUT:[speed=" + currentOutEase[0].speed.toFixed(2) +
+                                                       ", inf=" + currentOutEase[0].influence.toFixed(2) + "%]";
+                                        DEBUG_JSX.log("   ✓ Verified" + verifyInfo);
+                                    }
+                                } catch(e) {}
+
+                                break;
+                            }
+                        }
+                    }
+
+                    DEBUG_JSX.log("🔓 Restoring " + allNextKeyData.length + " keyframes after selection");
+
+                    // Calculate where the last selected keyframe ended up (for IN ease scaling)
+                    var newLastTime = firstTime + newDuration;
+
+                    for (var k = 0; k < allNextKeyData.length; k++) {
+                        var keyState = allNextKeyData[k];
+                        var newIndex = keyState.index + keysAdded;
+
+                        // Find keyframe by time since index may have shifted
+                        for (var i = 1; i <= prop.numKeys; i++) {
+                            if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
+                                // Scale IN ease based on distance change from last selected keyframe
+                                if (keyState.inEase && keyState.inEase.length > 0) {
+                                    var originalDistanceFromLast = keyState.time - lastTime;
+                                    var newDistanceFromLast = keyState.time - newLastTime;
+
+                                    if (originalDistanceFromLast > 0 && newDistanceFromLast > 0) {
+                                        // Scale IN ease
+                                        var scaledInEase = scaleEaseForDuration(keyState.inEase, originalDistanceFromLast, newDistanceFromLast);
+
+                                        // Create a modified keyState with scaled IN ease
+                                        var modifiedKeyState = {};
+                                        for (var propName in keyState) {
+                                            modifiedKeyState[propName] = keyState[propName];
+                                        }
+                                        modifiedKeyState.inEase = scaledInEase;
+
+                                        restoreKeyframeState(prop, i, modifiedKeyState);
+                                        DEBUG_JSX.log("🔓 Restored keyframe @ " + keyState.time.toFixed(3) + "s (scaled IN ease: " + (originalDistanceFromLast*1000).toFixed(1) + "ms → " + (newDistanceFromLast*1000).toFixed(1) + "ms)");
+                                    } else {
+                                        restoreKeyframeState(prop, i, keyState);
+                                        DEBUG_JSX.log("🔓 Restored keyframe at time " + keyState.time.toFixed(3) + "s");
+                                    }
+                                } else {
+                                    restoreKeyframeState(prop, i, keyState);
+                                    DEBUG_JSX.log("🔓 Restored keyframe at time " + keyState.time.toFixed(3) + "s");
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    // RESTORE SELECTED KEYFRAMES' EASE: After Effects may have modified them when we restored adjacent keyframes
+                    DEBUG_JSX.log("🔓 Restoring selected keyframes' ease after adjacent restoration");
+                    for (var k = 0; k < selectedKeyframesEase.length; k++) {
+                        var easeData = selectedKeyframesEase[k];
+
+                        // Find keyframe by time
+                        for (var i = 1; i <= prop.numKeys; i++) {
+                            if (Math.abs(prop.keyTime(i) - easeData.time) < 0.001) {
+                                try {
+                                    prop.setTemporalEaseAtKey(i, easeData.inEase, easeData.outEase);
+                                    DEBUG_JSX.log("  ✓ Restored selected keyframe ease @ " + easeData.time.toFixed(3) + "s");
+                                } catch(e) {
+                                    // Might fail for some properties
+                                }
+                                break;
+                            }
+                        }
                     }
 
                     // COLLECT selections for GLOBAL restoration at the very end (include layer reference)
@@ -2328,14 +2718,18 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                         layer: cached.layer,
                         propertyName: prop.name,
                         propertyReference: prop,  // Store actual property reference to avoid name conflicts
-                        indices: newSelIndices
+                        indices: newSelIndices,
+                        adjacentPrevKeyData: allPrevKeyData,  // Store for final restoration pass
+                        adjacentNextKeyData: allNextKeyData,  // Store for final restoration pass
+                        selectedKeyframesEase: selectedKeyframesEase,  // Store for final restoration pass
+                        originalLastTime: lastTime,            // Store for IN ease scaling
+                        newLastTime: newLastTime               // Store for IN ease scaling
                     });
                 }
         }
-        
-        app.endUndoGroup();
-        
+
         if (!processedAny) {
+            app.endUndoGroup();
             return "error|Select > 1 Key";
         }
         
@@ -2383,7 +2777,12 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                 layer: selData.layer,
                 propertyName: selData.propertyName,
                 propertyReference: selData.propertyReference,  // Use stored reference directly
-                indices: selData.indices
+                indices: selData.indices,
+                adjacentPrevKeyData: selData.adjacentPrevKeyData,  // Copy for final restoration
+                adjacentNextKeyData: selData.adjacentNextKeyData,  // Copy for final restoration
+                selectedKeyframesEase: selData.selectedKeyframesEase,  // Copy for final restoration
+                originalLastTime: selData.originalLastTime,        // Copy for IN ease scaling
+                newLastTime: selData.newLastTime                   // Copy for IN ease scaling
             });
         }
         
@@ -2423,7 +2822,96 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
             }
             DEBUG_JSX.log("  Successfully selected " + successfulSelections + "/" + selData.indices.length + " keyframes");
         }
-        
+
+        // FINAL RESTORATION PASS: After selection restoration, AE may have modified adjacent keyframes again
+        // Do one more restoration pass to ensure they stay correct
+        DEBUG_JSX.log("🔓 FINAL RESTORATION PASS: Restoring all adjacent keyframes after selection");
+        for (var i = 0; i < processedSelections.length; i++) {
+            var selData = processedSelections[i];
+            var prop = selData.propertyReference;
+
+            if (!prop) continue;
+
+            // Restore all previous keyframes
+            if (selData.adjacentPrevKeyData && selData.adjacentPrevKeyData.length > 0) {
+                DEBUG_JSX.log("  🔓 Final restore: " + selData.adjacentPrevKeyData.length + " keyframes before selection on " + selData.propertyName);
+                for (var k = 0; k < selData.adjacentPrevKeyData.length; k++) {
+                    var keyState = selData.adjacentPrevKeyData[k];
+
+                    // Find keyframe by time
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - keyState.time) < 0.001) {
+                            restoreKeyframeState(prop, j, keyState);
+                            DEBUG_JSX.log("     ✓ Final restored keyframe #" + keyState.index + " @ " + keyState.time.toFixed(3) + "s");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Restore all next keyframes (with IN ease scaling)
+            if (selData.adjacentNextKeyData && selData.adjacentNextKeyData.length > 0) {
+                DEBUG_JSX.log("  🔓 Final restore: " + selData.adjacentNextKeyData.length + " keyframes after selection on " + selData.propertyName);
+                for (var k = 0; k < selData.adjacentNextKeyData.length; k++) {
+                    var keyState = selData.adjacentNextKeyData[k];
+
+                    // Find keyframe by time
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - keyState.time) < 0.001) {
+                            // Scale IN ease based on distance change from last selected keyframe
+                            if (keyState.inEase && keyState.inEase.length > 0 && selData.originalLastTime && selData.newLastTime) {
+                                var originalDistanceFromLast = keyState.time - selData.originalLastTime;
+                                var newDistanceFromLast = keyState.time - selData.newLastTime;
+
+                                if (originalDistanceFromLast > 0 && newDistanceFromLast > 0) {
+                                    // Scale IN ease
+                                    var scaledInEase = scaleEaseForDuration(keyState.inEase, originalDistanceFromLast, newDistanceFromLast);
+
+                                    // Create a modified keyState with scaled IN ease
+                                    var modifiedKeyState = {};
+                                    for (var propName in keyState) {
+                                        modifiedKeyState[propName] = keyState[propName];
+                                    }
+                                    modifiedKeyState.inEase = scaledInEase;
+
+                                    restoreKeyframeState(prop, j, modifiedKeyState);
+                                    DEBUG_JSX.log("     ✓ Final restored keyframe #" + keyState.index + " @ " + keyState.time.toFixed(3) + "s (scaled IN ease)");
+                                } else {
+                                    restoreKeyframeState(prop, j, keyState);
+                                    DEBUG_JSX.log("     ✓ Final restored keyframe #" + keyState.index + " @ " + keyState.time.toFixed(3) + "s");
+                                }
+                            } else {
+                                restoreKeyframeState(prop, j, keyState);
+                                DEBUG_JSX.log("     ✓ Final restored keyframe #" + keyState.index + " @ " + keyState.time.toFixed(3) + "s");
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // FINAL RESTORATION: Restore selected keyframes' ease after restoring adjacent keyframes
+            if (selData.selectedKeyframesEase && selData.selectedKeyframesEase.length > 0) {
+                DEBUG_JSX.log("  🔓 Final restore: selected keyframes' ease on " + selData.propertyName);
+                for (var k = 0; k < selData.selectedKeyframesEase.length; k++) {
+                    var easeData = selData.selectedKeyframesEase[k];
+
+                    // Find keyframe by time
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - easeData.time) < 0.001) {
+                            try {
+                                prop.setTemporalEaseAtKey(j, easeData.inEase, easeData.outEase);
+                                DEBUG_JSX.log("     ✓ Final restored selected keyframe ease @ " + easeData.time.toFixed(3) + "s");
+                            } catch(e) {
+                                // Might fail for some properties
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         // NOTE: We intentionally do NOT set prop.selected = true here
         // because that can cause After Effects to auto-select ALL keyframes on the property
         // We've already selected the specific keyframes we want above
@@ -2449,7 +2937,10 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
         }
         
         DEBUG_JSX.log("🎬 Frame-based duration stretch completed: " + finalDurationMs + "ms / " + finalDurationFrames + "f");
-        
+
+        // End undo group AFTER all operations complete (including final restoration pass)
+        app.endUndoGroup();
+
         // Include debug messages in result
         var debugMessages = DEBUG_JSX.getMessages();
         return "success|" + finalDurationMs + "|" + finalDurationFrames + "|" + debugMessages.join("|");
@@ -2733,7 +3224,12 @@ function stretchKeyframesForCrossProperty(direction, frames) {
                 layer: selData.layer,
                 propertyName: selData.propertyName,
                 propertyReference: selData.propertyReference,  // Use stored reference directly
-                indices: selData.indices
+                indices: selData.indices,
+                adjacentPrevKeyData: selData.adjacentPrevKeyData,  // Copy for final restoration
+                adjacentNextKeyData: selData.adjacentNextKeyData,  // Copy for final restoration
+                selectedKeyframesEase: selData.selectedKeyframesEase,  // Copy for final restoration
+                originalLastTime: selData.originalLastTime,        // Copy for IN ease scaling
+                newLastTime: selData.newLastTime                   // Copy for IN ease scaling
             });
         }
         
@@ -6923,12 +7419,8 @@ function nudgeDelayTimelineMode(direction, frames) {
                     for (var j = 1; j <= prop.numKeys; j++) {
                         if (Math.abs(prop.keyTime(j) - data.newTime) < 0.001) {
                             try {
-                                // Restore interpolation type EXACTLY as it was
-                                // (Same as normal properties - line 6944)
-                                prop.setInterpolationTypeAtKey(j, data.inInterp, data.outInterp);
-
-                                // Restore temporal ease if it exists
-                                // (Same as normal properties - line 6947)
+                                // CRITICAL: Restore temporal ease FIRST before setting interpolation type
+                                // Setting interpolation type can reset/modify ease curves
                                 if (data.inEase !== undefined && data.outEase !== undefined) {
                                     try {
                                         prop.setTemporalEaseAtKey(j, data.inEase, data.outEase);
@@ -6937,8 +7429,10 @@ function nudgeDelayTimelineMode(direction, frames) {
                                     }
                                 }
 
+                                // THEN restore interpolation type (after ease is set)
+                                prop.setInterpolationTypeAtKey(j, data.inInterp, data.outInterp);
+
                                 // Restore temporal continuity
-                                // (Same as normal properties - line 6955)
                                 prop.setTemporalContinuousAtKey(j, data.temporalContinuous);
                                 prop.setTemporalAutoBezierAtKey(j, data.temporalAutoBezier);
 
@@ -7020,17 +7514,17 @@ function nudgeDelayTimelineMode(direction, frames) {
                 for (var k = keyframesToMove.length - 1; k >= 0; k--) {
                     prop.removeKey(keyframesToMove[k].index);
                 }
-                
+
                 // Add new keyframes at new times with all properties preserved
                 for (var k = 0; k < keyframesToMove.length; k++) {
                     var data = keyframesToMove[k];
                     var newIdx = prop.addKey(data.newTime);
-                    
-                    // Restore all keyframe properties
+
+                    // Restore all keyframe properties in CORRECT order
                     prop.setValueAtKey(newIdx, data.value);
-                    prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-                    
-                    // Apply temporal ease first to avoid flipping linear sides
+
+                    // CRITICAL: Apply temporal ease FIRST before setting interpolation type
+                    // Setting interpolation type can reset/modify ease curves
                     if (data.inEase !== undefined && data.outEase !== undefined) {
                         try {
                             prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
@@ -7039,7 +7533,7 @@ function nudgeDelayTimelineMode(direction, frames) {
                         }
                     }
 
-                    // Then re-assert original interpolation types
+                    // THEN set interpolation type (only once, after ease is set)
                     prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
 
                     // Safe flags restoration to keep linear icons for fully-linear keys
