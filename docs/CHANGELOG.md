@@ -5,6 +5,36 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.78] - 2025-01-08 🎯 **PERFECT EASING PRESERVATION**
+### ✨ Major Enhancement
+- **Perfect Easing Preservation for Duration Stretch**: Bezier easing curves now remain pixel-perfect when changing keyframe duration (forward/backward)
+- **Perfect Easing Preservation for Delay/Nudge**: Bezier easing curves now remain pixel-perfect when delaying or nudging keyframes (forward/backward)
+- **Adjacent Keyframe Protection**: Keyframes before and after the selection maintain their easing exactly during timing operations
+- **Smart Easing Scaling**: KeyframeEase speed values now scale inversely with duration changes (speed × time = value change)
+
+### 🔧 Technical Implementation
+- **Mathematical Foundation**: Implemented correct inverse scaling formula: `newSpeed = oldSpeed × (oldDuration / newDuration)`
+- **Influence Preservation**: KeyframeEase influence (percentage) now correctly preserved unchanged during timing operations
+- **Edge Case Handling**: First selected keyframe preserves IN ease, last selected keyframe scales OUT ease based on distance to next keyframe
+- **Multi-Pass Restoration**: Implemented multi-pass restoration strategy to prevent After Effects cascade modifications
+- **Original Value Tracking**: Captures and restores from ORIGINAL keyData values, not AE-modified values
+- **Undo Group Fix**: Moved `app.endUndoGroup()` to end of operations to fix Ctrl+Z undo functionality
+
+### 🎨 Impact
+- **Duration Stretch**: All easing preserved perfectly for keyframes before, during, and after the selection
+- **Delay/Nudge**: All easing preserved perfectly for keyframes before, during, and after the selection
+- **Property Dimensions**: Works with 1D (Opacity), 2D (Scale), and 3D (Position) properties
+- **User Experience**: Easing curves stay visually identical when only changing timing - no more unexpected easing changes
+
+### 📚 Documentation
+- **Advanced Technical Docs**: Added comprehensive "Advanced Easing Preservation" section to `docs/TECHNICAL_DOCS.md`
+- **Mathematical Proofs**: Documented why speed must scale inversely with duration
+- **Implementation Guide**: Complete guide with code examples, pitfalls, debugging tips, and testing approach
+- **Line References**: Includes exact line numbers for all implementations
+
+### 🔗 Associated Build
+- AirBoard-v4.16.78.zxp
+
 ## [4.16.77] - 2025-01-06 🔧 **REPLACE SHAPE & UI IMPROVEMENTS**
 ### 🔧 Fixed
 - **Replace Shape Scale Preservation**: Replace Shape now properly copies Rectangle Path Transform > Scale to the new squircle (previously only copied position and anchor point, causing size mismatches when original scale was not 100%)
