@@ -27,6 +27,42 @@ var DEBUG_JSX = {
     }
 };
 
+function getPropertySortKey(prop) {
+    var indices = [];
+    try {
+        var current = prop;
+        var depthGuard = 0;
+        while (current && current !== current.parentProperty && depthGuard < 50) {
+            if (current.propertyIndex !== undefined && !isNaN(current.propertyIndex)) {
+                indices.unshift(current.propertyIndex);
+            } else {
+                indices.unshift(0);
+            }
+            try {
+                current = current.parentProperty;
+            } catch(e) {
+                break;
+            }
+            depthGuard++;
+        }
+    } catch(e) {
+        indices.unshift(0);
+    }
+    return indices;
+}
+
+function compareSortKeys(a, b) {
+    var len = Math.max(a.length, b.length);
+    for (var i = 0; i < len; i++) {
+        var aVal = i < a.length ? a[i] : 0;
+        var bVal = i < b.length ? b[i] : 0;
+        if (aVal !== bVal) {
+            return aVal - bVal;
+        }
+    }
+    return 0;
+}
+
 // Helper function for more accurate millisecond rounding
 // Handles tiny values near zero and reduces floating point errors
 function roundMs(seconds) {
@@ -644,6 +680,7 @@ function readKeyframesSmart() {
             return "error|No layers selected";
         }
         
+        var propertyEncounterCounter = 0;
         var propertyTimes = [];
         
         // Generic function to recursively search for selected keyframes
@@ -653,23 +690,37 @@ function readKeyframesSmart() {
                 
                 // Check if this property has keyframes and selected keyframes
                 if (prop && prop.canVaryOverTime && prop.numKeys > 0) {
+                    var hasSelection = false;
+                    var earliestTime = null;
+                    var earliestKeyIndex = -1;
                     for (var j = 1; j <= prop.numKeys; j++) {
                         if (prop.keySelected(j)) {
-                            propertyTimes.push({
-                                name: prop.name,
-                                property: prop,
-                                layer: layerRef,
-                                time: prop.keyTime(j),
-                                keyIndex: j
-                            });
-                            break; // Only need first selected keyframe for cross-property
+                            var selectedTime = prop.keyTime(j);
+                            if (!hasSelection || selectedTime < earliestTime) {
+                                earliestTime = selectedTime;
+                                earliestKeyIndex = j;
+                            }
+                            hasSelection = true;
                         }
+                    }
+                    
+                    if (hasSelection) {
+                        var fullPath = getFullPropertyPath(prop);
+                        propertyTimes.push({
+                            name: prop.name,
+                            property: prop,
+                            layer: layerRef,
+                            time: earliestTime,
+                            keyIndex: earliestKeyIndex,
+                            order: propertyEncounterCounter++,
+                            fullPath: fullPath
+                        });
                     }
                 }
                 
                 // Recurse into property groups
                 if (prop && (prop.propertyType === PropertyType.INDEXED_GROUP || 
-                           prop.propertyType === PropertyType.NAMED_GROUP)) {
+                             prop.propertyType === PropertyType.NAMED_GROUP)) {
                     searchAllProperties(prop, layerRef);
                 }
             }
@@ -686,17 +737,30 @@ function readKeyframesSmart() {
             var layer = selectedLayers[layerIndex];
             try {
                 if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    var hasTimeRemapSelection = false;
+                    var earliestTRTime = null;
+                    var earliestTRIndex = -1;
                     for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
                         if (layer.timeRemap.keySelected(j)) {
-                            propertyTimes.push({
-                                name: "Time Remap",
-                                property: layer.timeRemap,
-                                layer: layer,
-                                time: layer.timeRemap.keyTime(j),
-                                keyIndex: j
-                            });
-                            break;
+                            var trTime = layer.timeRemap.keyTime(j);
+                            if (!hasTimeRemapSelection || trTime < earliestTRTime) {
+                                earliestTRTime = trTime;
+                                earliestTRIndex = j;
+                            }
+                            hasTimeRemapSelection = true;
                         }
+                    }
+                    
+                    if (hasTimeRemapSelection) {
+                        propertyTimes.push({
+                            name: "Time Remap",
+                            property: layer.timeRemap,
+                            layer: layer,
+                            time: earliestTRTime,
+                            keyIndex: earliestTRIndex,
+                            order: propertyEncounterCounter++,
+                            fullPath: "Time Remap"
+                        });
                     }
                 }
             } catch(e) {
@@ -1148,6 +1212,98 @@ function readKeyframesSmart() {
     }
 }
 
+function calculateSameLayerPropertyStagger(timingData, frameRate) {
+    try {
+        DEBUG_JSX.log("calculateSameLayerPropertyStagger: analyzing " + timingData.length + " items");
+        var propertyMap = {};
+        var propertyList = [];
+        
+        for (var i = 0; i < timingData.length; i++) {
+            var item = timingData[i];
+            if (!item || !item.property) {
+                continue;
+            }
+            
+            var path = item.fullPath ? item.fullPath : getFullPropertyPath(item.property);
+            var entry = propertyMap[path];
+            if (!entry) {
+                entry = {
+                    path: path,
+                    earliestTime: item.time,
+                    times: [item.time],
+                    order: item.order !== undefined ? item.order : propertyList.length
+                };
+                propertyMap[path] = entry;
+                propertyList.push(entry);
+            } else {
+                entry.times.push(item.time);
+                if (item.time < entry.earliestTime) {
+                    entry.earliestTime = item.time;
+                }
+            }
+        }
+        
+        if (propertyList.length <= 1) {
+            DEBUG_JSX.log("calculateSameLayerPropertyStagger: only " + propertyList.length + " properties, returning default");
+            return "Stagger";
+        }
+        
+        propertyList.sort(function(a, b) {
+            if (Math.abs(a.earliestTime - b.earliestTime) > 0.0005) {
+                return a.earliestTime - b.earliestTime;
+            }
+            if (a.order !== undefined && b.order !== undefined && a.order !== b.order) {
+                return a.order - b.order;
+            }
+            return 0;
+        });
+        
+        for (var debugIdx = 0; debugIdx < propertyList.length; debugIdx++) {
+            var entry = propertyList[debugIdx];
+            DEBUG_JSX.log("Same-layer property order " + debugIdx + ": " + entry.path + " @ " + (entry.earliestTime * 1000).toFixed(3) + "ms (order=" + entry.order + ")");
+        }
+        
+        var staggers = [];
+        for (var s = 1; s < propertyList.length; s++) {
+            var prev = propertyList[s - 1];
+            var current = propertyList[s];
+            var diff = current.earliestTime - prev.earliestTime;
+            var staggerMs = roundMs(diff);
+            DEBUG_JSX.log("Same-layer stagger " + s + ": " + (prev.earliestTime * 1000).toFixed(3) + "ms -> " + (current.earliestTime * 1000).toFixed(3) + "ms = " + (diff * 1000).toFixed(3) + "ms -> rounded: " + staggerMs + "ms");
+            staggers.push(staggerMs);
+        }
+        
+        if (staggers.length === 0) {
+            return "Stagger";
+        }
+        
+        var firstStagger = staggers[0];
+        var allSame = true;
+        for (var v = 1; v < staggers.length; v++) {
+            if (Math.abs(staggers[v] - firstStagger) > 1) {
+                allSame = false;
+                break;
+            }
+        }
+        
+        if (!allSame) {
+            return "Multiple";
+        }
+        
+        if (firstStagger === 0) {
+            return "0ms / 0f";
+        }
+        
+        var staggerFrames = Math.round((Math.abs(firstStagger) / 1000) * frameRate);
+        var sign = firstStagger < 0 ? "-" : "";
+        return sign + Math.abs(firstStagger) + "ms / " + sign + staggerFrames + "f";
+        
+    } catch(e) {
+        DEBUG_JSX.log("calculateSameLayerPropertyStagger error: " + e.toString());
+        return "Stagger";
+    }
+}
+
 // Calculate stagger from timing data (works for both keyframes and layers)
 function calculateStagger(timingData, frameRate, isKeyframeMode, isReverseDirection) {
     try {
@@ -1156,6 +1312,23 @@ function calculateStagger(timingData, frameRate, isKeyframeMode, isReverseDirect
         if (timingData.length <= 1) {
             DEBUG_JSX.log("calculateStagger: Only " + timingData.length + " items, returning default");
             return "Stagger"; // Default text for single item
+        }
+        
+        if (isKeyframeMode && timingData.length > 1) {
+            var baseLayerIndex = timingData[0].layer ? timingData[0].layer.index : null;
+            var singleLayerMode = baseLayerIndex !== null;
+            if (singleLayerMode) {
+                for (var sameIdx = 1; sameIdx < timingData.length; sameIdx++) {
+                    if (!timingData[sameIdx].layer || timingData[sameIdx].layer.index !== baseLayerIndex) {
+                        singleLayerMode = false;
+                        break;
+                    }
+                }
+            }
+            if (singleLayerMode) {
+                DEBUG_JSX.log("calculateStagger: single-layer keyframe mode detected (layer index " + baseLayerIndex + ")");
+                return calculateSameLayerPropertyStagger(timingData, frameRate);
+            }
         }
         
         // Group by layer for keyframe mode, or use layer start times for layer mode
@@ -8845,6 +9018,7 @@ function snapKeyframeStaggersToInputValue(layerGroups, staggerFrames, frameRate,
         
         // Check if intervals are already uniform (at any consistent value)
         var isCleanPattern = true;
+        var hasOppositeDirection = false;
         if (actualIntervals.length > 0) {
             // Use the first interval as the reference for uniformity check
             var referenceInterval = actualIntervals[0];
@@ -9989,6 +10163,122 @@ function snapStaggersToInputValue(layerArray, staggerFrames, frameRate, directio
     }
 }
 
+function snapSameLayerStaggersToInputValue(propertyEntries, orderIndices, staggerFrames, frameRate, direction) {
+    try {
+        DEBUG_JSX.log("Same-layer snap: checking " + propertyEntries.length + " properties for irregular pattern");
+        
+        if (!propertyEntries || propertyEntries.length < 2) {
+            DEBUG_JSX.log("Same-layer snap: not enough properties to analyze");
+            return { success: false };
+        }
+        
+        var staggerSeconds = staggerFrames / frameRate;
+        if (!isFinite(staggerSeconds) || Math.abs(staggerSeconds) < 1e-5) {
+            DEBUG_JSX.log("Same-layer snap: invalid stagger seconds (" + staggerSeconds + ")");
+            return { success: false };
+        }
+        
+        var tolerance = Math.min(0.005, Math.abs(staggerSeconds) * 0.15);
+        var absStaggerSeconds = Math.abs(staggerSeconds);
+        var targetInterval = direction * absStaggerSeconds;
+        var isCleanPattern = true;
+
+        var sequence = [];
+        for (var idx = 0; idx < propertyEntries.length; idx++) {
+            sequence.push({
+                entry: propertyEntries[idx],
+                order: orderIndices[idx],
+                originalIndex: idx
+            });
+        }
+        sequence.sort(function(a, b) { return a.order - b.order; });
+
+        var actualIntervals = [];
+        for (var seqIdx = 1; seqIdx < sequence.length; seqIdx++) {
+            var diff = sequence[seqIdx].entry.earliestTime - sequence[seqIdx - 1].entry.earliestTime;
+            actualIntervals.push(diff);
+            DEBUG_JSX.log("Same-layer snap: interval " + seqIdx + " = " + (diff * 1000).toFixed(3) + "ms");
+        }
+        
+        if (actualIntervals.length === 0) {
+            DEBUG_JSX.log("Same-layer snap: no intervals found");
+            return { success: false };
+        }
+        
+        for (var intIdx = 0; intIdx < actualIntervals.length; intIdx++) {
+            var interval = actualIntervals[intIdx];
+            var intervalAbs = Math.abs(interval);
+            var nearestMultiple = absStaggerSeconds > 0 ? Math.round(intervalAbs / absStaggerSeconds) * absStaggerSeconds : 0;
+            var diffFromMultiple = Math.abs(intervalAbs - nearestMultiple);
+            
+            if (diffFromMultiple > tolerance) {
+                DEBUG_JSX.log("Same-layer snap: interval " + (intIdx + 1) + " deviates by " + (diffFromMultiple * 1000).toFixed(3) + "ms (threshold " + (tolerance * 1000).toFixed(3) + "ms)");
+                isCleanPattern = false;
+                break;
+            }
+            
+            if (Math.abs(interval) > tolerance && Math.abs(targetInterval) > tolerance) {
+                if (interval * targetInterval < -tolerance) {
+                    hasOppositeDirection = true;
+                }
+            }
+        }
+
+        if (isCleanPattern) {
+            if (hasOppositeDirection) {
+                DEBUG_JSX.log("Same-layer snap: pattern already clean but stagger direction differs - skipping snap");
+                return { success: false };
+            }
+            DEBUG_JSX.log("Same-layer snap: pattern already clean, no snapping required");
+            return { success: false };
+        }
+        
+        DEBUG_JSX.log("Same-layer snap: irregular pattern detected, snapping to clean increments");
+        
+        var offsets = new Array(propertyEntries.length);
+        for (var initIdx = 0; initIdx < offsets.length; initIdx++) {
+            offsets[initIdx] = 0;
+        }
+        
+        var anchorIndex = direction >= 0 ? 0 : (sequence.length - 1);
+        var anchorOrder = sequence[anchorIndex].order;
+        var baselineTime = sequence[anchorIndex].entry.earliestTime;
+        offsets[sequence[anchorIndex].originalIndex] = 0;
+        DEBUG_JSX.log("Same-layer snap: anchor order=" + anchorOrder + " time=" + (baselineTime * 1000).toFixed(3) + "ms");
+        
+        for (var seqIdx = 0; seqIdx < sequence.length; seqIdx++) {
+            var seqEntry = sequence[seqIdx];
+            if (seqIdx === anchorIndex) continue;
+            var relativeOrder = seqEntry.order - anchorOrder;
+            var targetTime = baselineTime + (relativeOrder * targetInterval);
+            var offset = targetTime - seqEntry.entry.earliestTime;
+            offsets[seqEntry.originalIndex] = offset;
+            DEBUG_JSX.log("Same-layer snap: property order " + seqEntry.order + " relative=" + relativeOrder + " target=" + (targetTime * 1000).toFixed(3) + "ms, offset=" + (offset * 1000).toFixed(3) + "ms");
+        }
+
+        // Verify offsets won't create negative times (beyond tolerance)
+        var negativeTolerance = 1 / 1000; // 1ms in seconds
+        for (var checkIdx = 0; checkIdx < propertyEntries.length; checkIdx++) {
+            var checkEntry = propertyEntries[checkIdx];
+            var proposedTime = checkEntry.earliestTime + offsets[checkIdx];
+            if (proposedTime < -negativeTolerance) {
+                DEBUG_JSX.log("Same-layer snap: offset would push property " + checkEntry.propertyName + " to negative time " + (proposedTime * 1000).toFixed(3) + "ms - aborting snap");
+                return { success: false };
+            }
+        }
+
+        return {
+            success: true,
+            staggerMs: roundMs(absStaggerSeconds),
+            offsets: offsets
+        };
+        
+    } catch(e) {
+        DEBUG_JSX.log("Same-layer snap error: " + e.toString());
+        return { success: false };
+    }
+}
+
 // Main stagger function called from panel +/- buttons
 function applyStagger(direction, staggerFrames, isTopToBottom) {
     try {
@@ -10250,10 +10540,14 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                 
                 DEBUG_JSX.log("Found " + selKeys.length + " selected keyframes on " + getFullPropertyPath(prop));
                 
+                var encounterOrder = layerKeyframes.length;
+                var sortKey = getPropertySortKey(prop);
                 layerKeyframes.push({
                     property: prop,
                     propertyName: getFullPropertyPath(prop),
-                    selectedKeys: selKeys
+                    selectedKeys: selKeys.slice(),
+                    encounterOrder: encounterOrder,
+                    sortKey: sortKey
                 });
                 hasSelectedKeyframes = true;
             }
@@ -10270,11 +10564,15 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     
                     if (selectedTimeRemapKeys.length > 0) {
                         DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index);
+                        var trEncounterOrder = layerKeyframes.length;
+                        var trSortKey = getPropertySortKey(layer.timeRemap);
                         layerKeyframes.push({
                             property: layer.timeRemap,
                             propertyName: "Time Remap",
                             selectedKeys: selectedTimeRemapKeys,
-                            isTimeRemap: true // Flag for special handling
+                            isTimeRemap: true, // Flag for special handling
+                            encounterOrder: trEncounterOrder,
+                            sortKey: trSortKey
                         });
                         hasSelectedKeyframes = true;
                     }
@@ -10294,10 +10592,14 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     }
                     
                     if (selectedAudioKeys.length > 0) {
+                        var audioEncounterOrder = layerKeyframes.length;
+                        var audioSortKey = getPropertySortKey(layer.audioLevels);
                         layerKeyframes.push({
                             property: layer.audioLevels,
                             propertyName: "Audio Levels",
-                            selectedKeys: selectedAudioKeys
+                            selectedKeys: selectedAudioKeys,
+                            encounterOrder: audioEncounterOrder,
+                            sortKey: audioSortKey
                         });
                         hasSelectedKeyframes = true;
                     }
@@ -10318,11 +10620,15 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
                     
                     if (selectedTimeRemapKeys.length > 0) {
                         DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index);
+                        var trEncounterOrder2 = layerKeyframes.length;
+                        var trSortKey2 = getPropertySortKey(layer.timeRemap);
                         layerKeyframes.push({
                             property: layer.timeRemap,
                             propertyName: "Time Remap",
                             selectedKeys: selectedTimeRemapKeys,
-                            isTimeRemap: true // Flag for special handling
+                            isTimeRemap: true, // Flag for special handling
+                            encounterOrder: trEncounterOrder2,
+                            sortKey: trSortKey2
                         });
                         hasSelectedKeyframes = true;
                     }
@@ -10361,10 +10667,9 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         
         DEBUG_JSX.log("Found " + layerGroups.length + " layer groups with selected keyframes");
         
-        // NEW: Require multiple layers for staggering
         if (layerGroups.length === 1) {
-            DEBUG_JSX.log("Single layer detected - stagger requires multiple layers");
-            return "error|Select > 1 Layer (single layer detected)";
+            DEBUG_JSX.log("Single layer detected - attempting property-level stagger");
+            return applySameLayerStagger(layerGroups[0], direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
         }
         
         // Skip cross-property staggering - only stagger between different layers
@@ -10750,6 +11055,388 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         
     } catch(e) {
         return "error|Keyframe stagger failed: " + e.toString();
+    }
+}
+
+// Apply stagger to selected properties within a single layer
+function applySameLayerStagger(layerGroup, direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
+    try {
+        var layer = layerGroup.layer;
+        var secondsPerStep = staggerMs / 1000;
+        var propertyMap = {};
+        var propertyEntries = [];
+        
+        for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
+            var propData = layerGroup.keyframes[propIdx];
+            var prop = propData.property;
+            var uniquePath = propData.propertyName || getFullPropertyPath(prop);
+            
+            if (!propertyMap[uniquePath]) {
+                propertyMap[uniquePath] = {
+                    property: prop,
+                    propertyName: uniquePath,
+                    selectedKeys: propData.selectedKeys.slice(),
+                    encounterOrder: propData.encounterOrder !== undefined ? propData.encounterOrder : propIdx,
+                    isTimeRemap: propData.isTimeRemap === true,
+                    sortKey: propData.sortKey || getPropertySortKey(prop)
+                };
+                propertyEntries.push(propertyMap[uniquePath]);
+            } else {
+                var existing = propertyMap[uniquePath];
+                for (var s = 0; s < propData.selectedKeys.length; s++) {
+                    var keyIndex = propData.selectedKeys[s];
+                    var exists = false;
+                    for (var e = 0; e < existing.selectedKeys.length; e++) {
+                        if (existing.selectedKeys[e] === keyIndex) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        existing.selectedKeys.push(keyIndex);
+                    }
+                }
+            }
+        }
+        
+        if (propertyEntries.length <= 1) {
+            DEBUG_JSX.log("Same-layer stagger requires multiple properties - found " + propertyEntries.length);
+            return "error|Select > 1 property on the layer";
+        }
+        
+        DEBUG_JSX.log("Same-layer stagger: " + propertyEntries.length + " properties, direction=" + direction + ", stagger=" + staggerMs + "ms, topToBottom=" + isTopToBottom);
+        
+        for (var i = 0; i < propertyEntries.length; i++) {
+            var entry = propertyEntries[i];
+            entry.selectedKeys.sort(function(a, b) { return a - b; });
+            
+            var earliest = null;
+            for (var k = 0; k < entry.selectedKeys.length; k++) {
+                var keyTime = entry.property.keyTime(entry.selectedKeys[k]);
+                if (earliest === null || keyTime < earliest) {
+                    earliest = keyTime;
+                }
+            }
+            entry.earliestTime = earliest;
+        }
+        
+        propertyEntries.sort(function(a, b) {
+            var sortResult = compareSortKeys(a.sortKey || [], b.sortKey || []);
+            if (sortResult !== 0) {
+                return sortResult;
+            }
+            var aOrder = a.encounterOrder !== undefined ? a.encounterOrder : 0;
+            var bOrder = b.encounterOrder !== undefined ? b.encounterOrder : 0;
+            if (aOrder !== bOrder) {
+                return aOrder - bOrder;
+            }
+            if (a.earliestTime < b.earliestTime) return -1;
+            if (a.earliestTime > b.earliestTime) return 1;
+            return 0;
+        });
+
+        var orderIndices = [];
+        for (var idx = 0; idx < propertyEntries.length; idx++) {
+            var orderIndex = isTopToBottom ? idx : (propertyEntries.length - 1 - idx);
+            orderIndices[idx] = orderIndex;
+        }
+        for (var orderLogIdx = 0; orderLogIdx < propertyEntries.length; orderLogIdx++) {
+            DEBUG_JSX.log("Same-layer order: idx=" + orderLogIdx + ", orderIndex=" + orderIndices[orderLogIdx] + ", prop=" + propertyEntries[orderLogIdx].propertyName);
+        }
+        
+        var snapResult = snapSameLayerStaggersToInputValue(propertyEntries, orderIndices, staggerFrames, frameRate, direction);
+        var usingSnapOffsets = false;
+        var offsets = [];
+        
+        if (snapResult.success && snapResult.offsets && snapResult.offsets.length === propertyEntries.length) {
+            DEBUG_JSX.log("Same-layer stagger: smart snapping applied, using precomputed offsets");
+            for (var snapIdx = 0; snapIdx < snapResult.offsets.length; snapIdx++) {
+                offsets[snapIdx] = snapResult.offsets[snapIdx];
+            }
+            usingSnapOffsets = true;
+        } else {
+            for (var idx = 0; idx < propertyEntries.length; idx++) {
+                offsets[idx] = orderIndices[idx] * direction * secondsPerStep;
+            }
+        }
+        
+        var negativeToleranceMs = 1;
+        for (var checkIdx = 0; checkIdx < propertyEntries.length; checkIdx++) {
+            var checkEntry = propertyEntries[checkIdx];
+            var offsetSeconds = offsets[checkIdx];
+            for (var ck = 0; ck < checkEntry.selectedKeys.length; ck++) {
+                var ckIndex = checkEntry.selectedKeys[ck];
+                var oldTime = checkEntry.property.keyTime(ckIndex);
+                var newTime = oldTime + offsetSeconds;
+                if ((newTime * 1000) < -negativeToleranceMs) {
+                    DEBUG_JSX.log("Same-layer stagger aborted - property " + checkEntry.propertyName + " key would become negative (" + (newTime * 1000).toFixed(3) + "ms)");
+                    return "success|Stagger stopped to prevent negative times|0ms per property";
+                }
+            }
+        }
+        
+        var markerProp = null;
+        try {
+            markerProp = layer.property("Marker") || layer.property("ADBE Marker");
+        } catch(markerError) {}
+        
+        if (markerProp && markerProp.numKeys > 0) {
+            var markerEpsilon = 0.01;
+            var markersAdjusted = 0;
+            for (var m = 0; m < propertyEntries.length; m++) {
+                var markerEntry = propertyEntries[m];
+                var offsetSeconds = offsets[m];
+                if (Math.abs(offsetSeconds) < markerEpsilon) {
+                    continue;
+                }
+                var oldFirstTime = markerEntry.earliestTime;
+                var newFirstTime = Math.max(0, oldFirstTime + offsetSeconds);
+                var uniquePropId = getUniquePropertyId(markerEntry.property);
+                try {
+                    var markerResult = smartSplitMergeMarker(
+                        markerProp,
+                        oldFirstTime,
+                        newFirstTime,
+                        uniquePropId,
+                        markerEpsilon
+                    );
+                    if (markerResult !== "no marker at old time" && markerResult !== "no spring block for property") {
+                        markersAdjusted++;
+                        DEBUG_JSX.log("Same-layer SMART STAGGER: " + markerEntry.propertyName + " - " + markerResult);
+                    }
+                } catch(markerProcessError) {
+                    DEBUG_JSX.log("Same-layer SMART STAGGER ERROR: " + markerEntry.propertyName + " - " + markerProcessError.toString());
+                }
+            }
+            if (markersAdjusted > 0) {
+                DEBUG_JSX.log("Same-layer marker processing adjusted " + markersAdjusted + " markers");
+            }
+        }
+        
+        var processedProperties = 0;
+        var propertiesWithMovement = 0;
+        
+        for (var p = 0; p < propertyEntries.length; p++) {
+            var propEntry = propertyEntries[p];
+            var prop = propEntry.property;
+            var selectedKeys = propEntry.selectedKeys;
+            var offsetSeconds = offsets[p];
+            var offsetMs = offsetSeconds * 1000;
+            var hadMovement = false;
+            var newSelIndices = [];
+            
+            if (!selectedKeys || selectedKeys.length === 0) {
+                DEBUG_JSX.log("Same-layer stagger: skipping property with no selected keys (" + propEntry.propertyName + ")");
+                continue;
+            }
+            
+            DEBUG_JSX.log("Same-layer stagger: processing " + propEntry.propertyName + " with offset " + offsetMs.toFixed(3) + "ms");
+            
+            if (propEntry.isTimeRemap) {
+                DEBUG_JSX.log("Using Time Remap handling for same-layer stagger");
+                var timeRemapMoves = [];
+                for (var tr = 0; tr < selectedKeys.length; tr++) {
+                    var trIndex = selectedKeys[tr];
+                    var trOldTime = prop.keyTime(trIndex);
+                    var trNewTime = trOldTime + offsetSeconds;
+                    var trFinalTime = Math.max(0, trNewTime);
+                    
+                    if (Math.abs(trFinalTime - trOldTime) > 0.001) {
+                        hadMovement = true;
+                    }
+                    
+                    timeRemapMoves.push({
+                        oldIndex: trIndex,
+                        oldTime: trOldTime,
+                        newTime: trFinalTime,
+                        value: prop.keyValue(trIndex)
+                    });
+                }
+                
+                for (var addIdx = 0; addIdx < timeRemapMoves.length; addIdx++) {
+                    var move = timeRemapMoves[addIdx];
+                    prop.setValueAtTime(move.newTime, move.value);
+                }
+                
+                var oldKeyIndicesToRemove = [];
+                for (var rm = 0; rm < timeRemapMoves.length; rm++) {
+                    var oldTime = timeRemapMoves[rm].oldTime;
+                    for (var keyIdx = prop.numKeys; keyIdx >= 1; keyIdx--) {
+                        var keyTime = prop.keyTime(keyIdx);
+                        if (Math.abs(keyTime - oldTime) < 0.001) {
+                            var isNewKey = false;
+                            for (var chk = 0; chk < timeRemapMoves.length; chk++) {
+                                if (Math.abs(keyTime - timeRemapMoves[chk].newTime) < 0.001) {
+                                    isNewKey = true;
+                                    break;
+                                }
+                            }
+                            if (!isNewKey) {
+                                oldKeyIndicesToRemove.push(keyIdx);
+                            }
+                        }
+                    }
+                }
+                
+                oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                for (var rmIdx = 0; rmIdx < oldKeyIndicesToRemove.length; rmIdx++) {
+                    try {
+                        prop.removeKey(oldKeyIndicesToRemove[rmIdx]);
+                    } catch(removeError) {
+                        DEBUG_JSX.log("Same-layer Time Remap: failed to remove key " + oldKeyIndicesToRemove[rmIdx] + ": " + removeError.toString());
+                    }
+                }
+                
+                for (var findIdx = 0; findIdx < timeRemapMoves.length; findIdx++) {
+                    var targetTime = timeRemapMoves[findIdx].newTime;
+                    for (var searchIdx = prop.numKeys; searchIdx >= 1; searchIdx--) {
+                        if (Math.abs(prop.keyTime(searchIdx) - targetTime) < 0.001) {
+                            newSelIndices.push(searchIdx);
+                            break;
+                        }
+                    }
+                }
+                
+                propEntry.newSelIndices = newSelIndices;
+            } else {
+                var keyframeData = [];
+                var nextKeyData = captureNextKeyframe(prop, selectedKeys);
+                
+                for (var dk = 0; dk < selectedKeys.length; dk++) {
+                    var keyIndex = selectedKeys[dk];
+                    var oldTime = prop.keyTime(keyIndex);
+                    var newTime = oldTime + offsetSeconds;
+                    var finalTime = Math.max(0, newTime);
+                    
+                    if (Math.abs(finalTime - oldTime) > 0.001) {
+                        hadMovement = true;
+                    }
+                    
+                    var keyData = {
+                        oldIndex: keyIndex,
+                        newTime: finalTime,
+                        value: prop.keyValue(keyIndex),
+                        inInterp: prop.keyInInterpolationType(keyIndex),
+                        outInterp: prop.keyOutInterpolationType(keyIndex),
+                        temporalContinuous: prop.keyTemporalContinuous(keyIndex),
+                        temporalAutoBezier: prop.keyTemporalAutoBezier(keyIndex),
+                        label: prop.keyLabel(keyIndex)
+                    };
+                    
+                    if (keyData.inInterp === KeyframeInterpolationType.BEZIER ||
+                        keyData.outInterp === KeyframeInterpolationType.BEZIER) {
+                        try {
+                            keyData.inEase = prop.keyInTemporalEase(keyIndex);
+                            keyData.outEase = prop.keyOutTemporalEase(keyIndex);
+                        } catch(easeError) {}
+                    }
+                    
+                    if (prop.isSpatial) {
+                        try {
+                            keyData.spatialContinuous = prop.keySpatialContinuous(keyIndex);
+                            keyData.spatialAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+                            keyData.inTangent = prop.keyInSpatialTangent(keyIndex);
+                            keyData.outTangent = prop.keyOutSpatialTangent(keyIndex);
+                        } catch(spatialError) {}
+                    }
+                    
+                    keyframeData.push(keyData);
+                }
+                
+                for (var removeIdx = keyframeData.length - 1; removeIdx >= 0; removeIdx--) {
+                    try {
+                        prop.removeKey(keyframeData[removeIdx].oldIndex);
+                    } catch(removeKeyError) {
+                        DEBUG_JSX.log("Same-layer stagger: failed to remove key " + keyframeData[removeIdx].oldIndex + ": " + removeKeyError.toString());
+                    }
+                }
+                
+                for (var addKeyIdx = 0; addKeyIdx < keyframeData.length; addKeyIdx++) {
+                    var data = keyframeData[addKeyIdx];
+                    var newIdx = prop.addKey(data.newTime);
+                    
+                    try {
+                        prop.setValueAtKey(newIdx, data.value);
+                        
+                        if (data.inEase !== undefined && data.outEase !== undefined) {
+                            try {
+                                prop.setTemporalEaseAtKey(newIdx, data.inEase, data.outEase);
+                            } catch(easeSetError) {}
+                        }
+                        
+                        prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+                        prop.setTemporalContinuousAtKey(newIdx, data.temporalContinuous);
+                        prop.setTemporalAutoBezierAtKey(newIdx, data.temporalAutoBezier);
+                        
+                        if (data.spatialContinuous !== undefined) {
+                            try {
+                                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                                prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                            } catch(spatialSetError) {}
+                        }
+                        
+                        if (data.label !== undefined) {
+                            try {
+                                prop.setLabelAtKey(newIdx, data.label);
+                            } catch(labelError) {}
+                        }
+                    } catch(setError) {}
+                    
+                    newSelIndices.push(newIdx);
+                }
+                
+                if (nextKeyData !== null) {
+                    var keysAdded = newSelIndices.length - keyframeData.length;
+                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                }
+                
+                propEntry.newSelIndices = newSelIndices;
+            }
+            
+            processedProperties++;
+            if (hadMovement) {
+                propertiesWithMovement++;
+            }
+        }
+        
+        try {
+            for (var selIdx = 0; selIdx < propertyEntries.length; selIdx++) {
+                var selEntry = propertyEntries[selIdx];
+                if (!selEntry.newSelIndices) continue;
+                
+                var selProp = selEntry.property;
+                for (var clearIdx = 1; clearIdx <= selProp.numKeys; clearIdx++) {
+                    try {
+                        selProp.setSelectedAtKey(clearIdx, false);
+                    } catch(clearError) {}
+                }
+                
+                for (var ns = 0; ns < selEntry.newSelIndices.length; ns++) {
+                    try {
+                        selProp.setSelectedAtKey(selEntry.newSelIndices[ns], true);
+                    } catch(selectError) {
+                        DEBUG_JSX.log("Same-layer stagger: final selection failed for key " + selEntry.newSelIndices[ns] + ": " + selectError.toString());
+                    }
+                }
+            }
+        } catch(finalSelectionError) {
+            DEBUG_JSX.log("Same-layer stagger: final selection pass failed - " + finalSelectionError.toString());
+        }
+        
+        var effectiveStagger;
+        if (usingSnapOffsets) {
+            var signedSnapMs = snapResult.staggerMs !== undefined ? (snapResult.staggerMs * (direction >= 0 ? 1 : -1)) : 0;
+            effectiveStagger = propertiesWithMovement > 0 ? signedSnapMs : 0;
+        } else {
+            effectiveStagger = propertiesWithMovement > 0 ? (direction * staggerMs) : 0;
+        }
+        DEBUG_JSX.log("Same-layer stagger complete. Processed " + processedProperties + " properties. Effective stagger: " + effectiveStagger + "ms");
+        
+        return "success|Applied stagger to " + processedProperties + " properties|" + effectiveStagger + "ms per property";
+        
+    } catch(e) {
+        return "error|Same-layer stagger failed: " + e.toString();
     }
 }
 

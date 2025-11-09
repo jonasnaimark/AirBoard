@@ -1527,9 +1527,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Don't update cumulative stagger if operation was stopped
                         } else {
                             // Check the actual stagger result to see if any movement occurred
-                            // parts[2] contains the effective stagger like "0ms per layer" or "50ms per layer"
+                            // parts[2] contains the effective stagger like "0ms per layer" or "50ms per property"
                             var effectiveStaggerText = parts[2] || '';
-                            var effectiveStaggerMatch = effectiveStaggerText.match(/([-\d\.]+)ms per layer/);
+                            var effectiveStaggerMatch = effectiveStaggerText.match(/([-\d\.]+)ms per (?:layer|property)/);
                             var effectiveStaggerValue = effectiveStaggerMatch ? parseFloat(effectiveStaggerMatch[1]) : null;
                             
                             console.log('Debug INCREMENT: effectiveStaggerValue=' + effectiveStaggerValue + ' from "' + effectiveStaggerText + '"');
@@ -1555,6 +1555,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 errorMsg.indexOf('single layer') !== -1 ||
                                 errorMsg.indexOf('one layer') !== -1) {
                                 staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
+                                staggerTextElement.style.opacity = '1';
+                            } else if (errorMsg.indexOf('property') !== -1) {
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Property</span>';
                                 staggerTextElement.style.opacity = '1';
                             } else {
                                 // For other errors, show default stagger text
@@ -1633,9 +1636,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             // Don't update cumulative stagger if operation was stopped
                         } else {
                             // Check the actual stagger result to see if any movement occurred
-                            // parts[2] contains the effective stagger like "0ms per layer" or "-50ms per layer"
+                            // parts[2] contains the effective stagger like "0ms per layer" or "-50ms per property"
                             var effectiveStaggerText = parts[2] || '';
-                            var effectiveStaggerMatch = effectiveStaggerText.match(/([-\d\.]+)ms per layer/);
+                            var effectiveStaggerMatch = effectiveStaggerText.match(/([-\d\.]+)ms per (?:layer|property)/);
                             var effectiveStaggerValue = effectiveStaggerMatch ? parseFloat(effectiveStaggerMatch[1]) : null;
                             
                             console.log('Debug DECREMENT: effectiveStaggerValue=' + effectiveStaggerValue + ' from "' + effectiveStaggerText + '"');
@@ -1661,6 +1664,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 errorMsg.indexOf('single layer') !== -1 ||
                                 errorMsg.indexOf('one layer') !== -1) {
                                 staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Layer</span>';
+                                staggerTextElement.style.opacity = '1';
+                            } else if (errorMsg.indexOf('property') !== -1) {
+                                staggerTextElement.innerHTML = 'Stagger: <span style="opacity: 0.75;">Select > 1 Property</span>';
                                 staggerTextElement.style.opacity = '1';
                             } else {
                                 // For other errors, show default stagger text

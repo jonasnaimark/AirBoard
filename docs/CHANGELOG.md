@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Perfect Easing Preservation for Delay/Nudge**: Bezier easing curves now remain pixel-perfect when delaying or nudging keyframes (forward/backward)
 - **Adjacent Keyframe Protection**: Keyframes before and after the selection maintain their easing exactly during timing operations
 - **Smart Easing Scaling**: KeyframeEase speed values now scale inversely with duration changes (speed × time = value change)
+- **Single Layer Property Stagger**: Stagger now works with multiple properties selected on a single layer (e.g., Position + Opacity + Scale)
 
 ### 🔧 Technical Implementation
 - **Mathematical Foundation**: Implemented correct inverse scaling formula: `newSpeed = oldSpeed × (oldDuration / newDuration)`
@@ -19,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-Pass Restoration**: Implemented multi-pass restoration strategy to prevent After Effects cascade modifications
 - **Original Value Tracking**: Captures and restores from ORIGINAL keyData values, not AE-modified values
 - **Undo Group Fix**: Moved `app.endUndoGroup()` to end of operations to fix Ctrl+Z undo functionality
+- **Property Order Tracking**: Added property encounter counter and sort key system for consistent stagger ordering
+- **Stagger Calculation**: New `calculateSameLayerPropertyStagger()` function sorts properties by earliest keyframe time and property order
 
 ### 🎨 Impact
 - **Duration Stretch**: All easing preserved perfectly for keyframes before, during, and after the selection
