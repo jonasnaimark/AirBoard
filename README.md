@@ -1,11 +1,11 @@
 # AirBoard - Animation Tools and Presets for After Effects
 
 [![After Effects](https://img.shields.io/badge/After%20Effects-2020%2B-purple.svg)](https://www.adobe.com/products/aftereffects.html)
-[![Version](https://img.shields.io/badge/version-4.16.77-blue.svg)](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.77.zxp)
+[![Version](https://img.shields.io/badge/version-4.16.78-blue.svg)](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.78.zxp)
 
 ## 📥 Get the Plugin
 
-**[⬇️ Download AirBoard v4.16.77](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.77.zxp)**
+**[⬇️ Download AirBoard v4.16.78](https://github.com/jonasnaimark/AirBoard/raw/main/dist/AirBoard-v4.16.78.zxp)**
 
 ### Install Steps
 1. Download the `.zxp` file above
