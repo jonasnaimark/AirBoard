@@ -7841,18 +7841,18 @@ function nudgeDelayTimelineMode(direction, frames) {
                             modifiedKeyState.outEase = scaledOutEase;
 
                             // Find and restore keyframe
-                            for (var i = 1; i <= prop.numKeys; i++) {
-                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
-                                    restoreKeyframeState(prop, i, modifiedKeyState);
+                            for (var keyIdx = 1; keyIdx <= prop.numKeys; keyIdx++) {
+                                if (Math.abs(prop.keyTime(keyIdx) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, keyIdx, modifiedKeyState);
                                     DEBUG_JSX.log("🔓 Restored prev keyframe @ " + keyState.time.toFixed(3) + "s (scaled OUT ease: " + (originalDistanceToFirst*1000).toFixed(1) + "ms → " + (newDistanceToFirst*1000).toFixed(1) + "ms)");
                                     break;
                                 }
                             }
                         } else {
                             // No scaling needed, restore as-is
-                            for (var i = 1; i <= prop.numKeys; i++) {
-                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
-                                    restoreKeyframeState(prop, i, keyState);
+                            for (var keyIdx = 1; keyIdx <= prop.numKeys; keyIdx++) {
+                                if (Math.abs(prop.keyTime(keyIdx) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, keyIdx, keyState);
                                     DEBUG_JSX.log("🔓 Restored prev keyframe @ " + keyState.time.toFixed(3) + "s");
                                     break;
                                 }
@@ -7860,9 +7860,9 @@ function nudgeDelayTimelineMode(direction, frames) {
                         }
                     } else {
                         // Not immediately previous, restore as-is
-                        for (var i = 1; i <= prop.numKeys; i++) {
-                            if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
-                                restoreKeyframeState(prop, i, keyState);
+                        for (var keyIdx = 1; keyIdx <= prop.numKeys; keyIdx++) {
+                            if (Math.abs(prop.keyTime(keyIdx) - keyState.time) < 0.001) {
+                                restoreKeyframeState(prop, keyIdx, keyState);
                                 DEBUG_JSX.log("🔓 Restored prev keyframe @ " + keyState.time.toFixed(3) + "s");
                                 break;
                             }
@@ -7891,18 +7891,18 @@ function nudgeDelayTimelineMode(direction, frames) {
                             modifiedKeyState.inEase = scaledInEase;
 
                             // Find and restore keyframe
-                            for (var i = 1; i <= prop.numKeys; i++) {
-                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
-                                    restoreKeyframeState(prop, i, modifiedKeyState);
+                            for (var keyIdx = 1; keyIdx <= prop.numKeys; keyIdx++) {
+                                if (Math.abs(prop.keyTime(keyIdx) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, keyIdx, modifiedKeyState);
                                     DEBUG_JSX.log("🔓 Restored next keyframe @ " + keyState.time.toFixed(3) + "s (scaled IN ease: " + (originalDistanceFromLast*1000).toFixed(1) + "ms → " + (newDistanceFromLast*1000).toFixed(1) + "ms)");
                                     break;
                                 }
                             }
                         } else {
                             // No scaling needed, restore as-is
-                            for (var i = 1; i <= prop.numKeys; i++) {
-                                if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
-                                    restoreKeyframeState(prop, i, keyState);
+                            for (var keyIdx = 1; keyIdx <= prop.numKeys; keyIdx++) {
+                                if (Math.abs(prop.keyTime(keyIdx) - keyState.time) < 0.001) {
+                                    restoreKeyframeState(prop, keyIdx, keyState);
                                     DEBUG_JSX.log("🔓 Restored next keyframe @ " + keyState.time.toFixed(3) + "s");
                                     break;
                                 }
@@ -7910,9 +7910,9 @@ function nudgeDelayTimelineMode(direction, frames) {
                         }
                     } else {
                         // Not immediately next, restore as-is
-                        for (var i = 1; i <= prop.numKeys; i++) {
-                            if (Math.abs(prop.keyTime(i) - keyState.time) < 0.001) {
-                                restoreKeyframeState(prop, i, keyState);
+                        for (var keyIdx = 1; keyIdx <= prop.numKeys; keyIdx++) {
+                            if (Math.abs(prop.keyTime(keyIdx) - keyState.time) < 0.001) {
+                                restoreKeyframeState(prop, keyIdx, keyState);
                                 DEBUG_JSX.log("🔓 Restored next keyframe @ " + keyState.time.toFixed(3) + "s");
                                 break;
                             }
