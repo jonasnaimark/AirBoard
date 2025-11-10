@@ -7512,6 +7512,16 @@ function nudgeDelayTimelineMode(direction, frames) {
             var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
             DEBUG_JSX.log("Processing property " + (i+1) + "/" + cachedSelections.length + ": " + cached.propertyName + " on " + cached.layerName + " with " + selKeys.length + " keys");
 
+            // CRITICAL: Check if property reference is still valid
+            try {
+                var propCheck = prop.numKeys;  // Try to access property to verify it's valid
+                DEBUG_JSX.log("  Property is valid with " + propCheck + " total keys");
+            } catch(propError) {
+                DEBUG_JSX.log("  ERROR: Property reference invalid: " + propError.toString());
+                DEBUG_JSX.log("  Skipping this property and continuing to next");
+                continue;  // Skip this property if reference is invalid
+            }
+
             // PROTECTION: Capture ALL adjacent keyframes to prevent AE from modifying them
             var allPrevKeyData = [];
             var minSelectedIndex = Math.min.apply(Math, selKeys);
@@ -7948,6 +7958,14 @@ function nudgeDelayTimelineMode(direction, frames) {
 
             // Store selections for restoration with CORRECT new indices AND property reference
             // CRITICAL: Store the actual property reference to avoid name conflicts
+
+            // Debug: Check if newIndices is empty (which might indicate a problem)
+            if (newIndices.length === 0) {
+                DEBUG_JSX.log("  WARNING: newIndices is EMPTY for " + cached.propertyName + " - this property will not be added to processedSelections");
+            } else {
+                DEBUG_JSX.log("  newIndices for " + cached.propertyName + ": [" + newIndices.join(", ") + "]");
+            }
+
             processedSelections.push({
                 layer: cached.layer,
                 propertyName: cached.propertyName,
@@ -7955,7 +7973,12 @@ function nudgeDelayTimelineMode(direction, frames) {
                 indices: newIndices  // These should be the NEW indices after recreation
             });
             DEBUG_JSX.log("Stored selection data for " + cached.propertyName + " with NEW indices: [" + newIndices.join(", ") + "] and property reference");
+            DEBUG_JSX.log("✓ COMPLETED property " + (i+1) + "/" + cachedSelections.length + ": " + cached.propertyName + " - processedSelections.length is now " + processedSelections.length);
         }
+
+        DEBUG_JSX.log("======== LOOP COMPLETED ========");
+        DEBUG_JSX.log("Finished processing all " + cachedSelections.length + " cached properties");
+        DEBUG_JSX.log("processedSelections.length = " + processedSelections.length);
         
         // Markers were already moved before keyframe operations to avoid selection interference
         
