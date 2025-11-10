@@ -5,6 +5,27 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.79] - 2025-01-10 🐛 **CRITICAL BUG FIX: Multi-Property Delay**
+### 🔧 Fixed
+- **Multi-Property Delay Regression**: Fixed critical bug where only the first selected property was delayed instead of all selected properties
+- **Variable Name Collision**: Resolved ExtendScript scoping issue where nested loop variables overwrote the main loop counter
+- **Selection Restoration**: All selected properties (Position, Opacity, Sliders, etc.) now move together correctly during timeline delay operations
+
+### 🔬 Technical Details
+- **Root Cause**: Main loop used `var i` to iterate through 10 cached properties, but 6 nested loops inside also used `var i`
+- **ExtendScript Scoping**: Function-level scoping (not block-level) meant all `i` variables were actually the same variable
+- **Symptom**: When first nested loop completed with `prop.numKeys=10`, it set `i=10`, causing outer loop condition `(i < 10)` to fail immediately
+- **Solution**: Renamed all 6 nested loop variables from `var i` to `var keyIdx` to prevent collision
+- **Evidence**: Debug logs showed "COMPLETED property 11/10" instead of "1/10", proving loop counter corruption
+
+### 🎯 Impact
+- Timeline delay operations now process all selected properties correctly
+- Multi-property animations maintain synchronization during delay adjustments
+- Selection is properly maintained across all properties after delay operations
+
+### 🔗 Associated Build
+- AirBoard-v4.16.79.zxp
+
 ## [4.16.78] - 2025-01-08 🎯 **PERFECT EASING PRESERVATION**
 ### ✨ Major Enhancement
 - **Perfect Easing Preservation for Duration Stretch**: Bezier easing curves now remain pixel-perfect when changing keyframe duration (forward/backward)
