@@ -7507,6 +7507,7 @@ function nudgeDelayTimelineMode(direction, frames) {
         // STEP 2: PROCESS USING CACHED SELECTIONS
         DEBUG_JSX.log("Processing " + cachedSelections.length + " cached properties");
         for (var i = 0; i < cachedSelections.length; i++) {
+            DEBUG_JSX.log("======== LOOP ITERATION " + (i+1) + "/" + cachedSelections.length + " START ========");
             var cached = cachedSelections[i];
             var prop = cached.property;
             var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
