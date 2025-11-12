@@ -5,6 +5,33 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.80] - 2025-01-12 🐛 **FIX: Trimmed Layer Content Sampling**
+### 🔧 Fixed
+- **Fit to Squircle Timing**: Fixed critical timing bug where content layers animated at wrong frames when squircle layer was trimmed
+- **Content Sampling Formula**: Implemented correct `sourceRectAtTime()` formula for trimmed layers: `sourceTime = compTime - startTime`
+- **Animation Synchronization**: Content layer scaling now perfectly syncs with squircle keyframe animations regardless of trim offset
+
+### 🔬 Technical Details
+- **Root Cause**: When sampling layer content with `sourceRectAtTime()`, After Effects does NOT automatically compensate for layer trim offset
+- **Symptom**: Layer trimmed by 146 frames caused content to animate 146 frames offset from squircle keyframes
+- **Example Scenario**: Squircle layer trimmed at frame 146 and slid back to frame 0 (startTime = -146). Width keyframe at comp frame 3, but content was animating at frame 146
+- **Solution**: Use formula `sourceTime = time - layer.startTime` for all sourceRectAtTime() calls
+- **Mathematical Proof**: At comp frame 3 with startTime = -146: sourceTime = 3 - (-146) = 149 (correct source frame)
+
+### 🎯 Impact
+- Fit to Squircle now works correctly with trimmed layers
+- Content animations perfectly synchronized to shape layer keyframes
+- Applies to both fitWidth and fitNone (padding) modes
+- Works for text layers, shape layers, and precomps
+
+### 📚 Documentation
+- **Challenge 17 Added**: Documented complete solution in `docs/KEYFRAME_SYSTEM_SUMMARY.md`
+- **Key Insight**: Timeline positioning (complex inPoint checks) vs Content sampling (simple compTime - startTime formula)
+- **Wrong Approaches**: Documented all failed attempts to help future debugging
+
+### 🔗 Associated Build
+- AirBoard-v4.16.80.zxp
+
 ## [4.16.79] - 2025-01-10 🐛 **CRITICAL BUG FIX: Multi-Property Delay**
 ### 🔧 Fixed
 - **Multi-Property Delay Regression**: Fixed critical bug where only the first selected property was delayed instead of all selected properties
