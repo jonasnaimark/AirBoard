@@ -3348,19 +3348,20 @@ function stretchKeyframesForCrossProperty(direction, frames) {
         var processedProperties = 0;
         var allProcessedSelections = []; // Collect ALL selections for final restoration
         var allProcessedKeyframeTimes = []; // Collect ALL new keyframe times for total span calculation
-        
+        var propertyDurations = []; // Collect each property's duration to check if they're all the same
+
         for (var i = 0; i < cachedSelections.length; i++) {
             var cached = cachedSelections[i];
             var prop = cached.property;
             var selKeys = cached.selectedIndices; // Use cached, not prop.selectedKeys!
-            
+
             DEBUG_JSX.log("Process: " + cached.propertyName + " (" + selKeys.length + " keys)");
-            
-            // Use the duration stretching logic with cached selections
-            var result = stretchPropertyDurationWithCache(prop, selKeys, direction * framesToSeconds, cached);
+
+            // Use the duration stretching logic with cached selections (pass frameRate for smart snapping)
+            var result = stretchPropertyDurationWithCache(prop, selKeys, direction * framesToSeconds, cached, frameRate);
             if (result.success) {
                 processedProperties++;
-                
+
                 // COLLECT selections for GLOBAL restoration at the very end
                 allProcessedSelections.push({
                     layer: cached.layer,
@@ -3368,13 +3369,16 @@ function stretchKeyframesForCrossProperty(direction, frames) {
                     propertyReference: prop,  // Store actual property reference to avoid name conflicts
                     indices: result.newSelIndices
                 });
-                
+
                 // COLLECT all new keyframe times for total span calculation (like readKeyframesSmart does)
                 for (var t = 0; t < result.newKeyframeTimes.length; t++) {
                     allProcessedKeyframeTimes.push(result.newKeyframeTimes[t]);
                 }
-                
-                DEBUG_JSX.log("🎬 COLLECTED " + result.newSelIndices.length + " keyframe selections for property " + cached.propertyName + " with times: " + result.newKeyframeTimes.join(", "));
+
+                // COLLECT each property's duration
+                propertyDurations.push(result.durationMs);
+
+                DEBUG_JSX.log("🎬 COLLECTED " + result.newSelIndices.length + " keyframe selections for property " + cached.propertyName + " with duration: " + result.durationMs + "ms");
             }
         }
         
@@ -3478,25 +3482,47 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             DEBUG_JSX.log("  Successfully selected " + successfulSelections + "/" + selData.indices.length + " keyframes");
         }
         
-        // Calculate total span duration like readKeyframesSmart does for cross-property mode
+        // Calculate duration: check if all properties have the same duration (like readKeyframesSmart does)
         var totalDurationMs = 0;
         var totalDurationFrames = 0;
-        
-        if (allProcessedKeyframeTimes.length > 0) {
-            // Sort all keyframe times to find earliest and latest
-            allProcessedKeyframeTimes.sort(function(a, b) { return a - b; });
-            var earliestTime = allProcessedKeyframeTimes[0];
-            var latestTime = allProcessedKeyframeTimes[allProcessedKeyframeTimes.length - 1];
-            var totalSpanSeconds = latestTime - earliestTime;
-            
-            totalDurationMs = Math.round(totalSpanSeconds * 1000);
-            totalDurationFrames = Math.round(totalSpanSeconds * frameRate);
-            
-            DEBUG_JSX.log("🎬 Total span calculation: " + allProcessedKeyframeTimes.length + " keyframes from " + (earliestTime * 1000).toFixed(1) + "ms to " + (latestTime * 1000).toFixed(1) + "ms = " + totalDurationMs + "ms span");
+
+        DEBUG_JSX.log("🎬 Checking if all " + propertyDurations.length + " properties have same duration");
+
+        // Check if all property durations are the same (with 1ms tolerance)
+        var uniqueDurations = [];
+        for (var k = 0; k < propertyDurations.length; k++) {
+            var found = false;
+            for (var j = 0; j < uniqueDurations.length; j++) {
+                if (Math.abs(uniqueDurations[j] - propertyDurations[k]) < 1) { // 1ms tolerance
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                uniqueDurations.push(propertyDurations[k]);
+            }
         }
-        
+
+        DEBUG_JSX.log("🎬 Found " + uniqueDurations.length + " unique durations: " + uniqueDurations.join(", ") + "ms");
+
+        if (uniqueDurations.length === 0) {
+            // No durations (shouldn't happen but handle it)
+            totalDurationMs = 0;
+            totalDurationFrames = 0;
+        } else if (uniqueDurations.length === 1) {
+            // All properties have the same duration
+            totalDurationMs = uniqueDurations[0];
+            totalDurationFrames = Math.round((totalDurationMs / 1000) * frameRate);
+            DEBUG_JSX.log("🎬 All properties have same duration: " + totalDurationMs + "ms");
+        } else {
+            // Different durations - show "Multiple"
+            totalDurationMs = -1; // Special flag for "Multiple"
+            totalDurationFrames = -1;
+            DEBUG_JSX.log("🎬 Properties have different durations - returning Multiple");
+        }
+
         DEBUG_JSX.log("🎬 Cross-property duration stretch completed: " + processedProperties + " properties, " + totalDurationMs + "ms / " + totalDurationFrames + "f");
-        
+
         // Return success with cross-property flag
         return "success|" + totalDurationMs + "|" + totalDurationFrames + "|1|CROSSDURATION";
         
@@ -3508,7 +3534,7 @@ function stretchKeyframesForCrossProperty(direction, frames) {
 }
 
 // Helper function to stretch duration of a single property with cached selection support
-function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cached) {
+function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cached, frameRate) {
     try {
         // PROTECTION: Capture the next keyframe to prevent AE from modifying it
         var nextKeyData = captureNextKeyframe(prop, selectedKeys);
@@ -3556,9 +3582,28 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
         var lastTime = keyframeData[keyframeData.length - 1].time;
         var currentDuration = lastTime - firstTime;
 
-        // Calculate new duration
-        var newDuration = Math.max(0, currentDuration + deltaSeconds);
-        DEBUG_JSX.log("🎬 " + prop.name + " duration: " + (currentDuration * 1000) + "ms → " + (newDuration * 1000) + "ms");
+        // SMART SNAPPING: Apply delta then snap to nearest 50ms (same as single-property mode)
+        var currentDurationMs = currentDuration * 1000;
+        var deltaMs = deltaSeconds * 1000;
+
+        // Step 1: Apply the delta (add or subtract)
+        var targetDurationMs = currentDurationMs + deltaMs;
+
+        // Step 2: Snap to nearest 50ms increment
+        var newDurationMs = Math.round(targetDurationMs / 50) * 50;
+
+        // Step 3: Ensure we don't go below one frame duration
+        var minDurationMs = (1 / frameRate) * 1000;
+        if (newDurationMs < minDurationMs) {
+            newDurationMs = minDurationMs;
+        }
+
+        DEBUG_JSX.log("🎬 Smart snap: " + currentDurationMs.toFixed(1) + "ms -> " + targetDurationMs.toFixed(1) + "ms (target) -> " + newDurationMs.toFixed(1) + "ms (snapped to 50ms)");
+
+        // Convert back to seconds
+        var newDuration = newDurationMs / 1000;
+
+        DEBUG_JSX.log("🎬 " + prop.name + " duration: " + currentDurationMs.toFixed(1) + "ms → " + newDurationMs.toFixed(1) + "ms");
 
         // Capture next keyframe time if it exists (for OUT ease scaling of last keyframe)
         var nextKeyframeTime = null;
@@ -3694,7 +3739,7 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
 
         return {
             success: true,
-            durationMs: newDuration * 1000,
+            durationMs: newDurationMs,  // Use the snapped duration in milliseconds
             newSelIndices: newSelIndices,  // Return for global selection restoration
             newKeyframeTimes: newKeyframeTimes  // Return for total span calculation
         };
