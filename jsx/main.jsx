@@ -11649,7 +11649,7 @@ function snapToPlayheadFromPanel(preserveDelays) {
 
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
-            alert("Please select at least one layer with keyframes to snap to playhead.");
+            alert("Please select at least one layer to snap to playhead.");
             return "error|No layers selected";
         }
 
@@ -11663,6 +11663,91 @@ function snapToPlayheadFromPanel(preserveDelays) {
 
         // Store marker offsets and time ranges for each layer
         var layerMarkerOffsets = {}; // layerIndex -> {propertyId -> {offset, minTime, maxTime}}
+
+        // PHASE 0: Check if there are any selected keyframes - if not, snap layers instead
+        var hasSelectedKeyframes = false;
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
+            var selectedProps = layer.selectedProperties;
+
+            for (var propIdx = 0; propIdx < selectedProps.length; propIdx++) {
+                var prop = selectedProps[propIdx];
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        hasSelectedKeyframes = true;
+                        break;
+                    }
+                }
+                if (hasSelectedKeyframes) break;
+            }
+            if (hasSelectedKeyframes) break;
+
+            // Also check Time Remap
+            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                    if (layer.timeRemap.keySelected(k)) {
+                        hasSelectedKeyframes = true;
+                        break;
+                    }
+                }
+            }
+            if (hasSelectedKeyframes) break;
+        }
+
+        // If no keyframes selected, snap layers instead
+        if (!hasSelectedKeyframes) {
+            DEBUG_JSX.log("No keyframes selected - snapping layers to playhead instead");
+
+            // Collect layer visual positions (accounting for trim)
+            var layerPositions = [];
+            for (var i = 0; i < selectedLayers.length; i++) {
+                var layer = selectedLayers[i];
+                var isTrimmed = Math.abs(layer.inPoint - layer.startTime) > 0.001;
+                var visualPosition = isTrimmed ? layer.inPoint : layer.startTime;
+                layerPositions.push({
+                    layer: layer,
+                    visualPosition: visualPosition,
+                    isTrimmed: isTrimmed
+                });
+            }
+
+            if (preserveDelays) {
+                // Find earliest layer
+                var earliestPos = layerPositions[0].visualPosition;
+                for (var i = 1; i < layerPositions.length; i++) {
+                    if (layerPositions[i].visualPosition < earliestPos) {
+                        earliestPos = layerPositions[i].visualPosition;
+                    }
+                }
+
+                // Calculate offset to move earliest to playhead
+                var offset = playheadTime - earliestPos;
+
+                // Apply offset to all layers
+                for (var i = 0; i < layerPositions.length; i++) {
+                    var layerData = layerPositions[i];
+                    var newStartTime = layerData.layer.startTime + offset;
+                    layerData.layer.startTime = Math.max(0, newStartTime);
+                }
+
+                app.endUndoGroup();
+                return "success|Snapped " + selectedLayers.length + " layers to playhead (preserved delays)";
+            } else {
+                // Snap each layer independently to playhead
+                for (var i = 0; i < layerPositions.length; i++) {
+                    var layerData = layerPositions[i];
+                    var offset = playheadTime - layerData.visualPosition;
+                    var newStartTime = layerData.layer.startTime + offset;
+                    layerData.layer.startTime = Math.max(0, newStartTime);
+                }
+
+                app.endUndoGroup();
+                return "success|Snapped " + selectedLayers.length + " layers to playhead";
+            }
+        }
 
         // PHASE 1: Collect all selected keyframes grouped by property
         var allPropertyData = []; // Array of {layer, property, uniqueId, keyframes}
