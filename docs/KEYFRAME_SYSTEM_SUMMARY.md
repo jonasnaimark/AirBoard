@@ -2269,7 +2269,71 @@ function findKeyframesRobust(layer) {
 
 ---
 
-*Last Updated: December 2024*  
-*Version: v4.16.50 - Stagger Performance Optimization + Universal Property Detection*  
-*Status: All keyframe systems fully implemented and production-ready*  
-*Critical Achievement: Universal keyframe detection using selectedProperties API, future-proof and maintenance-free*
+### **Challenge 17: Content Sampling on Trimmed Layers - sourceRectAtTime() Formula**
+
+**Problem**: When using `sourceRectAtTime()` to sample content dimensions on trimmed layers (layers where in-point has been adjusted and the layer moved), the content was being sampled at the wrong time, causing animations to be offset by the trim amount.
+
+**Context**: The Fit to Squircle feature needed to sample a shape layer's bounds to scale content dynamically. When the shape layer was trimmed (e.g., trimmed by 146 frames and slid back to frame 0), the content layer would animate 146 frames off from the shape layer's keyframes.
+
+**Example Scenario**:
+- Squircle layer starts at frame 0
+- User moves to frame 146, trims the layer (removes first 146 frames of content)
+- User slides layer back to frame 0 (startTime becomes -146, inPoint stays 0)
+- Squircle has width animation keyframe at comp frame 3
+- Content layer was incorrectly animating at frame 146 instead of frame 3
+
+**The Wrong Approaches Tried**:
+
+1. ❌ Using `time` directly: `sourceRectAtTime(time, false)`
+   - After Effects does NOT automatically handle trim offset for sourceRectAtTime
+   - Samples at wrong source frame
+
+2. ❌ Using `startTime + (time - inPoint)`:
+   - Double-counted the offset in wrong direction
+   - Made timing even worse (289 instead of 3)
+
+3. ❌ Various combinations of inPoint calculations
+   - These apply to timeline positioning, not content sampling
+   - Overcomplicated the solution
+
+**The Correct Solution**:
+
+```javascript
+// For expressions sampling trimmed layer content:
+var sourceTime = time - shapeLayer.startTime;
+var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);
+```
+
+**Why This Works**:
+
+When a layer is trimmed and moved:
+- `inPoint`: Where the layer bar appears in timeline (0 in example)
+- `startTime`: Internal timing offset (-146 in example)
+- At comp frame 3, we want to sample source frame 149 (3 + 146)
+- Formula: `sourceTime = compTime - startTime = 3 - (-146) = 149` ✓
+
+**Key Insight**:
+- **Timeline positioning logic** (documented elsewhere) uses complex inPoint/startTime checks
+- **Content sampling** is simpler: Always use `compTime - startTime`
+- This works for both natural and trimmed layers
+
+**Implementation Locations**:
+- `jsx/main.jsx` lines ~14260-14355: Fit to Squircle expressions
+- All `sourceRectAtTime()` calls in expressions and JSX code
+
+**Real-World Results**:
+- **Before**: Content animations offset by trim amount (146 frames early/late)
+- **After**: Content perfectly synced to shape layer keyframe timing
+- **Formula applies to**: Text layers, shape layers, precomps - any content sampling
+
+**Documentation Gap**:
+This was hard to fix because existing trimmed layer documentation focused on timeline positioning (moving layers, reading delays) but not content sampling with `sourceRectAtTime()`. The two use cases require different formulas:
+- **Timeline positioning**: Complex checks with `inPoint == startTime` detection
+- **Content sampling**: Simple `sourceTime = compTime - startTime`
+
+---
+
+*Last Updated: January 2025*
+*Version: v4.16.79 - Multi-property Delay Fix + Trimmed Layer Content Sampling*
+*Status: All keyframe systems fully implemented and production-ready*
+*Critical Achievement: Universal keyframe detection using selectedProperties API, plus proper content sampling formula for trimmed layers*

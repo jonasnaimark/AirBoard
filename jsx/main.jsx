@@ -14029,7 +14029,9 @@ function applyFitToShape(mode) {
         var fitNoneData = null;
         if (mode === "fitNone") {
             try {
-                var fnShapeBounds = shapeLayer.sourceRectAtTime(comp.time, false);
+                // Account for trim: sourceTime = compTime - startTime
+                var fnSourceTime = comp.time - shapeLayer.startTime;
+                var fnShapeBounds = shapeLayer.sourceRectAtTime(fnSourceTime, false);
                 var fnShapeWidth = Math.abs(fnShapeBounds.width);
                 var fnShapeHeight = Math.abs(fnShapeBounds.height);
                 if (fnShapeWidth === 0) { fnShapeWidth = 1; }
@@ -14245,7 +14247,9 @@ function applyFitToShape(mode) {
             // Store initial dimensions for reference
             var otherWidth, otherHeight;
             if (otherLayer instanceof TextLayer || otherLayer instanceof ShapeLayer) {
-                var layerRect = otherLayer.sourceRectAtTime(comp.time, false);
+                // Account for trim: sourceTime = compTime - startTime
+                var otherSourceTime = comp.time - otherLayer.startTime;
+                var layerRect = otherLayer.sourceRectAtTime(otherSourceTime, false);
                 otherWidth = layerRect.width;
                 otherHeight = layerRect.height;
             } else {
@@ -14258,7 +14262,9 @@ function applyFitToShape(mode) {
                 // Scale expression that respects Scale To dropdown
                 var scaleExpr = [
                     "var shapeLayer = parent;",
-                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "// Account for trim: sourceTime = compTime - startTime",
+                    "var sourceTime = time - shapeLayer.startTime;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);",
                     "var shapeWidth = shapeBounds.width;",
                     "var shapeHeight = shapeBounds.height;",
                     "var myWidth = " + otherWidth + ";",
@@ -14301,7 +14307,9 @@ function applyFitToShape(mode) {
                 // X Position expression with 9-point alignment
                 var xPosExpr = [
                     "var shapeLayer = parent;",
-                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "// Account for trim: sourceTime = compTime - startTime",
+                    "var sourceTime = time - shapeLayer.startTime;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);",
                     "var myScale = transform.scale[0] / 100;",
                     "var myWidth = " + otherWidth + " * myScale;",
                     "",
@@ -14341,7 +14349,9 @@ function applyFitToShape(mode) {
                 // Y Position expression with 9-point alignment
                 var yPosExpr = [
                     "var shapeLayer = parent;",
-                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "// Account for trim: sourceTime = compTime - startTime",
+                    "var sourceTime = time - shapeLayer.startTime;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);",
                     "var myScale = transform.scale[1] / 100;",
                     "var myHeight = " + otherHeight + " * myScale;",
                     "",
@@ -14385,8 +14395,9 @@ function applyFitToShape(mode) {
         
         // Handle fitNone mode with precomp (Layers + Padding functionality)
         if (mode === "fitNone" && otherLayers.length > 0) {
-            // Get shape info
-            var shapeBounds = shapeLayer.sourceRectAtTime(comp.time, false);
+            // Get shape info - account for trim
+            var shapeSourceTime = comp.time - shapeLayer.startTime;
+            var shapeBounds = shapeLayer.sourceRectAtTime(shapeSourceTime, false);
             DEBUG_JSX.log("fitNone bounds - left: " + shapeBounds.left + ", top: " + shapeBounds.top + ", width: " + shapeBounds.width + ", height: " + shapeBounds.height);
             
             var shapeWidth = Math.abs(shapeBounds.width);
@@ -14614,8 +14625,9 @@ function applyFitToShape(mode) {
                     }
                 }
                 
-                // Get precomp actual content size  
-                var precompBounds = precomp.sourceRectAtTime(comp.time, false);
+                // Get precomp actual content size - account for trim
+                var precompSourceTime = comp.time - precomp.startTime;
+                var precompBounds = precomp.sourceRectAtTime(precompSourceTime, false);
                 var precompWidth = precompBounds.width;
                 var precompHeight = precompBounds.height;
                 
@@ -14625,7 +14637,9 @@ function applyFitToShape(mode) {
                 // Scale expression that respects Scale To dropdown
                 var scaleExpr = [
                     "var shapeLayer = parent;",
-                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "// Account for trim: sourceTime = compTime - startTime",
+                    "var sourceTime = time - shapeLayer.startTime;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);",
                     "var shapeWidth = shapeBounds.width;",
                     "var shapeHeight = shapeBounds.height;",
                     "var originalWidth = " + precompWidth + ";",
@@ -14675,7 +14689,9 @@ function applyFitToShape(mode) {
                 // X Position with 9-point alignment
                 var xPosExpr = [
                     "var shapeLayer = parent;",
-                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "// Account for trim: sourceTime = compTime - startTime",
+                    "var sourceTime = time - shapeLayer.startTime;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);",
                     "var myScale = transform.scale[0] / 100;",
                     "var myWidth = " + precompWidth + " * myScale;",
                     "",
@@ -14714,7 +14730,9 @@ function applyFitToShape(mode) {
                 // Y Position with 9-point alignment
                 var yPosExpr = [
                     "var shapeLayer = parent;",
-                    "var shapeBounds = shapeLayer.sourceRectAtTime();",
+                    "// Account for trim: sourceTime = compTime - startTime",
+                    "var sourceTime = time - shapeLayer.startTime;",
+                    "var shapeBounds = shapeLayer.sourceRectAtTime(sourceTime, false);",
                     "var myScale = transform.scale[1] / 100;",
                     "var myHeight = " + precompHeight + " * myScale;",
                     "",
