@@ -5,6 +5,36 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.82] - 2025-01-12 🎯 **ENHANCEMENT: Smart Duration Snapping + Readout Fix**
+### 🔧 Fixed
+- **Duration Readout**: Fixed duration showing wrong value after stretch operations (e.g., showing 300ms when actual duration was 150ms)
+- **Readout Required Re-read**: Previously clicking duration +/- would show incorrect value, requiring user to click "read" again to see correct value
+
+### ✨ Enhanced
+- **Smart Snapping for Multi-Property**: Added 50ms increment snapping to multi-property duration changes
+- **Odd Duration Handling**: Multi-property duration now snaps odd durations (like 1183ms) to nearest 50ms increment when clicking +/-
+- **Consistent Behavior**: Multi-property duration now matches single-property smart snapping behavior
+
+### 🔬 Technical Details
+- **Root Cause (Readout)**: `stretchKeyframesForCrossProperty` calculated total span across all keyframes instead of checking if properties had same duration
+- **Solution**: Changed to collect each property's duration and check if all are the same (with 1ms tolerance)
+  - Returns actual duration when all properties have same duration
+  - Returns -1 flag for "Multiple" when properties have different durations
+- **Smart Snapping Implementation**: Modified `stretchPropertyDurationWithCache` to:
+  1. Apply frame delta to current duration
+  2. Snap result to nearest 50ms increment
+  3. Ensure minimum of 1 frame duration
+  4. Return snapped duration in milliseconds
+
+### 🎯 Impact
+- Duration readout now shows correct value immediately after stretch operations
+- No more need to click "read" again to see actual duration
+- Multi-property duration changes now snap to clean 50ms increments
+- Works for all selection scenarios (multiple properties on same/different layers)
+
+### 🔗 Associated Build
+- AirBoard-v4.16.82.zxp
+
 ## [4.16.81] - 2025-01-12 🐛 **CRITICAL FIX: Multi-Property Duration + Layer Snap**
 ### 🔧 Fixed
 - **Multi-Layer Duration Freeze**: Fixed freeze and line 2675 error when changing duration with multiple properties on different layers
