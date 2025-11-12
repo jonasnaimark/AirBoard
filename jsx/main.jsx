@@ -935,18 +935,17 @@ function readKeyframesSmart() {
                 }
             }
             
-            // Calculate total duration span across ALL selected keyframes
+            // Calculate duration for each property and check if they're all the same
             var resultDurationMs = 0, resultDurationFrames = 0;
-            var earliestTime = Infinity;
-            var latestTime = -Infinity;
-            
-            DEBUG_JSX.log("Calculating total duration span across all selected keyframes");
-            
-            // Find the earliest and latest times across ALL selected keyframes on ALL properties
+            var propertyDurations = [];
+
+            DEBUG_JSX.log("Calculating duration for each property to check if they're the same");
+
+            // Calculate duration for each property (first to last selected keyframe)
             for (var k = 0; k < propertyTimes.length; k++) {
                 var propInfo = propertyTimes[k];
                 var prop = propInfo.property;
-                
+
                 // Get all selected keyframe times for this property
                 var selectedTimes = [];
                 for (var j = 1; j <= prop.numKeys; j++) {
@@ -954,36 +953,52 @@ function readKeyframesSmart() {
                         selectedTimes.push(prop.keyTime(j));
                     }
                 }
-                
-                if (selectedTimes.length > 0) {
+
+                if (selectedTimes.length >= 2) {
                     // Sort times to get first and last for this property
                     selectedTimes.sort(function(a, b) { return a - b; });
                     var propFirstTime = selectedTimes[0];
                     var propLastTime = selectedTimes[selectedTimes.length - 1];
-                    
-                    DEBUG_JSX.log("Property " + propInfo.name + ": first=" + (propFirstTime * 1000).toFixed(3) + "ms, last=" + (propLastTime * 1000).toFixed(3) + "ms");
-                    
-                    // Update global earliest and latest across all properties
-                    if (propFirstTime < earliestTime) {
-                        earliestTime = propFirstTime;
-                    }
-                    if (propLastTime > latestTime) {
-                        latestTime = propLastTime;
-                    }
+                    var propDuration = propLastTime - propFirstTime;
+                    var propDurationMs = roundMs(propDuration);
+
+                    DEBUG_JSX.log("Property " + propInfo.name + ": first=" + (propFirstTime * 1000).toFixed(3) + "ms, last=" + (propLastTime * 1000).toFixed(3) + "ms, duration=" + propDurationMs + "ms");
+
+                    propertyDurations.push(propDurationMs);
                 }
             }
-            
-            // Calculate total duration from first to last keyframe across all properties
-            if (earliestTime !== Infinity && latestTime !== -Infinity) {
-                var totalSpanSeconds = latestTime - earliestTime;
-                resultDurationMs = roundMs(totalSpanSeconds);
-                resultDurationFrames = Math.round(totalSpanSeconds * frameRate);
-                DEBUG_JSX.log("Total duration span: " + resultDurationMs + "ms (from " + (earliestTime * 1000).toFixed(3) + "ms to " + (latestTime * 1000).toFixed(3) + "ms)");
+
+            // Check if all property durations are the same (with 1ms tolerance, same as delay logic)
+            var uniqueDurations = [];
+            for (var k = 0; k < propertyDurations.length; k++) {
+                var found = false;
+                for (var j = 0; j < uniqueDurations.length; j++) {
+                    if (Math.abs(uniqueDurations[j] - propertyDurations[k]) < 1) { // 1ms tolerance
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    uniqueDurations.push(propertyDurations[k]);
+                }
+            }
+
+            DEBUG_JSX.log("Found " + uniqueDurations.length + " unique durations: " + uniqueDurations.join(", ") + "ms");
+
+            if (uniqueDurations.length === 0) {
+                // No durations found (all single keyframes)
+                resultDurationMs = 0;
+                resultDurationFrames = 0;
+            } else if (uniqueDurations.length === 1) {
+                // All properties have the same duration
+                resultDurationMs = uniqueDurations[0];
+                resultDurationFrames = Math.round((resultDurationMs / 1000) * frameRate);
+                DEBUG_JSX.log("All properties have same duration: " + resultDurationMs + "ms");
             } else {
-                // Fallback if we couldn't find valid times
-                resultDurationMs = -1;
+                // Different durations - show "Multiple"
+                resultDurationMs = -1; // Special flag for "Multiple"
                 resultDurationFrames = -1;
-                DEBUG_JSX.log("Could not calculate total span, using -1");
+                DEBUG_JSX.log("Properties have different durations - showing Multiple");
             }
             
             // Calculate position distances from the propertyTimes array
