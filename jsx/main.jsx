@@ -3188,13 +3188,15 @@ function stretchKeyframesWithFrames(direction, frames) {
             return "error|Invalid parameters|" + debugMessages.join("|");
         }
         
-        // Check if we're in cross-property mode first (same as original)
-        var crossPropertyResult = checkCrossPropertyMode();
-        DEBUG_JSX.log("Mode: " + (crossPropertyResult.isCrossProperty ? "cross-property" : "single-property"));
-        
-        // Add debug for what checkCrossPropertyMode actually found
+        // CRITICAL FIX: For DURATION operations, we need to check if there are multiple properties
+        // with selected keyframes, regardless of timing differences.
+        // The timing difference check in checkCrossPropertyMode() is only relevant for DELAY operations.
+
         var comp = app.project.activeItem;
         var selectedLayers = comp.selectedLayers;
+
+        // Count properties with selected keyframes
+        var propertiesWithKeys = 0;
         DEBUG_JSX.log("🎬 MANUAL CHECK: " + selectedLayers.length + " selected layers");
         for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
             var layer = selectedLayers[layerIdx];
@@ -3203,17 +3205,26 @@ function stretchKeyframesWithFrames(direction, frames) {
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
                 try {
-                    var selKeys = prop.selectedKeys;
-                    DEBUG_JSX.log("🎬 MANUAL CHECK: Property " + prop.name + " has " + selKeys.length + " selected keyframes");
+                    if (prop.propertyValueType !== PropertyValueType.NO_VALUE && prop.numKeys >= 2) {
+                        var selKeys = prop.selectedKeys;
+                        if (selKeys && selKeys.length >= 2) {
+                            propertiesWithKeys++;
+                            DEBUG_JSX.log("🎬 MANUAL CHECK: Property " + prop.name + " has " + selKeys.length + " selected keyframes");
+                        }
+                    }
                 } catch(e) {
                     DEBUG_JSX.log("🎬 MANUAL CHECK: Property " + prop.name + " - ERROR accessing selectedKeys: " + e.toString());
                 }
             }
         }
-        
-        if (crossPropertyResult.isCrossProperty) {
-            // For cross-property mode, stretch each property's duration individually
-            DEBUG_JSX.log("🎬 Using CROSS-PROPERTY mode - calling stretchKeyframesForCrossProperty");
+
+        // Use multi-property mode if more than one property has selected keyframes
+        var isMultiProperty = (propertiesWithKeys > 1);
+        DEBUG_JSX.log("Mode: " + (isMultiProperty ? "multi-property (" + propertiesWithKeys + " properties)" : "single-property"));
+
+        if (isMultiProperty) {
+            // For multi-property mode, stretch each property's duration individually
+            DEBUG_JSX.log("🎬 Using MULTI-PROPERTY mode - calling stretchKeyframesForCrossProperty");
             var result;
             try {
                 result = stretchKeyframesForCrossProperty(direction, frames);
@@ -3502,7 +3513,7 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                 // CRITICAL: Preserve keyframe color labels
                 label: prop.keyLabel(keyIndex)
             };
-            
+
             // Only collect temporal ease if BOTH sides are bezier
             if (data.inInterp === KeyframeInterpolationType.BEZIER || data.outInterp === KeyframeInterpolationType.BEZIER) {
                 try {
@@ -3512,7 +3523,7 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                     // Temporal ease might not be available for some properties
                 }
             }
-            
+
             // Handle spatial properties if applicable
             if (prop.isSpatial) {
                 data.spatialContinuous = prop.keySpatialContinuous(keyIndex);
@@ -3520,20 +3531,26 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                 data.inTangent = prop.keyInSpatialTangent(keyIndex);
                 data.outTangent = prop.keyOutSpatialTangent(keyIndex);
             }
-            
+
             keyframeData.push(data);
         }
-        
+
         // Sort by time to identify first and last keyframes
         keyframeData.sort(function(a, b) { return a.time - b.time; });
         var firstTime = keyframeData[0].time;
         var lastTime = keyframeData[keyframeData.length - 1].time;
         var currentDuration = lastTime - firstTime;
-        
+
         // Calculate new duration
         var newDuration = Math.max(0, currentDuration + deltaSeconds);
         DEBUG_JSX.log("🎬 " + prop.name + " duration: " + (currentDuration * 1000) + "ms → " + (newDuration * 1000) + "ms");
-        
+
+        // Capture next keyframe time if it exists (for OUT ease scaling of last keyframe)
+        var nextKeyframeTime = null;
+        if (nextKeyData && nextKeyData.time) {
+            nextKeyframeTime = nextKeyData.time;
+        }
+
         // Calculate new times - stretch proportionally
         for (var k = 0; k < keyframeData.length; k++) {
             var data = keyframeData[k];
@@ -3546,30 +3563,76 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
                 data.newTime = firstTime + (progress * newDuration);
             }
         }
-        
+
         // Remove old keyframes in reverse order
         var indices = [];
         for (var k = 0; k < keyframeData.length; k++) {
             indices.push(keyframeData[k].oldIndex);
         }
         indices.sort(function(a, b) { return b - a; }); // Reverse order
-        
+
         for (var k = 0; k < indices.length; k++) {
             prop.removeKey(indices[k]);
         }
-        
+
         // Create new keyframes at new times
         var newSelIndices = [];
         var newKeyframeTimes = [];
         for (var k = 0; k < keyframeData.length; k++) {
             var data = keyframeData[k];
             var newIdx = prop.addKey(data.newTime);
-            
+
             // Restore all attributes
             prop.setValueAtKey(newIdx, data.value);
 
-            // Apply temporal ease only for sides originally Bezier
-            restoreTemporalEaseSafely(prop, newIdx, data.inInterp, data.outInterp, data.inEase, data.outEase);
+            // CRITICAL: Scale ease speed to maintain visual curve shape
+            if (data.inEase !== undefined && data.outEase !== undefined) {
+                try {
+                    // Determine if we should scale IN or OUT ease:
+                    // - First keyframe: DON'T scale IN ease (affects curve from previous non-selected keyframe)
+                    // - Last keyframe: Check if there's a next keyframe
+                    //   - If NO next keyframe: DON'T scale OUT ease (no curve to affect)
+                    //   - If YES next keyframe: Scale OUT ease based on distance change to next keyframe
+                    // - Middle keyframes: scale both IN and OUT ease
+                    var isFirstKey = (k === 0);
+                    var isLastKey = (k === keyframeData.length - 1);
+
+                    var scaledInEase = isFirstKey ? data.inEase : scaleEaseForDuration(data.inEase, currentDuration, newDuration);
+
+                    var scaledOutEase;
+                    if (isLastKey && nextKeyframeTime !== null) {
+                        // Calculate distance to next keyframe
+                        var originalDistanceToNext = nextKeyframeTime - data.time;
+                        var newDistanceToNext = nextKeyframeTime - data.newTime;
+
+                        // Scale OUT ease based on distance change to next keyframe
+                        scaledOutEase = scaleEaseForDuration(data.outEase, originalDistanceToNext, newDistanceToNext);
+                        DEBUG_JSX.log("  📊 Last keyframe OUT ease: scaled by distance to next keyframe (" + (originalDistanceToNext*1000).toFixed(1) + "ms → " + (newDistanceToNext*1000).toFixed(1) + "ms)");
+                    } else if (isLastKey) {
+                        // No next keyframe, preserve OUT ease
+                        scaledOutEase = data.outEase;
+                    } else {
+                        // Middle keyframe, scale based on internal duration
+                        scaledOutEase = scaleEaseForDuration(data.outEase, currentDuration, newDuration);
+                    }
+
+                    prop.setTemporalEaseAtKey(newIdx, scaledInEase, scaledOutEase);
+
+                    if (isFirstKey) {
+                        DEBUG_JSX.log("  ✅ Applied scaled ease (preserved IN ease for first keyframe)");
+                    } else if (isLastKey && nextKeyframeTime === null) {
+                        DEBUG_JSX.log("  ✅ Applied scaled ease (preserved OUT ease for last keyframe - no next keyframe)");
+                    } else {
+                        DEBUG_JSX.log("  ✅ Applied scaled ease");
+                    }
+                } catch(e) {
+                    // Some properties might not support temporal ease
+                    DEBUG_JSX.log("  ❌ Failed to set ease: " + e.toString());
+                }
+            } else {
+                // No ease data collected, use safe restore method
+                restoreTemporalEaseSafely(prop, newIdx, data.inInterp, data.outInterp, data.inEase, data.outEase);
+            }
 
             // Then re-assert original interpolation types
             prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
