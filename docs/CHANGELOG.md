@@ -5,6 +5,44 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.81] - 2025-01-12 🐛 **CRITICAL FIX: Multi-Property Duration + Layer Snap**
+### 🔧 Fixed
+- **Multi-Layer Duration Freeze**: Fixed freeze and line 2675 error when changing duration with multiple properties on different layers
+- **Multi-Property Easing**: Fixed easing changes when changing duration with multiple properties on same layer
+- **Duration Mode Detection**: Fixed incorrect mode detection causing only one property to process when multiple properties selected
+
+### 🔬 Technical Details - Duration Bugs
+- **Root Cause #1 (Freeze)**: Duration mode detection was using timing difference check (meant for delay operations only)
+  - When multiple properties had same start time, incorrectly used single-property mode
+  - Single-property mode can't handle multiple properties → freeze and error at line 2675
+  - **Solution**: Count properties with selected keyframes, use multi-property mode if >1
+- **Root Cause #2 (Easing)**: `stretchPropertyDurationWithCache` function restored original ease without scaling
+  - Single-property mode correctly scaled ease, but multi-property mode didn't
+  - Ease speed values need to scale inversely with duration changes to maintain visual curves
+  - **Solution**: Added sophisticated ease scaling to `stretchPropertyDurationWithCache`:
+    - First keyframe: preserve IN ease (doesn't affect previous keyframe)
+    - Last keyframe: scale OUT ease based on distance to next keyframe
+    - Middle keyframes: scale both IN and OUT ease
+    - Uses `scaleEaseForDuration()` to maintain visual curve shape
+
+### ✨ New Feature - Layer Snap to Playhead
+- **Snap Layers**: When no keyframes selected, snap to playhead now snaps selected layers
+- **Normal Mode**: Each layer's visual start position snaps independently to playhead
+- **Shift Mode**: Preserves relative delays between layers (earliest layer → playhead, others maintain spacing)
+- **Trim Support**: Correctly accounts for trimmed layers (uses inPoint for trimmed, startTime for natural)
+
+### 🎯 Impact
+- Duration changes now work correctly for:
+  - ✅ Multiple properties on same layer (Position + Opacity)
+  - ✅ Multiple properties on different layers
+  - ✅ Single property selection
+  - ✅ All easing preserved perfectly in all scenarios
+- Snap to playhead now works with both keyframes and layers
+- No more freeze/error when adjusting duration with complex selections
+
+### 🔗 Associated Build
+- AirBoard-v4.16.81.zxp
+
 ## [4.16.80] - 2025-01-12 🐛 **FIX: Trimmed Layer Content Sampling**
 ### 🔧 Fixed
 - **Fit to Squircle Timing**: Fixed critical timing bug where content layers animated at wrong frames when squircle layer was trimmed
