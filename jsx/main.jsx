@@ -6402,9 +6402,45 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                             }
                         }
                         var nextKeyData = protectKeyIndex ? captureKeyframeState(prop, protectKeyIndex) : null;
-                        
+
                         if (timeRemapKeys.length > 0) {
                             DEBUG_JSX.log("    Time Remap: Moving " + timeRemapKeys.length + " keyframes");
+
+                            // EASING PRESERVATION: Scale easing when duration changes due to global delay
+                            if (protectKeyIndex !== null && nextKeyData !== null) {
+                                try {
+                                    var stationaryKeyTime = prop.keyTime(protectKeyIndex);
+                                    var firstMovingOldTime = timeRemapKeys[0].oldTime;
+                                    var firstMovingNewTime = timeRemapKeys[0].newTime;
+
+                                    var oldDuration = firstMovingOldTime - stationaryKeyTime;
+                                    var newDuration = firstMovingNewTime - stationaryKeyTime;
+
+                                    if (Math.abs(oldDuration - newDuration) > 0.001 && oldDuration > 0 && newDuration > 0) {
+                                        DEBUG_JSX.log("    🔧 Time Remap duration change: " + (oldDuration * 1000).toFixed(0) + "ms → " + (newDuration * 1000).toFixed(0) + "ms");
+
+                                        // Scale the IN ease of the first moving keyframe
+                                        if (timeRemapKeys[0].inEase !== undefined) {
+                                            var scaledInEase = scaleEaseForDuration(timeRemapKeys[0].inEase, oldDuration, newDuration);
+                                            if (scaledInEase) {
+                                                timeRemapKeys[0].inEase = scaledInEase;
+                                                DEBUG_JSX.log("    ✓ Scaled Time Remap IN ease");
+                                            }
+                                        }
+
+                                        // Scale the OUT ease of the stationary keyframe
+                                        if (nextKeyData.outEase !== undefined) {
+                                            var scaledOutEase = scaleEaseForDuration(nextKeyData.outEase, oldDuration, newDuration);
+                                            if (scaledOutEase) {
+                                                nextKeyData.outEase = scaledOutEase;
+                                                DEBUG_JSX.log("    ✓ Scaled Time Remap OUT ease of stationary key");
+                                            }
+                                        }
+                                    }
+                                } catch(easingScaleError) {
+                                    DEBUG_JSX.log("    Warning: Could not scale Time Remap easing: " + easingScaleError.toString());
+                                }
+                            }
 
                             // FIRST: Add new keyframes using setValueAtTime with stored values
                             for (var k = 0; k < timeRemapKeys.length; k++) {
@@ -6687,6 +6723,47 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     
                     // Only proceed if we successfully read keyframe data
                     if (keyframeData.length > 0) {
+                        // EASING PRESERVATION: Scale easing when duration changes due to global delay
+                        // If there's a stationary keyframe before the first moving keyframe,
+                        // the duration between them changes and we need to scale the easing
+                        if (protectKeyIndex !== null && keyframesToMove.length > 0 && nextKeyData !== null) {
+                            try {
+                                var stationaryKeyTime = prop.keyTime(protectKeyIndex);
+                                var firstMovingOldTime = keyframesToMove[0].time;
+                                var firstMovingNewTime = keyframesToMove[0].newTime;
+
+                                var oldDuration = firstMovingOldTime - stationaryKeyTime;
+                                var newDuration = firstMovingNewTime - stationaryKeyTime;
+
+                                if (Math.abs(oldDuration - newDuration) > 0.001 && oldDuration > 0 && newDuration > 0) {
+                                    DEBUG_JSX.log("  🔧 Global Delay duration change detected:");
+                                    DEBUG_JSX.log("    " + prop.name + ": " + (oldDuration * 1000).toFixed(0) + "ms → " + (newDuration * 1000).toFixed(0) + "ms");
+
+                                    // Scale the IN ease of the first moving keyframe
+                                    // (affects curve FROM stationary keyframe TO this one)
+                                    if (keyframeData.length > 0 && keyframeData[0].inEase !== undefined) {
+                                        var scaledInEase = scaleEaseForDuration(keyframeData[0].inEase, oldDuration, newDuration);
+                                        if (scaledInEase) {
+                                            keyframeData[0].inEase = scaledInEase;
+                                            DEBUG_JSX.log("    ✓ Scaled IN ease of first moving keyframe");
+                                        }
+                                    }
+
+                                    // Scale the OUT ease of the stationary keyframe
+                                    // (affects curve FROM stationary TO first moving keyframe)
+                                    if (nextKeyData.outEase !== undefined) {
+                                        var scaledOutEase = scaleEaseForDuration(nextKeyData.outEase, oldDuration, newDuration);
+                                        if (scaledOutEase) {
+                                            nextKeyData.outEase = scaledOutEase;
+                                            DEBUG_JSX.log("    ✓ Scaled OUT ease of stationary keyframe");
+                                        }
+                                    }
+                                }
+                            } catch(easingScaleError) {
+                                DEBUG_JSX.log("  Warning: Could not scale easing for global delay: " + easingScaleError.toString());
+                            }
+                        }
+
                         // Special logging for Size properties
                         if (prop.name === "Size") {
                             DEBUG_JSX.log("  🎯 MOVING " + keyframeData.length + " Size keyframes on " + layer.name);
