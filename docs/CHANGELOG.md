@@ -5,6 +5,34 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.83] - 2025-01-13 ✨ **ENHANCEMENT: Global Delay Easing Preservation**
+### 🔧 Fixed
+- **Global Delay Easing Distortion**: Fixed easing curves changing shape when global delay extends duration between keyframes
+- **Curve Preservation**: Bezier curves now maintain exact visual shape when playhead-based delay changes distance between stationary and moving keyframes
+
+### 🔬 Technical Details
+- **Root Cause**: When global delay moves keyframes after playhead, the distance between stationary (before playhead) and moving (after playhead) keyframes changes
+  - Example: Key A at 1.0s, Key B at 2.0s (duration: 1.0s). Global delay at 1.5s moves B to 2.5s (duration: 1.5s)
+  - Previous behavior: Easing speed values remained unchanged → visual curve distorted
+  - **Solution**: Scale KeyframeEase speed values inversely with duration change (speed × oldDuration/newDuration)
+- **Implementation**: Modified `moveKeyframesAfterTime()` function to:
+  1. Detect when stationary keyframe exists before first moving keyframe
+  2. Calculate old vs new duration between them
+  3. Scale IN ease of first moving keyframe using `scaleEaseForDuration()`
+  4. Scale OUT ease of stationary keyframe
+  5. Keep influence values unchanged (they're already percentages)
+- **Scope**: Applied to both regular properties and Time Remap keyframes
+- **Mathematical Foundation**: Same inverse scaling used in duration stretch operations (speed = valueChange / time, so longer time requires proportionally slower speed to maintain same value change)
+
+### 🎯 Impact
+- Global delay now preserves easing perfectly when extending/contracting duration between keyframes
+- Bezier values remain identical before and after global delay operations
+- Works across all property types (Position, Opacity, Scale, Rotation, effects, etc.)
+- Matches the sophisticated easing preservation already working in duration stretch and delay nudge operations
+
+### 🔗 Associated Build
+- AirBoard-v4.16.83.zxp
+
 ## [4.16.82] - 2025-01-12 🎯 **ENHANCEMENT: Smart Duration Snapping + Readout Fix**
 ### 🔧 Fixed
 - **Duration Readout**: Fixed duration showing wrong value after stretch operations (e.g., showing 300ms when actual duration was 150ms)
