@@ -1454,18 +1454,35 @@ document.addEventListener('DOMContentLoaded', function() {
             csInterface.evalScript(script, function(result) {
                 console.log('Snap to playhead result' + (isShiftHeld ? ' [PRESERVE DELAYS]' : ' [PER-PROPERTY]') + ':', result);
 
-                if (result && result.indexOf('success') === 0) {
-                    // Parse result: "success|Snapped 5 keyframes across 2 properties to playhead (moved 1 markers)"
+                if (result && result.indexOf('|') !== -1) {
                     var parts = result.split('|');
-                    if (parts.length >= 2) {
-                        var message = parts[1];
-                        console.log('✓ ' + message);
-                        // Optionally show success feedback in UI
+                    var status = parts[0];
+
+                    // Extract debug messages if present (starting from index 2 for snap to playhead)
+                    var debugMessages = [];
+                    if (parts.length > 2) {
+                        debugMessages = parts.slice(2);
                     }
-                } else if (result && result.indexOf('error') === 0) {
-                    var errorMsg = result.split('|')[1] || 'Unknown error';
-                    console.error('Snap to playhead error:', errorMsg);
-                    // Error alert is now shown in ExtendScript for native AE dialog
+
+                    // Display debug messages in panel if available
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4aff9e; font-weight: bold;">🎯 Snap to Playhead Debug:</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">AirBoard: ' + debugMessages[j] + '</div>';
+                            }
+                            debugLog.scrollTop = debugLog.scrollHeight;
+                        }
+                    }
+
+                    if (status === 'success') {
+                        var message = parts[1] || 'Snap completed';
+                        console.log('✓ ' + message);
+                    } else if (status === 'error') {
+                        var errorMsg = parts[1] || 'Unknown error';
+                        console.error('Snap to playhead error:', errorMsg);
+                    }
                 }
             });
         });
