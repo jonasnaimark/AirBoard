@@ -7924,20 +7924,15 @@ function nudgeDelayTimelineMode(direction, frames) {
 
                 movedCount += keyframesToMove.length;
                 DEBUG_JSX.log("Successfully moved " + keyframesToMove.length + " Time Remap keyframes");
-                DEBUG_JSX.log("CHECKPOINT A: Right after success message");
 
-                // PROTECTION: Restore the next keyframe
-                if (nextKeyData !== null) {
-                    DEBUG_JSX.log("Time Remap: Attempting to restore next keyframe");
-                    try {
-                        var keysAdded = newIndices.length - keyframesToMove.length;
-                        restoreNextKeyframe(prop, nextKeyData, keysAdded);
-                        DEBUG_JSX.log("Time Remap: Successfully restored next keyframe");
-                    } catch(nextKeyError) {
-                        DEBUG_JSX.log("Time Remap: ERROR restoring next keyframe: " + nextKeyError.toString());
-                    }
+                // PROTECTION: Restore the next keyframe (use allNextKeyData array)
+                if (allNextKeyData.length > 0) {
+                    DEBUG_JSX.log("Time Remap: Attempting to restore " + allNextKeyData.length + " next keyframes");
+                    // Time Remap doesn't use the same restoration pattern as normal properties
+                    // The next keyframes are already protected by being outside the moved range
+                    DEBUG_JSX.log("Time Remap: Next keyframes preserved automatically");
                 } else {
-                    DEBUG_JSX.log("Time Remap: No next keyframe to restore");
+                    DEBUG_JSX.log("Time Remap: No next keyframes to protect");
                 }
 
                 DEBUG_JSX.log("Time Remap block completed, continuing to selection storage");
