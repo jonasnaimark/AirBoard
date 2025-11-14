@@ -3309,11 +3309,11 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             
             for (var j = 0; j < selectedProps.length; j++) {
                 var prop = selectedProps[j];
-                
+
                 if (prop.propertyValueType === PropertyValueType.NO_VALUE || prop.numKeys < 2) {
                     continue;
                 }
-                
+
                 // CRITICAL: Manually check EVERY keyframe for selection
                 // DO NOT trust prop.selectedKeys after this point!
                 var selKeys = [];
@@ -3322,7 +3322,7 @@ function stretchKeyframesForCrossProperty(direction, frames) {
                         selKeys.push(k);
                     }
                 }
-                
+
                 if (selKeys.length >= 2) {
                     cachedSelections.push({
                         layer: layer,
@@ -10789,28 +10789,43 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             }
             
             // IMPORTANT: Check Time Remap separately (same as delay nudging)
+            // Only add if it wasn't already found in selectedProperties
             try {
                 if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-                    var selectedTimeRemapKeys = [];
-                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
-                        if (layer.timeRemap.keySelected(k)) {
-                            selectedTimeRemapKeys.push(k);
+                    // Check if Time Remap was already added via selectedProperties
+                    // Compare by matchName since property references might differ
+                    var timeRemapAlreadyAdded = false;
+                    for (var check = 0; check < layerKeyframes.length; check++) {
+                        var checkProp = layerKeyframes[check].property;
+                        if (checkProp && checkProp.matchName === "ADBE Time Remapping") {
+                            timeRemapAlreadyAdded = true;
+                            DEBUG_JSX.log("Time Remap already found in selectedProperties - skipping duplicate check");
+                            break;
                         }
                     }
-                    
-                    if (selectedTimeRemapKeys.length > 0) {
-                        DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index);
-                        var trEncounterOrder = layerKeyframes.length;
-                        var trSortKey = getPropertySortKey(layer.timeRemap);
-                        layerKeyframes.push({
-                            property: layer.timeRemap,
-                            propertyName: "Time Remap",
-                            selectedKeys: selectedTimeRemapKeys,
-                            isTimeRemap: true, // Flag for special handling
-                            encounterOrder: trEncounterOrder,
-                            sortKey: trSortKey
-                        });
-                        hasSelectedKeyframes = true;
+
+                    if (!timeRemapAlreadyAdded) {
+                        var selectedTimeRemapKeys = [];
+                        for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                            if (layer.timeRemap.keySelected(k)) {
+                                selectedTimeRemapKeys.push(k);
+                            }
+                        }
+
+                        if (selectedTimeRemapKeys.length > 0) {
+                            DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index + " (via separate check)");
+                            var trEncounterOrder = layerKeyframes.length;
+                            var trSortKey = getPropertySortKey(layer.timeRemap);
+                            layerKeyframes.push({
+                                property: layer.timeRemap,
+                                propertyName: "Time Remap",
+                                selectedKeys: selectedTimeRemapKeys,
+                                isTimeRemap: true, // Flag for special handling
+                                encounterOrder: trEncounterOrder,
+                                sortKey: trSortKey
+                            });
+                            hasSelectedKeyframes = true;
+                        }
                     }
                 }
             } catch(e) {
@@ -10843,36 +10858,7 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             } catch(e) {
                 // Audio levels might not be available
             }
-            
-            // IMPORTANT: Check Time Remap separately (not in property groups)
-            try {
-                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-                    var selectedTimeRemapKeys = [];
-                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
-                        if (layer.timeRemap.keySelected(k)) {
-                            selectedTimeRemapKeys.push(k);
-                        }
-                    }
-                    
-                    if (selectedTimeRemapKeys.length > 0) {
-                        DEBUG_JSX.log("Found " + selectedTimeRemapKeys.length + " selected Time Remap keyframes on layer " + layer.index);
-                        var trEncounterOrder2 = layerKeyframes.length;
-                        var trSortKey2 = getPropertySortKey(layer.timeRemap);
-                        layerKeyframes.push({
-                            property: layer.timeRemap,
-                            propertyName: "Time Remap",
-                            selectedKeys: selectedTimeRemapKeys,
-                            isTimeRemap: true, // Flag for special handling
-                            encounterOrder: trEncounterOrder2,
-                            sortKey: trSortKey2
-                        });
-                        hasSelectedKeyframes = true;
-                    }
-                }
-            } catch(e) {
-                // Time Remap might not be accessible on this layer
-            }
-            
+
             if (layerKeyframes.length > 0) {
                 layerGroups.push({
                     layer: layer,
