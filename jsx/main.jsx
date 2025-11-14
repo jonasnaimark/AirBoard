@@ -11813,6 +11813,8 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, is
 // preserveDelays: if true (shift+click), maintains relative delays between properties
 function snapToPlayheadFromPanel(preserveDelays) {
     try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("snapToPlayheadFromPanel called, preserveDelays=" + preserveDelays);
         app.beginUndoGroup("Snap to Playhead");
 
         var comp = app.project.activeItem;
@@ -12419,6 +12421,7 @@ function snapToPlayheadFromPanel(preserveDelays) {
         }
 
         // PHASE 4: Backup selection restoration using fresh property references
+        DEBUG_JSX.log("PHASE 4: Starting backup selection restoration for " + processedSelections.length + " properties");
         try {
             // Helper: find property by name within a layer (supports groups)
             function findPropertyByName(layer, targetName) {
@@ -12447,9 +12450,12 @@ function snapToPlayheadFromPanel(preserveDelays) {
 
             for (var s = 0; s < processedSelections.length; s++) {
                 var sel = processedSelections[s];
+                DEBUG_JSX.log("PHASE 4: Restoring selection " + (s+1) + "/" + processedSelections.length + ": " + sel.propertyName + " on layer " + sel.layer.name + " with " + (sel.newSelIndices ? sel.newSelIndices.length : 0) + " indices");
+
                 // Prefer stored property reference; fall back to name search if needed
                 var fresh = sel.propertyReference || findPropertyByName(sel.layer, sel.propertyName);
                 if (fresh && sel.newSelIndices && sel.newSelIndices.length > 0) {
+                    DEBUG_JSX.log("  Deselecting all " + fresh.numKeys + " keys, then selecting indices: [" + sel.newSelIndices.join(", ") + "]");
                     // Deselect all, then select our indices
                     for (var k = 1; k <= fresh.numKeys; k++) {
                         try { fresh.setSelectedAtKey(k, false); } catch(e) {}
@@ -12457,8 +12463,12 @@ function snapToPlayheadFromPanel(preserveDelays) {
                     for (var j = 0; j < sel.newSelIndices.length; j++) {
                         try { fresh.setSelectedAtKey(sel.newSelIndices[j], true); } catch(e) {}
                     }
+                    DEBUG_JSX.log("  Selection restoration completed for " + sel.propertyName);
+                } else {
+                    DEBUG_JSX.log("  SKIPPED: fresh=" + (fresh ? "OK" : "NULL") + ", newSelIndices=" + (sel.newSelIndices ? sel.newSelIndices.length : "NULL"));
                 }
             }
+            DEBUG_JSX.log("PHASE 4: Backup selection restoration completed");
         } catch(selectionBackupError) {
             // Non-fatal selection restoration error
             $.writeln("Selection backup restoration failed: " + selectionBackupError.toString());
@@ -12470,11 +12480,15 @@ function snapToPlayheadFromPanel(preserveDelays) {
         if (markersProcessed > 0) {
             result += " (moved " + markersProcessed + " markers)";
         }
-        return result;
+
+        // Include debug messages in result
+        var debugMessages = DEBUG_JSX.getMessages();
+        return result + "|" + debugMessages.join("|");
 
     } catch(e) {
         app.endUndoGroup();
-        return "error|Snap to playhead failed: " + e.toString();
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|Snap to playhead failed: " + e.toString() + "|" + debugMessages.join("|");
     }
 }
 
