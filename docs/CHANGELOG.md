@@ -5,6 +5,33 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.84] - 2025-01-13 🔧 **FIX: Spring Marker Movement with Leading Keyframes**
+### 🔧 Fixed
+- **Spring Markers Not Moving**: Fixed spring markers staying behind when selected keyframes include leading keyframes before the spring segment
+- **Delay Operations**: All delay modes (individual and timeline) now check every selected keyframe for markers, not just the first
+- **Snap to Playhead**: Checks all selected keyframes for spring markers during snap operations
+- **Stagger**: Checks all selected keyframes for spring markers during stagger operations
+
+### 🔬 Technical Details
+- **Root Cause**: Delay, snap, and stagger operations only checked the first selected keyframe for spring markers
+  - Scenario: User selects leading keyframe at frame 0 + spring segment starting at frame 50 with marker
+  - Previous behavior: Only checked frame 0 → found no marker → marker stayed at frame 50 while keys moved
+  - New behavior: Checks all selected keyframes → finds marker at frame 50 → moves marker with keys
+- **Implementation Changes**:
+  - **Delay (Individual)**: Loop through `propData.keyframes` array checking each keyframe time
+  - **Delay (Timeline)**: Loop through `selKeys` indices checking each selected keyframe
+  - **Stagger**: Loop through all `selectedKeys` instead of just `selectedKeys[0]`
+  - **Snap**: Store `selectedKeyTimes` array in `layerMarkerOffsets` and loop through all times
+- **Property Safety**: Uses `uniquePropId` to ensure only the correct property's spring block moves, won't affect unrelated markers
+
+### 🎯 Impact
+- Spring markers now stay synchronized with their spring segments when selections include leading keyframes
+- Works across all four operations: delay (both modes), snap to playhead, and stagger
+- No performance impact: Marker lookup is fast, only processes when markers actually exist
+
+### 🔗 Associated Build
+- AirBoard-v4.16.84.zxp
+
 ## [4.16.83] - 2025-01-13 ✨ **ENHANCEMENT: Global Delay Easing Preservation**
 ### 🔧 Fixed
 - **Global Delay Easing Distortion**: Fixed easing curves changing shape when global delay extends duration between keyframes
