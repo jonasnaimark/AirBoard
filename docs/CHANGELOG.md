@@ -5,6 +5,33 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.88] - 2025-01-14 🐛 **FIX: Spring Marker Double-Processing**
+### 🐛 Fixed
+- **Snap to Playhead**: Fixed spring markers being processed multiple times and incorrectly splitting
+- **Delay Nudging**: Fixed markers moving 2x too far when snapping springs to playhead
+- **Marker Tracking**: Prevented double-processing by tracking both original and new marker positions
+
+### 🔬 Technical Details
+- **Root Cause**: Code was looping through all keyframes in a spring (e.g., 15 keyframes) and calling `smartSplitMergeMarker` for each one
+  - First iteration: Moved marker from 4.367s → 4.583s ✓
+  - Second iteration: Found marker at 4.578s (where we just moved it!) → moved AGAIN to 4.794s ✗
+- **Marker Position Tracking**: Now tracks BOTH original and new marker times in `processedMarkerTimes` array
+  - When a marker is moved from time A to time B, both times are tracked
+  - Subsequent keyframes at either time A or time B skip marker processing
+  - Prevents the same marker from being moved multiple times
+- **Support for Mid-Selection Markers**: Still checks ALL keyframes for markers (supports markers in middle of selections)
+  - Maintains functionality where markers between selected keyframes move with their spring segment
+  - Example: Blue keyframe with marker in middle of selection correctly moves with its spring
+
+### 🎯 Impact
+- Spring markers now move exactly once to the correct position
+- No more phantom/split markers created during snap operations
+- Markers correctly follow their spring segments regardless of position in selection
+- Fixes affect both snap to playhead and delay nudging operations
+
+### 🔗 Associated Build
+- AirBoard-v4.16.88.zxp
+
 ## [4.16.87] - 2025-01-14 🐛 **FIX: Time Remap Selection Preservation**
 ### 🐛 Fixed
 - **Stagger Operations**: Time Remap keyframes now remain selected when applying stagger to irregular/uneven staggers

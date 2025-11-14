@@ -5864,14 +5864,29 @@ function nudgeDelay(direction) {
                         continue;
                     }
 
-                    // NEW: Loop through ALL selected keyframes, not just first
+                    // FIXED: Check ALL keyframes for markers, but only process each unique marker ONCE
+                    // Track BOTH original and new marker times to prevent double-processing
+                    var processedMarkerTimes = []; // Stores both old and new times
                     var markersProcessed = 0;
+
                     for (var kfIdx = 0; kfIdx < propData.keyframes.length; kfIdx++) {
                         var keyframeData = propData.keyframes[kfIdx];
                         var oldKeyTime = keyframeData.time;
+
+                        // Check if we've already processed a marker at this time (original OR moved location)
+                        var alreadyProcessed = false;
+                        for (var p = 0; p < processedMarkerTimes.length; p++) {
+                            if (Math.abs(processedMarkerTimes[p] - oldKeyTime) < markerEpsilon) {
+                                alreadyProcessed = true;
+                                break;
+                            }
+                        }
+
+                        if (alreadyProcessed) continue;
+
                         var newKeyTime = oldKeyTime + timeOffset;
 
-                        // Call smartSplitMergeMarker for each selected keyframe
+                        // Call smartSplitMergeMarker for this keyframe
                         var result = smartSplitMergeMarker(
                             markerProp,
                             oldKeyTime,
@@ -5882,6 +5897,9 @@ function nudgeDelay(direction) {
 
                         if (result !== "no marker at old time" && result !== "no spring block for property") {
                             markersProcessed++;
+                            // Track BOTH the original time AND the new time to prevent reprocessing
+                            processedMarkerTimes.push(oldKeyTime);
+                            processedMarkerTimes.push(newKeyTime);
                             DEBUG_JSX.log("SMART MARKER: " + propData.property + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
                         }
                     }
@@ -12535,12 +12553,27 @@ function snapToPlayheadFromPanel(preserveDelays) {
                 // Skip if no actual movement
                 if (Math.abs(timeOffset) < 0.001) continue;
 
-                // NEW: Loop through ALL selected keyframes, not just first
+                // FIXED: Check ALL keyframes for markers, but only process each unique marker ONCE
+                // Track BOTH original and new marker times to prevent double-processing
+                var processedMarkerTimes = []; // Stores both old and new times
+
                 for (var kIdx = 0; kIdx < selectedKeyTimes.length; kIdx++) {
                     var oldKeyTime = selectedKeyTimes[kIdx];
+
+                    // Check if we've already processed a marker at this time (original OR moved location)
+                    var alreadyProcessed = false;
+                    for (var p = 0; p < processedMarkerTimes.length; p++) {
+                        if (Math.abs(processedMarkerTimes[p] - oldKeyTime) < epsilon) {
+                            alreadyProcessed = true;
+                            break;
+                        }
+                    }
+
+                    if (alreadyProcessed) continue;
+
                     var newKeyTime = Math.max(0, oldKeyTime + timeOffset);
 
-                    // Call smart split/merge for each selected keyframe
+                    // Call smart split/merge for this keyframe
                     try {
                         var result = smartSplitMergeMarker(
                             markerProp,
@@ -12552,6 +12585,9 @@ function snapToPlayheadFromPanel(preserveDelays) {
 
                         if (result !== "no marker at old time" && result !== "no spring block for property") {
                             markersProcessed++;
+                            // Track BOTH the original time AND the new time to prevent reprocessing
+                            processedMarkerTimes.push(oldKeyTime);
+                            processedMarkerTimes.push(newKeyTime);
                             $.writeln("SNAP: Smart marker " + propId + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
                         }
                     } catch(smartMarkerError) {
