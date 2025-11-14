@@ -8170,13 +8170,19 @@ function nudgeDelayTimelineMode(direction, frames) {
 
             // Store selections for restoration with CORRECT new indices AND property reference
             // CRITICAL: Store the actual property reference to avoid name conflicts
-            processedSelections.push({
-                layer: cached.layer,
-                propertyName: cached.propertyName,
-                propertyReference: prop,  // Store actual property reference
-                indices: newIndices  // These should be the NEW indices after recreation
-            });
-            DEBUG_JSX.log("Stored selection data for " + cached.propertyName + " with NEW indices: [" + newIndices.join(", ") + "] and property reference");
+            // This runs for BOTH Time Remap and normal properties
+            DEBUG_JSX.log("About to store selection data for " + cached.propertyName);
+            try {
+                processedSelections.push({
+                    layer: cached.layer,
+                    propertyName: cached.propertyName,
+                    propertyReference: prop,  // Store actual property reference
+                    indices: newIndices  // These should be the NEW indices after recreation
+                });
+                DEBUG_JSX.log("Stored selection data for " + cached.propertyName + " with NEW indices: [" + newIndices.join(", ") + "] and property reference");
+            } catch(selError) {
+                DEBUG_JSX.log("ERROR storing selection for " + cached.propertyName + ": " + selError.toString());
+            }
         }
         
         // Markers were already moved before keyframe operations to avoid selection interference
