@@ -5,6 +5,38 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.87] - 2025-01-14 🐛 **FIX: Time Remap Selection Preservation**
+### 🐛 Fixed
+- **Stagger Operations**: Time Remap keyframes now remain selected when applying stagger to irregular/uneven staggers
+- **Duration Nudging**: Time Remap keys maintain selection during duration increase/decrease operations
+- **Cross-Property Mode**: Fixed Time Remap selection when multiple properties are selected together
+- **Single-Property Mode**: Fixed Time Remap selection when only Time Remap keys are selected
+
+### 🔬 Technical Details
+- **Add-Before-Delete Pattern**: Implemented special handling for Time Remap using `setValueAtTime()` before deleting old keyframes
+  - Prevents "property is hidden" errors that occur when using standard `addKey()` approach
+  - Works around After Effects hiding Time Remap property during keyframe operations
+- **Duplicate Detection**: Fixed duplicate Time Remap entries in stagger using matchName-based comparison
+  - Changed from object reference comparison to `matchName === "ADBE Time Remapping"` check
+  - Prevents processing same Time Remap property multiple times
+- **Old Keyframe Verification**: Added verification step to ensure old keyframes exist before deletion
+  - Tracks keyframes as `{index, time}` objects instead of just indices
+  - Prevents accidentally deleting newly created keyframes
+- **Selection Restoration**: Multi-phase selection process with explicit clearing before final re-selection
+  - Immediate selection after adding new keyframes
+  - Clear all selections after deletions
+  - Find final indices by time and select them
+- **ExtendScript Compatibility**: Replaced modern JavaScript `.map()` with manual for loops for debug logging
+
+### 🎯 Impact
+- Time Remap keyframes now behave consistently with other property types
+- Stagger snapping operations preserve all Time Remap selections
+- Duration nudging (+ and -) maintains Time Remap selections in all scenarios
+- Fixes affect both multi-property and single-property selection modes
+
+### 🔗 Associated Build
+- AirBoard-v4.16.87.zxp
+
 ## [4.16.86] - 2025-01-13 🎨 **UI: Enhanced Tooltip System**
 ### ✨ Enhanced
 - **Snap to Playhead Tooltip**: Added two-line tooltip showing "Shift: Keep delays" modifier hint

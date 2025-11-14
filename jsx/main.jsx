@@ -2573,97 +2573,121 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
                 }
                 
                 if (isTimeRemap) {
-                    // TIME REMAPPING: Special handling to avoid deletion (same as original)
+                    // TIME REMAPPING: Use add-before-delete pattern (same as cross-property mode)
                     try {
-                        var scaleFactor = newDuration / duration;
-                        
-                        // Store current selection state
-                        var selectionState = [];
-                        for (var s = 0; s < selKeys.length; s++) {
-                            selectionState.push(prop.keySelected(selKeys[s]));
-                        }
-                        
-                        // Clear selection first (same as other properties)
-                        for (var clearIdx = 1; clearIdx <= prop.numKeys; clearIdx++) {
-                            try {
-                                prop.keySelected(clearIdx, false);
-                            } catch(e) {
-                                // Continue
-                            }
-                        }
-                        
-                        // Try using setKeyTime method for time remapping with deferred selection
-                        var newKeyTimes = []; // Track the new times instead of indices
-                        for (var k = keyData.length - 1; k >= 0; k--) { // Reverse order
+                        DEBUG_JSX.log("🎬 TIME REMAP: Using add-before-delete pattern");
+
+                        var newKeyTimes = []; // Track the new times
+                        var keysToDelete = []; // Track which keys to delete
+
+                        // Add new keyframes at new times BEFORE deleting old ones
+                        for (var k = 0; k < keyData.length; k++) {
                             var data = keyData[k];
                             // Calculate relative position (0 to 1) within the selected keyframe range
                             var relativePosition = (data.time - firstTime) / duration;
                             // Apply to new duration, maintaining start position
                             var newTime = firstTime + relativePosition * newDuration;
-                            var keyIndex = selKeys[k];
-                            
-                            try {
-                                // Try to move the keyframe time
-                                prop.setKeyTime(keyIndex, newTime);
-                                // Track the new time for later index lookup
-                                newKeyTimes.push(newTime);
-                            } catch(e) {
-                                // If setKeyTime fails, fall back to record/delete/recreate but with minimal properties
-                                console.log("setKeyTime failed for time remapping, trying fallback...");
-                                prop.removeKey(keyIndex);
-                                var newIdx = prop.addKey(newTime);
-                                try {
-                                    prop.setValueAtKey(newIdx, data.value);
-                                    // Track the new time for later index lookup
+
+                            // Check if keyframe needs to be moved
+                            if (Math.abs(newTime - data.time) < 0.001) {
+                                // No movement needed
+                                newKeyTimes.push(data.time);
+                                DEBUG_JSX.log("  Time Remap keyframe " + (k+1) + " already at target time " + (newTime * 1000).toFixed(1) + "ms");
+                            } else {
+                                // Add new keyframe at new time using setValueAtTime
+                                prop.setValueAtTime(newTime, data.value);
+
+                                // Find the new keyframe index and select it immediately
+                                var newIdx = -1;
+                                for (var j = 1; j <= prop.numKeys; j++) {
+                                    if (Math.abs(prop.keyTime(j) - newTime) < 0.001) {
+                                        newIdx = j;
+                                        break;
+                                    }
+                                }
+
+                                if (newIdx !== -1) {
+                                    // Select immediately
+                                    try {
+                                        prop.setSelectedAtKey(newIdx, true);
+                                        DEBUG_JSX.log("  Immediately selected Time Remap keyframe at index " + newIdx);
+                                    } catch(e) {
+                                        DEBUG_JSX.log("  Failed to select Time Remap keyframe: " + e.toString());
+                                    }
+
                                     newKeyTimes.push(newTime);
-                                } catch(e2) {
-                                    // Even this might fail
+
+                                    // Only mark for deletion if old keyframe still exists at OLD time
+                                    var oldKeyStillExists = false;
+                                    for (var j = 1; j <= prop.numKeys; j++) {
+                                        if (Math.abs(prop.keyTime(j) - data.time) < 0.001) {
+                                            oldKeyStillExists = true;
+                                            keysToDelete.push({index: j, time: data.time});
+                                            DEBUG_JSX.log("  Found old keyframe at index " + j + " (time " + (data.time * 1000).toFixed(1) + "ms) - will delete");
+                                            break;
+                                        }
+                                    }
+
+                                    if (!oldKeyStillExists) {
+                                        DEBUG_JSX.log("  Old keyframe at " + (data.time * 1000).toFixed(1) + "ms no longer exists");
+                                    }
                                 }
                             }
                         }
-                        
-                        // Find the actual indices of the moved keyframes
+
+                        // Now delete old keyframes in reverse order by index
+                        keysToDelete.sort(function(a, b) { return b.index - a.index; });
+                        for (var k = 0; k < keysToDelete.length; k++) {
+                            DEBUG_JSX.log("  Removing old Time Remap keyframe at index " + keysToDelete[k].index);
+                            prop.removeKey(keysToDelete[k].index);
+                        }
+
+                        // Clear ALL selections first
+                        DEBUG_JSX.log("  Clearing all Time Remap selections before final re-selection");
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            try {
+                                prop.setSelectedAtKey(j, false);
+                            } catch(e) {
+                                // Ignore
+                            }
+                        }
+
+                        // Find the final indices by time and select them
                         var processedIndices = [];
-                        for (var t = 0; t < newKeyTimes.length; t++) {
-                            var targetTime = newKeyTimes[t];
-                            // Find the keyframe at this time
+                        for (var k = 0; k < newKeyTimes.length; k++) {
+                            var targetTime = newKeyTimes[k];
                             for (var j = 1; j <= prop.numKeys; j++) {
                                 if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
                                     processedIndices.push(j);
+                                    try {
+                                        prop.setSelectedAtKey(j, true);
+                                        DEBUG_JSX.log("  Final selection: Time Remap keyframe at index " + j);
+                                    } catch(e) {
+                                        DEBUG_JSX.log("  Failed to select: " + e.toString());
+                                    }
                                     break;
                                 }
                             }
                         }
-                        
-                        // Track all Time Remap keyframe times for total span calculation
+
+                        // Track keyframe times for total span calculation
                         for (var t = 0; t < newKeyTimes.length; t++) {
                             allProcessedKeyframeTimes.push(newKeyTimes[t]);
                         }
 
-                        // PROTECTION: Restore adjacent keyframes
-                        var keysAdded = processedIndices.length - selKeys.length;
-                        if (prevKeyData !== null) {
-                            restorePreviousKeyframe(prop, prevKeyData, keysAdded);
-                        }
-                        if (nextKeyData !== null) {
-                            restoreNextKeyframe(prop, nextKeyData, keysAdded);
-                        }
-
-                        // COLLECT selections for GLOBAL restoration instead of selecting immediately
-                        // This ensures Time Remap selection is preserved along with other properties
-                        DEBUG_JSX.log("🎬 COLLECTING " + processedIndices.length + " Time Remap keyframe selections for layer " + cached.layerName);
+                        // COLLECT selections for restoration
+                        DEBUG_JSX.log("🎬 COLLECTING " + processedIndices.length + " Time Remap keyframe selections");
                         allProcessedSelections.push({
                             layer: cached.layer,
                             propertyName: "Time Remap",
-                            propertyReference: prop,  // Store actual property reference to avoid name conflicts
+                            propertyReference: prop,
                             indices: processedIndices
                         });
-                        
+
                     } catch(timeRemapError) {
-                        console.log("Time remapping failed: " + timeRemapError.toString());
-                        // Don't break the entire operation
+                        DEBUG_JSX.log("Time remapping failed: " + timeRemapError.toString());
                     }
-                    
+
                 } else {
                     // NORMAL APPROACH FOR NON-TIME-REMAPPING PROPERTIES (same as original)
                     var scaleFactor = newDuration / duration;
@@ -3624,111 +3648,229 @@ function stretchPropertyDurationWithCache(prop, selectedKeys, deltaSeconds, cach
             }
         }
 
-        // Remove old keyframes in reverse order
-        var indices = [];
-        for (var k = 0; k < keyframeData.length; k++) {
-            indices.push(keyframeData[k].oldIndex);
-        }
-        indices.sort(function(a, b) { return b - a; }); // Reverse order
+        // Check if this is Time Remap - needs special add-before-delete handling
+        var isTimeRemap = (prop.matchName === "ADBE Time Remapping");
 
-        for (var k = 0; k < indices.length; k++) {
-            prop.removeKey(indices[k]);
+        if (isTimeRemap) {
+            DEBUG_JSX.log("🎬 Using Time Remap special handling (add-before-delete pattern)");
         }
 
-        // Create new keyframes at new times
+        // TIME REMAP: Add new keyframes BEFORE deleting old ones
         var newSelIndices = [];
         var newKeyframeTimes = [];
-        for (var k = 0; k < keyframeData.length; k++) {
-            var data = keyframeData[k];
-            var newIdx = prop.addKey(data.newTime);
+        var keysToDelete = []; // Track which keys to delete for Time Remap
 
-            // Restore all attributes
-            prop.setValueAtKey(newIdx, data.value);
+        if (isTimeRemap) {
+            for (var k = 0; k < keyframeData.length; k++) {
+                var data = keyframeData[k];
 
-            // CRITICAL: Scale ease speed to maintain visual curve shape
-            if (data.inEase !== undefined && data.outEase !== undefined) {
-                try {
-                    // Determine if we should scale IN or OUT ease:
-                    // - First keyframe: DON'T scale IN ease (affects curve from previous non-selected keyframe)
-                    // - Last keyframe: Check if there's a next keyframe
-                    //   - If NO next keyframe: DON'T scale OUT ease (no curve to affect)
-                    //   - If YES next keyframe: Scale OUT ease based on distance change to next keyframe
-                    // - Middle keyframes: scale both IN and OUT ease
-                    var isFirstKey = (k === 0);
-                    var isLastKey = (k === keyframeData.length - 1);
+                // Check if keyframe needs to be moved
+                if (Math.abs(data.newTime - data.time) < 0.001) {
+                    // No movement needed, just track the time for later selection
+                    newKeyframeTimes.push(data.time);
+                    DEBUG_JSX.log("  Time Remap keyframe " + (k+1) + " already at target time " + (data.newTime * 1000).toFixed(1) + "ms");
+                } else {
+                    // Add new keyframe at new time using setValueAtTime
+                    prop.setValueAtTime(data.newTime, data.value);
 
-                    var scaledInEase = isFirstKey ? data.inEase : scaleEaseForDuration(data.inEase, currentDuration, newDuration);
-
-                    var scaledOutEase;
-                    if (isLastKey && nextKeyframeTime !== null) {
-                        // Calculate distance to next keyframe
-                        var originalDistanceToNext = nextKeyframeTime - data.time;
-                        var newDistanceToNext = nextKeyframeTime - data.newTime;
-
-                        // Scale OUT ease based on distance change to next keyframe
-                        scaledOutEase = scaleEaseForDuration(data.outEase, originalDistanceToNext, newDistanceToNext);
-                        DEBUG_JSX.log("  📊 Last keyframe OUT ease: scaled by distance to next keyframe (" + (originalDistanceToNext*1000).toFixed(1) + "ms → " + (newDistanceToNext*1000).toFixed(1) + "ms)");
-                    } else if (isLastKey) {
-                        // No next keyframe, preserve OUT ease
-                        scaledOutEase = data.outEase;
-                    } else {
-                        // Middle keyframe, scale based on internal duration
-                        scaledOutEase = scaleEaseForDuration(data.outEase, currentDuration, newDuration);
+                    // Find the new keyframe index and select it immediately
+                    var newIdx = -1;
+                    for (var j = 1; j <= prop.numKeys; j++) {
+                        if (Math.abs(prop.keyTime(j) - data.newTime) < 0.001) {
+                            newIdx = j;
+                            break;
+                        }
                     }
 
-                    prop.setTemporalEaseAtKey(newIdx, scaledInEase, scaledOutEase);
+                    if (newIdx !== -1) {
+                        // IMMEDIATE SELECTION before deletion
+                        try {
+                            prop.setSelectedAtKey(newIdx, true);
+                            DEBUG_JSX.log("  Immediately selected Time Remap keyframe at index " + newIdx);
+                        } catch(e) {
+                            DEBUG_JSX.log("  Failed to select Time Remap keyframe: " + e.toString());
+                        }
 
-                    if (isFirstKey) {
-                        DEBUG_JSX.log("  ✅ Applied scaled ease (preserved IN ease for first keyframe)");
-                    } else if (isLastKey && nextKeyframeTime === null) {
-                        DEBUG_JSX.log("  ✅ Applied scaled ease (preserved OUT ease for last keyframe - no next keyframe)");
-                    } else {
-                        DEBUG_JSX.log("  ✅ Applied scaled ease");
+                        newKeyframeTimes.push(data.newTime);
+
+                        // Only mark for deletion if old keyframe still exists at OLD time
+                        // (setValueAtTime might have replaced it in place)
+                        var oldKeyStillExists = false;
+                        for (var j = 1; j <= prop.numKeys; j++) {
+                            if (Math.abs(prop.keyTime(j) - data.time) < 0.001) {
+                                oldKeyStillExists = true;
+                                keysToDelete.push({index: j, time: data.time});
+                                DEBUG_JSX.log("  Found old keyframe at index " + j + " (time " + (data.time * 1000).toFixed(1) + "ms) - will delete");
+                                break;
+                            }
+                        }
+
+                        if (!oldKeyStillExists) {
+                            DEBUG_JSX.log("  Old keyframe at " + (data.time * 1000).toFixed(1) + "ms no longer exists (replaced in place by setValueAtTime)");
+                        }
                     }
-                } catch(e) {
-                    // Some properties might not support temporal ease
-                    DEBUG_JSX.log("  ❌ Failed to set ease: " + e.toString());
                 }
-            } else {
-                // No ease data collected, use safe restore method
-                restoreTemporalEaseSafely(prop, newIdx, data.inInterp, data.outInterp, data.inEase, data.outEase);
             }
 
-            // Then re-assert original interpolation types
-            prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
-            
-            restoreTemporalFlagsSafely(prop, newIdx, data.inInterp, data.outInterp, data.temporalContinuous, data.temporalAutoBezier);
-            
-            if (data.spatialContinuous !== undefined) {
-                prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
-                prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
-                // Only restore tangents if NOT auto-bezier (manual tangent control)
-                if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
-                    prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
-                }
+            // Now delete old keyframes in reverse order by index
+            keysToDelete.sort(function(a, b) { return b.index - a.index; });
+            for (var k = 0; k < keysToDelete.length; k++) {
+                DEBUG_JSX.log("  Removing old Time Remap keyframe at index " + keysToDelete[k].index + " (time " + (keysToDelete[k].time * 1000).toFixed(1) + "ms)");
+                prop.removeKey(keysToDelete[k].index);
             }
-            
-            // CRITICAL: Restore keyframe color label
-            if (data.label !== undefined) {
+
+            // CRITICAL: Clear ALL selections on Time Remap property first
+            DEBUG_JSX.log("  Clearing all Time Remap selections before final re-selection");
+            for (var j = 1; j <= prop.numKeys; j++) {
                 try {
-                    prop.setLabelAtKey(newIdx, data.label);
+                    prop.setSelectedAtKey(j, false);
                 } catch(e) {
-                    // Label setting might fail on some property types
+                    // Ignore deselection errors
                 }
             }
-            
-            // IMMEDIATE SELECTION: Select the keyframe right after creation (like stagger does)
-            try {
-                prop.setSelectedAtKey(newIdx, true);
-                DEBUG_JSX.log("  Immediately selected duration keyframe " + newIdx);
-            } catch(e) {
-                DEBUG_JSX.log("  Failed to immediately select duration keyframe " + newIdx + ": " + e.toString());
+
+            // Debug: Show all existing keyframes after deletion
+            DEBUG_JSX.log("  Time Remap property now has " + prop.numKeys + " total keyframes:");
+            for (var j = 1; j <= prop.numKeys; j++) {
+                DEBUG_JSX.log("    Index " + j + " at time " + (prop.keyTime(j) * 1000).toFixed(1) + "ms");
             }
-            
-            // COLLECT indices for return value
-            newSelIndices.push(newIdx);
-            // COLLECT times for total span calculation
-            newKeyframeTimes.push(data.newTime);
+
+            // After deletion, find the final indices by time and select them
+            var timesStr = "";
+            for (var t = 0; t < newKeyframeTimes.length; t++) {
+                if (t > 0) timesStr += ", ";
+                timesStr += (newKeyframeTimes[t] * 1000).toFixed(1) + "ms";
+            }
+            DEBUG_JSX.log("  Searching for " + newKeyframeTimes.length + " target times: " + timesStr);
+            for (var k = 0; k < newKeyframeTimes.length; k++) {
+                var targetTime = newKeyframeTimes[k];
+                var found = false;
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    if (Math.abs(prop.keyTime(j) - targetTime) < 0.001) {
+                        newSelIndices.push(j);
+                        found = true;
+                        // Select the keyframe
+                        try {
+                            prop.setSelectedAtKey(j, true);
+                            DEBUG_JSX.log("  Final selection: Time Remap keyframe at index " + j + " (time " + (targetTime * 1000).toFixed(1) + "ms)");
+                        } catch(e) {
+                            DEBUG_JSX.log("  Failed to select Time Remap keyframe at index " + j + ": " + e.toString());
+                        }
+                        break;
+                    }
+                }
+                if (!found) {
+                    DEBUG_JSX.log("  WARNING: Could not find Time Remap keyframe at target time " + (targetTime * 1000).toFixed(1) + "ms");
+                }
+            }
+            DEBUG_JSX.log("  Time Remap final selected indices after deletion: " + newSelIndices.join(", "));
+        } else {
+            // NORMAL PROPERTIES: Use standard delete-then-recreate pattern
+
+            // Remove old keyframes in reverse order
+            var indices = [];
+            for (var k = 0; k < keyframeData.length; k++) {
+                indices.push(keyframeData[k].oldIndex);
+            }
+            indices.sort(function(a, b) { return b - a; }); // Reverse order
+
+            for (var k = 0; k < indices.length; k++) {
+                prop.removeKey(indices[k]);
+            }
+
+            // Create new keyframes at new times
+            for (var k = 0; k < keyframeData.length; k++) {
+                var data = keyframeData[k];
+                var newIdx = prop.addKey(data.newTime);
+
+                // Restore all attributes
+                prop.setValueAtKey(newIdx, data.value);
+
+                // CRITICAL: Scale ease speed to maintain visual curve shape
+                if (data.inEase !== undefined && data.outEase !== undefined) {
+                    try {
+                        // Determine if we should scale IN or OUT ease:
+                        // - First keyframe: DON'T scale IN ease (affects curve from previous non-selected keyframe)
+                        // - Last keyframe: Check if there's a next keyframe
+                        //   - If NO next keyframe: DON'T scale OUT ease (no curve to affect)
+                        //   - If YES next keyframe: Scale OUT ease based on distance change to next keyframe
+                        // - Middle keyframes: scale both IN and OUT ease
+                        var isFirstKey = (k === 0);
+                        var isLastKey = (k === keyframeData.length - 1);
+
+                        var scaledInEase = isFirstKey ? data.inEase : scaleEaseForDuration(data.inEase, currentDuration, newDuration);
+
+                        var scaledOutEase;
+                        if (isLastKey && nextKeyframeTime !== null) {
+                            // Calculate distance to next keyframe
+                            var originalDistanceToNext = nextKeyframeTime - data.time;
+                            var newDistanceToNext = nextKeyframeTime - data.newTime;
+
+                            // Scale OUT ease based on distance change to next keyframe
+                            scaledOutEase = scaleEaseForDuration(data.outEase, originalDistanceToNext, newDistanceToNext);
+                            DEBUG_JSX.log("  📊 Last keyframe OUT ease: scaled by distance to next keyframe (" + (originalDistanceToNext*1000).toFixed(1) + "ms → " + (newDistanceToNext*1000).toFixed(1) + "ms)");
+                        } else if (isLastKey) {
+                            // No next keyframe, preserve OUT ease
+                            scaledOutEase = data.outEase;
+                        } else {
+                            // Middle keyframe, scale based on internal duration
+                            scaledOutEase = scaleEaseForDuration(data.outEase, currentDuration, newDuration);
+                        }
+
+                        prop.setTemporalEaseAtKey(newIdx, scaledInEase, scaledOutEase);
+
+                        if (isFirstKey) {
+                            DEBUG_JSX.log("  ✅ Applied scaled ease (preserved IN ease for first keyframe)");
+                        } else if (isLastKey && nextKeyframeTime === null) {
+                            DEBUG_JSX.log("  ✅ Applied scaled ease (preserved OUT ease for last keyframe - no next keyframe)");
+                        } else {
+                            DEBUG_JSX.log("  ✅ Applied scaled ease");
+                        }
+                    } catch(e) {
+                        // Some properties might not support temporal ease
+                        DEBUG_JSX.log("  ❌ Failed to set ease: " + e.toString());
+                    }
+                } else {
+                    // No ease data collected, use safe restore method
+                    restoreTemporalEaseSafely(prop, newIdx, data.inInterp, data.outInterp, data.inEase, data.outEase);
+                }
+
+                // Then re-assert original interpolation types
+                prop.setInterpolationTypeAtKey(newIdx, data.inInterp, data.outInterp);
+
+                restoreTemporalFlagsSafely(prop, newIdx, data.inInterp, data.outInterp, data.temporalContinuous, data.temporalAutoBezier);
+
+                if (data.spatialContinuous !== undefined) {
+                    prop.setSpatialContinuousAtKey(newIdx, data.spatialContinuous);
+                    prop.setSpatialAutoBezierAtKey(newIdx, data.spatialAutoBezier);
+                    // Only restore tangents if NOT auto-bezier (manual tangent control)
+                    if (!data.spatialAutoBezier && data.inTangent !== undefined && data.outTangent !== undefined) {
+                        prop.setSpatialTangentsAtKey(newIdx, data.inTangent, data.outTangent);
+                    }
+                }
+
+                // CRITICAL: Restore keyframe color label
+                if (data.label !== undefined) {
+                    try {
+                        prop.setLabelAtKey(newIdx, data.label);
+                    } catch(e) {
+                        // Label setting might fail on some property types
+                    }
+                }
+
+                // IMMEDIATE SELECTION: Select the keyframe right after creation (like stagger does)
+                try {
+                    prop.setSelectedAtKey(newIdx, true);
+                    DEBUG_JSX.log("  Immediately selected duration keyframe " + newIdx);
+                } catch(e) {
+                    DEBUG_JSX.log("  Failed to immediately select duration keyframe " + newIdx + ": " + e.toString());
+                }
+
+                // COLLECT indices for return value
+                newSelIndices.push(newIdx);
+                // COLLECT times for total span calculation
+                newKeyframeTimes.push(data.newTime);
+            }
         }
 
         // PROTECTION: Restore the next keyframe
