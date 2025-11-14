@@ -17394,8 +17394,48 @@ function generateFullSpringCurve(t1, t2, v1, v2, dampingRatio, stiffness, mass, 
 }
 
 /**
+ * findInflectionPoints - Find points where velocity changes direction (bounce points)
+ * COPIED FROM: Sproing v1.2.6 (SpringBaker.jsx lines 196-230)
+ */
+function findInflectionPoints(points) {
+    if (points.length < 3) return [];
+
+    var inflectionIndices = [];
+    var dim = points[0].y.length;
+
+    // Check each dimension for velocity direction changes
+    for (var d = 0; d < dim; d++) {
+        for (var i = 1; i < points.length - 1; i++) {
+            // Calculate velocity before and after this point
+            var v1 = points[i].y[d] - points[i - 1].y[d];
+            var v2 = points[i + 1].y[d] - points[i].y[d];
+
+            // If velocity changes sign, this is an inflection point (direction reversal)
+            if (v1 * v2 < 0 && Math.abs(v1) > 0.001 && Math.abs(v2) > 0.001) {
+                // Add index if not already in list
+                var alreadyAdded = false;
+                for (var j = 0; j < inflectionIndices.length; j++) {
+                    if (inflectionIndices[j] === i) {
+                        alreadyAdded = true;
+                        break;
+                    }
+                }
+                if (!alreadyAdded) {
+                    inflectionIndices.push(i);
+                }
+            }
+        }
+    }
+
+    // Sort indices
+    inflectionIndices.sort(function(a, b) { return a - b; });
+
+    return inflectionIndices;
+}
+
+/**
  * simplifySpringKeyframes - Simplify spring keyframes using CleanBakedKeys algorithm
- * COPIED FROM: Sproing v0.94.2 (SpringBaker.jsx lines 175-230)
+ * UPDATED: Sproing v1.2.6 - Added inflection point preservation
  */
 function simplifySpringKeyframes(fullCurveData, precisionSetting, frameRate) {
     if (!PRECISION_SETTINGS[precisionSetting] || precisionSetting === 'max') {
@@ -17418,8 +17458,42 @@ function simplifySpringKeyframes(fullCurveData, precisionSetting, frameRate) {
     var epsilon = 20 * Math.pow(0.25, (scaledPrecision - 1) / 9);
     var maxGapTime = scaledMaxGapFrames * frameDuration;
 
-    // Apply Douglas-Peucker simplification
-    var simplifiedPoints = douglasPeucker(fullCurveData, epsilon);
+    // Find inflection points (where velocity changes direction) - these MUST be preserved
+    var inflectionIndices = findInflectionPoints(fullCurveData);
+
+    // Apply Douglas-Peucker simplification with inflection point preservation
+    var simplifiedPoints;
+    if (inflectionIndices.length === 0) {
+        // No inflection points, simplify normally
+        simplifiedPoints = douglasPeucker(fullCurveData, epsilon);
+    } else {
+        // Split curve at inflection points and simplify each segment separately
+        // This ensures inflection points (bounces/rebounds) are always preserved
+        simplifiedPoints = [];
+        var segmentStart = 0;
+
+        for (var i = 0; i < inflectionIndices.length; i++) {
+            var segmentEnd = inflectionIndices[i];
+
+            // Simplify segment from segmentStart to segmentEnd
+            var segment = fullCurveData.slice(segmentStart, segmentEnd + 1);
+            var simplifiedSegment = douglasPeucker(segment, epsilon);
+
+            // Add all points except the last one (to avoid duplicates)
+            for (var j = 0; j < simplifiedSegment.length - 1; j++) {
+                simplifiedPoints.push(simplifiedSegment[j]);
+            }
+
+            segmentStart = segmentEnd;
+        }
+
+        // Simplify final segment from last inflection point to end
+        var finalSegment = fullCurveData.slice(segmentStart);
+        var simplifiedFinalSegment = douglasPeucker(finalSegment, epsilon);
+        for (var j = 0; j < simplifiedFinalSegment.length; j++) {
+            simplifiedPoints.push(simplifiedFinalSegment[j]);
+        }
+    }
 
     // Insert points in large gaps if maxGapTime > 0
     if (maxGapTime > 0) {
@@ -18090,6 +18164,14 @@ function mirrorKeysFromPanel(preserveDelays) {
                     // Detect baking precision
                     var detectedPrecision = detectBakingPrecision(prop, sel, frameRate);
                     DEBUG_JSX.log("    Detected precision: " + detectedPrecision);
+
+                    // Time Remap needs a higher-density bake to match the dense curve
+                    // COPIED FROM: Sproing v1.2.10 (SpringBaker.jsx lines 1964-1967)
+                    if (detectedPrecision !== 'max' && detectedPrecision !== 'high' &&
+                        (prop.matchName === 'ADBE Time Remapping' || prop.name === 'Time Remap')) {
+                        DEBUG_JSX.log("    Time Remap precision boost: " + detectedPrecision + " -> high");
+                        detectedPrecision = 'high';
+                    }
 
                     // Calculate start time (apply reversed delay in shift mode)
                     var springStartTime = playheadTime;
