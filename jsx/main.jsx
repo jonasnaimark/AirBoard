@@ -7931,6 +7931,8 @@ function nudgeDelayTimelineMode(direction, frames) {
                     restoreNextKeyframe(prop, nextKeyData, keysAdded);
                 }
 
+                DEBUG_JSX.log("Time Remap block completed, continuing to selection storage");
+
             } else {
                 // Normal handling for non-Time Remap properties
                 // Calculate distance changes for ease scaling
@@ -8183,6 +8185,8 @@ function nudgeDelayTimelineMode(direction, frames) {
             } catch(selError) {
                 DEBUG_JSX.log("ERROR storing selection for " + cached.propertyName + ": " + selError.toString());
             }
+
+            DEBUG_JSX.log("Completed processing property " + (i+1) + "/" + cachedSelections.length);
         }
         
         // Markers were already moved before keyframe operations to avoid selection interference
