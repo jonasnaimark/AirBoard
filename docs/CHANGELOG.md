@@ -5,6 +5,26 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.86] - 2025-01-13 🎨 **UI: Enhanced Tooltip System**
+### ✨ Enhanced
+- **Snap to Playhead Tooltip**: Added two-line tooltip showing "Shift: Keep delays" modifier hint
+- **Tooltip Styling**: Improved tooltip readability with centered text and optimized line spacing
+
+### 🔬 Technical Details
+- Updated snap to playhead button tooltip to display modifier functionality
+- Added `text-align: center` to tooltip styling for better visual alignment
+- Set `line-height: 1.3` for improved readability on multi-line tooltips
+- Tooltip displays as two separate lines with proper vertical spacing
+
+### 🎯 Impact
+- Users can now discover the Shift modifier functionality through tooltip hover
+- Better discoverability of advanced features without cluttering the UI
+- Consistent tooltip styling across all buttons
+- Improved user experience for new and existing users
+
+### 🔗 Associated Build
+- AirBoard-v4.16.86.zxp
+
 ## [4.16.85] - 2025-01-13 ✨ **ENHANCEMENT: Mirrored Springs Sync with Sproing v1.2.10**
 ### ✨ Enhanced
 - **Inflection Point Preservation**: Bouncy mirrored springs now preserve smooth curves at bounce/rebound points
