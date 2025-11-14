@@ -5657,25 +5657,26 @@ function nudgeDelay(direction) {
                     var propData = propertyDelays[i];
                     if (!propData.keyframes || propData.keyframes.length === 0) continue;
 
-                    // Get the property's OLD first keyframe time (before movement)
-                    var oldFirstKeyframeTime = propData.currentDelay;
-
-                    // Calculate NEW first keyframe time (after movement)
-                    var newFirstKeyframeTime;
+                    // Calculate time offset for this property
+                    var timeOffset;
                     if (useIndividualDelays) {
                         var targetDelaySeconds = propData.targetDelay / 1000;
-                        newFirstKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                        var newFirstKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                        var oldFirstKeyframeTime = propData.currentDelay;
+                        timeOffset = newFirstKeyframeTime - oldFirstKeyframeTime;
                     } else {
                         if (propData.isOriginalBaseline) {
-                            newFirstKeyframeTime = originalEarliestTime; // Baseline stays at original time
+                            timeOffset = 0; // Baseline stays at original time
                         } else {
                             var targetDelaySeconds = targetDelayMs / 1000;
-                            newFirstKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                            var newFirstKeyframeTime = originalEarliestTime + targetDelaySeconds;
+                            var oldFirstKeyframeTime = propData.currentDelay;
+                            timeOffset = newFirstKeyframeTime - oldFirstKeyframeTime;
                         }
                     }
 
                     // Skip if property didn't actually move
-                    if (Math.abs(newFirstKeyframeTime - oldFirstKeyframeTime) < markerEpsilon) {
+                    if (Math.abs(timeOffset) < markerEpsilon) {
                         DEBUG_JSX.log("SMART MARKER: Property " + propData.property + " didn't move, skipping marker check");
                         continue;
                     }
@@ -5721,17 +5722,31 @@ function nudgeDelay(direction) {
                         continue;
                     }
 
-                    // Call smartSplitMergeMarker for this property
-                    var result = smartSplitMergeMarker(
-                        markerProp,
-                        oldFirstKeyframeTime,
-                        newFirstKeyframeTime,
-                        uniquePropId,
-                        markerEpsilon
-                    );
+                    // NEW: Loop through ALL selected keyframes, not just first
+                    var markersProcessed = 0;
+                    for (var kfIdx = 0; kfIdx < propData.keyframes.length; kfIdx++) {
+                        var keyframeData = propData.keyframes[kfIdx];
+                        var oldKeyTime = keyframeData.time;
+                        var newKeyTime = oldKeyTime + timeOffset;
 
-                    DEBUG_JSX.log("SMART MARKER: " + propData.property + " result: " + result);
-                    debugInfo.push("Marker: " + uniquePropId.split("|").pop() + " - " + result);
+                        // Call smartSplitMergeMarker for each selected keyframe
+                        var result = smartSplitMergeMarker(
+                            markerProp,
+                            oldKeyTime,
+                            newKeyTime,
+                            uniquePropId,
+                            markerEpsilon
+                        );
+
+                        if (result !== "no marker at old time" && result !== "no spring block for property") {
+                            markersProcessed++;
+                            DEBUG_JSX.log("SMART MARKER: " + propData.property + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
+                        }
+                    }
+
+                    if (markersProcessed > 0) {
+                        debugInfo.push("Markers: " + uniquePropId.split("|").pop() + " - " + markersProcessed + " moved");
+                    }
                 }
 
             } catch(markerSyncError) {
@@ -10906,34 +10921,41 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
 
                 if (selectedKeys.length === 0) continue;
 
-                // Get the OLD first keyframe time (before stagger)
-                var oldFirstKeyTime = prop.keyTime(selectedKeys[0]);
-
-                // Calculate NEW first keyframe time (after stagger)
-                var newFirstKeyTime = Math.max(0, oldFirstKeyTime + layerStaggerOffset);
-
                 // Skip if no actual movement
                 if (Math.abs(layerStaggerOffset) < markerEpsilon) continue;
 
                 // Get unique property ID for marker block identification
                 var uniquePropId = getUniquePropertyId(prop);
 
-                // Call smart split/merge for this property
-                try {
-                    var result = smartSplitMergeMarker(
-                        layer.marker,
-                        oldFirstKeyTime,
-                        newFirstKeyTime,
-                        uniquePropId,
-                        markerEpsilon
-                    );
+                // NEW: Loop through ALL selected keyframes, not just first
+                var markersProcessed = 0;
+                for (var kIdx = 0; kIdx < selectedKeys.length; kIdx++) {
+                    var keyIndex = selectedKeys[kIdx];
 
-                    if (result !== "no marker at old time" && result !== "no spring block for property") {
-                        staggerMarkersSplitMerged++;
-                        DEBUG_JSX.log("SMART STAGGER: " + propData.propertyName + " on " + layer.name + " - " + result);
+                    // Get the OLD keyframe time (before stagger)
+                    var oldKeyTime = prop.keyTime(keyIndex);
+
+                    // Calculate NEW keyframe time (after stagger)
+                    var newKeyTime = Math.max(0, oldKeyTime + layerStaggerOffset);
+
+                    // Call smart split/merge for this keyframe
+                    try {
+                        var result = smartSplitMergeMarker(
+                            layer.marker,
+                            oldKeyTime,
+                            newKeyTime,
+                            uniquePropId,
+                            markerEpsilon
+                        );
+
+                        if (result !== "no marker at old time" && result !== "no spring block for property") {
+                            markersProcessed++;
+                            staggerMarkersSplitMerged++;
+                            DEBUG_JSX.log("SMART STAGGER: " + propData.propertyName + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
+                        }
+                    } catch(smartMarkerError) {
+                        DEBUG_JSX.log("SMART STAGGER ERROR: " + propData.propertyName + " @ " + oldKeyTime.toFixed(3) + "s - " + smartMarkerError.toString());
                     }
-                } catch(smartMarkerError) {
-                    DEBUG_JSX.log("SMART STAGGER ERROR: " + propData.propertyName + " - " + smartMarkerError.toString());
                 }
             }
         }
@@ -12027,13 +12049,20 @@ function snapToPlayheadFromPanel(preserveDelays) {
             if (Math.abs(timeOffset) < 0.001) continue;
 
             // Store offset and time range for marker processing
+            // NEW: Also store all selected keyframe times for marker checking
+            var selectedKeyTimes = [];
+            for (var sk = 0; sk < selectedKeys.length; sk++) {
+                selectedKeyTimes.push(prop.keyTime(selectedKeys[sk]));
+            }
+
             if (!layerMarkerOffsets[layer.index]) {
                 layerMarkerOffsets[layer.index] = {};
             }
             layerMarkerOffsets[layer.index][uniquePropId] = {
                 offset: timeOffset,
                 minTime: earliestKeyTime,
-                maxTime: latestKeyTime
+                maxTime: latestKeyTime,
+                selectedKeyTimes: selectedKeyTimes // NEW: Store all selected keyframe times
             };
 
             // CRITICAL: Preserve the keyframe AFTER the selected ones to prevent AE from modifying it
@@ -12336,29 +12365,34 @@ function snapToPlayheadFromPanel(preserveDelays) {
             // Process each property that moved on this layer
             for (var propId in propertyOffsets) {
                 var propData = propertyOffsets[propId];
-                var oldFirstKeyTime = propData.minTime; // Use minTime as old first keyframe time
                 var timeOffset = propData.offset;
-                var newFirstKeyTime = Math.max(0, oldFirstKeyTime + timeOffset);
+                var selectedKeyTimes = propData.selectedKeyTimes || [propData.minTime]; // Fallback to minTime if not available
 
                 // Skip if no actual movement
                 if (Math.abs(timeOffset) < 0.001) continue;
 
-                // Call smart split/merge for this property
-                try {
-                    var result = smartSplitMergeMarker(
-                        markerProp,
-                        oldFirstKeyTime,
-                        newFirstKeyTime,
-                        propId,
-                        epsilon
-                    );
+                // NEW: Loop through ALL selected keyframes, not just first
+                for (var kIdx = 0; kIdx < selectedKeyTimes.length; kIdx++) {
+                    var oldKeyTime = selectedKeyTimes[kIdx];
+                    var newKeyTime = Math.max(0, oldKeyTime + timeOffset);
 
-                    if (result !== "no marker at old time" && result !== "no spring block for property") {
-                        markersProcessed++;
-                        $.writeln("SNAP: Smart marker " + propId + " - " + result);
+                    // Call smart split/merge for each selected keyframe
+                    try {
+                        var result = smartSplitMergeMarker(
+                            markerProp,
+                            oldKeyTime,
+                            newKeyTime,
+                            propId,
+                            epsilon
+                        );
+
+                        if (result !== "no marker at old time" && result !== "no spring block for property") {
+                            markersProcessed++;
+                            $.writeln("SNAP: Smart marker " + propId + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
+                        }
+                    } catch(smartMarkerError) {
+                        $.writeln("SNAP: Smart marker error for " + propId + " @ " + oldKeyTime.toFixed(3) + "s: " + smartMarkerError.toString());
                     }
-                } catch(smartMarkerError) {
-                    $.writeln("SNAP: Smart marker error for " + propId + ": " + smartMarkerError.toString());
                 }
             }
         }
