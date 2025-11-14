@@ -7671,13 +7671,6 @@ function nudgeDelayTimelineMode(direction, frames) {
 
             if (selKeys.length === 0) continue;
 
-            // Get the OLD first keyframe time (before movement)
-            var oldFirstKeyTime = prop.keyTime(selKeys[0]);
-
-            // Calculate NEW first keyframe time (after movement)
-            var newFirstKeyTime = oldFirstKeyTime + timeOffset;
-            if (newFirstKeyTime < 0) newFirstKeyTime = 0;
-
             // Skip if no actual movement
             if (Math.abs(timeOffset) < markerEpsilon) continue;
 
@@ -7696,22 +7689,36 @@ function nudgeDelayTimelineMode(direction, frames) {
 
             if (!markerProp) continue;
 
-            // Call smart split/merge for this property
-            try {
-                var result = smartSplitMergeMarker(
-                    markerProp,
-                    oldFirstKeyTime,
-                    newFirstKeyTime,
-                    uniquePropId,
-                    markerEpsilon
-                );
+            // NEW: Loop through ALL selected keyframes, not just first
+            var markersProcessed = 0;
+            for (var kIdx = 0; kIdx < selKeys.length; kIdx++) {
+                var keyIndex = selKeys[kIdx];
 
-                if (result !== "no marker at old time" && result !== "no spring block for property") {
-                    markersSplitMerged++;
-                    DEBUG_JSX.log("SMART MARKER: " + cached.propertyName + " - " + result);
+                // Get the OLD keyframe time (before movement)
+                var oldKeyTime = prop.keyTime(keyIndex);
+
+                // Calculate NEW keyframe time (after movement)
+                var newKeyTime = oldKeyTime + timeOffset;
+                if (newKeyTime < 0) newKeyTime = 0;
+
+                // Call smart split/merge for each selected keyframe
+                try {
+                    var result = smartSplitMergeMarker(
+                        markerProp,
+                        oldKeyTime,
+                        newKeyTime,
+                        uniquePropId,
+                        markerEpsilon
+                    );
+
+                    if (result !== "no marker at old time" && result !== "no spring block for property") {
+                        markersProcessed++;
+                        markersSplitMerged++;
+                        DEBUG_JSX.log("SMART MARKER: " + cached.propertyName + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
+                    }
+                } catch(smartMarkerError) {
+                    DEBUG_JSX.log("SMART MARKER ERROR: " + cached.propertyName + " @ " + oldKeyTime.toFixed(3) + "s - " + smartMarkerError.toString());
                 }
-            } catch(smartMarkerError) {
-                DEBUG_JSX.log("SMART MARKER ERROR: " + cached.propertyName + " - " + smartMarkerError.toString());
             }
         }
 
