@@ -12032,12 +12032,15 @@ function snapToPlayheadFromPanel(preserveDelays) {
         }
 
         // PHASE 2: Process each property independently
+        DEBUG_JSX.log("PHASE 2: Processing " + allPropertyData.length + " properties");
         for (var propDataIdx = 0; propDataIdx < allPropertyData.length; propDataIdx++) {
             var propData = allPropertyData[propDataIdx];
             var layer = propData.layer;
             var prop = propData.property;
             var uniquePropId = propData.uniqueId;
             var selectedKeys = propData.selectedKeyIndices;
+
+            DEBUG_JSX.log("PHASE 2: Processing property " + (propDataIdx+1) + "/" + allPropertyData.length + ": " + prop.name + " on layer " + layer.name + " with " + selectedKeys.length + " selected keys");
 
             // Find earliest and latest selected keyframe times for this property
             var earliestKeyTime = null;
@@ -12068,8 +12071,18 @@ function snapToPlayheadFromPanel(preserveDelays) {
                 timeOffset = playheadTime - earliestKeyTime;
             }
 
-            // Skip if already at playhead
-            if (Math.abs(timeOffset) < 0.001) continue;
+            // Skip if already at playhead, but still store selections for restoration
+            if (Math.abs(timeOffset) < 0.001) {
+                DEBUG_JSX.log("PHASE 2: Property " + prop.name + " already at playhead, storing current selection without moving");
+                // Store current selection indices for restoration
+                processedSelections.push({
+                    layer: layer,
+                    propertyName: prop.name,
+                    propertyReference: prop,
+                    newSelIndices: selectedKeys.slice() // Use current indices since we're not moving
+                });
+                continue;
+            }
 
             // Store offset and time range for marker processing
             // NEW: Also store all selected keyframe times for marker checking
