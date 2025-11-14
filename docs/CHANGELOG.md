@@ -5,6 +5,35 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.85] - 2025-01-13 ✨ **ENHANCEMENT: Mirrored Springs Sync with Sproing v1.2.10**
+### ✨ Enhanced
+- **Inflection Point Preservation**: Bouncy mirrored springs now preserve smooth curves at bounce/rebound points
+- **Time Remap Precision**: Time Remap mirrored springs auto-boost to high precision for smooth curves
+- **Visual Quality Match**: Mirrored springs now perfectly match Sproing's baking quality
+
+### 🔬 Technical Details
+- **Inflection Point Detection (Sproing v1.2.6)**:
+  - Added `findInflectionPoints()` function to detect velocity direction changes
+  - Modified `simplifySpringKeyframes()` to split curve at inflection points before Douglas-Peucker simplification
+  - Ensures bounce/rebound keyframes are never removed by simplification algorithm
+  - Critical for bouncy springs (damping ratio < 1) to maintain smooth arced easing at turning points
+- **Time Remap Precision Boost (Sproing v1.2.10)**:
+  - Auto-upgrades Time Remap properties from low/medium → high precision during mirroring
+  - Only affects Time Remap, other properties continue using detected precision level
+  - Prevents visible stuttering on Time Remap mirrored springs
+  - Ensures smooth curves that match dense baking quality
+- **Implementation**: Updated mirror keys feature to match Sproing v1.2.10 spring baking algorithms
+
+### 🎯 Impact
+- Bouncy mirrored springs maintain perfect curves at all direction changes
+- Time Remap mirrors are smoother and more accurate across all precision settings
+- Mirrored springs now 100% match Sproing's visual baking quality
+- No changes to existing non-bouncy spring behavior
+- Fully compatible with Sproing unbake/rebake workflows
+
+### 🔗 Associated Build
+- AirBoard-v4.16.85.zxp
+
 ## [4.16.84] - 2025-01-13 🔧 **FIX: Spring Marker Movement with Leading Keyframes**
 ### 🔧 Fixed
 - **Spring Markers Not Moving**: Fixed spring markers staying behind when selected keyframes include leading keyframes before the spring segment
