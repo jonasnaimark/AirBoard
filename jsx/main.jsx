@@ -7924,6 +7924,7 @@ function nudgeDelayTimelineMode(direction, frames) {
 
                 movedCount += keyframesToMove.length;
                 DEBUG_JSX.log("Successfully moved " + keyframesToMove.length + " Time Remap keyframes");
+                DEBUG_JSX.log("CHECKPOINT A: Right after success message");
 
                 // PROTECTION: Restore the next keyframe
                 if (nextKeyData !== null) {
