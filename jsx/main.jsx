@@ -7927,8 +7927,16 @@ function nudgeDelayTimelineMode(direction, frames) {
 
                 // PROTECTION: Restore the next keyframe
                 if (nextKeyData !== null) {
-                    var keysAdded = newIndices.length - keyframesToMove.length;
-                    restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                    DEBUG_JSX.log("Time Remap: Attempting to restore next keyframe");
+                    try {
+                        var keysAdded = newIndices.length - keyframesToMove.length;
+                        restoreNextKeyframe(prop, nextKeyData, keysAdded);
+                        DEBUG_JSX.log("Time Remap: Successfully restored next keyframe");
+                    } catch(nextKeyError) {
+                        DEBUG_JSX.log("Time Remap: ERROR restoring next keyframe: " + nextKeyError.toString());
+                    }
+                } else {
+                    DEBUG_JSX.log("Time Remap: No next keyframe to restore");
                 }
 
                 DEBUG_JSX.log("Time Remap block completed, continuing to selection storage");
