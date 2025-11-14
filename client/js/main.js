@@ -612,7 +612,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Create tooltip for global frame input
         createTooltip(globalFrameInputField, 'Frames');
 
-        durationIncrementBtn.addEventListener('click', function() {
+        durationIncrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('Duration increment (stretch forward) clicked');
 
             if (!csInterface) {
@@ -622,8 +623,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get duration frames from input field
             var durationFrames = parseFloat(globalFrameInputField.value) || 3;
+            // Apply 10x multiplier if Alt is held
+            if (isAltHeld) {
+                durationFrames *= 10;
+            }
             console.log('Applying +' + durationFrames + ' frame duration stretch');
-            
+
             durationIncrementBtn.disabled = true;
             
             // Call the frame-based function that maintains selection and uses dynamic input
@@ -691,18 +696,23 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        durationDecrementBtn.addEventListener('click', function() {
+        durationDecrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('Duration decrement (stretch backward) clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get duration frames from input field
             var durationFrames = parseFloat(globalFrameInputField.value) || 3;
+            // Apply 10x multiplier if Alt is held
+            if (isAltHeld) {
+                durationFrames *= 10;
+            }
             console.log('Applying -' + durationFrames + ' frame duration stretch');
-            
+
             durationDecrementBtn.disabled = true;
             
             // Call the frame-based function that maintains selection and uses dynamic input
@@ -777,7 +787,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         delayIncrementBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
-            console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]'));
+            var isAltHeld = event.altKey;
+            console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]') + (isAltHeld ? ' [ALT - 10x]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -786,8 +797,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get delay frames from input field
             var delayFrames = parseFloat(globalFrameInputField.value) || 3;
+            // Apply 10x multiplier if Alt is held
+            if (isAltHeld) {
+                delayFrames *= 10;
+            }
             console.log('Applying +' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
-            
+
             delayIncrementBtn.disabled = true;
             
             // Choose function based on shift key (SWAPPED: normal = timeline, shift = baseline)
@@ -859,17 +874,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         delayDecrementBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
+            var isAltHeld = event.altKey;
             console.log('Delay decrement (nudge backward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]'));
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get delay frames from input field
             var delayFrames = parseFloat(globalFrameInputField.value) || 3;
+            // Apply 10x multiplier if Alt is held
+            if (isAltHeld) {
+                delayFrames *= 10;
+            }
             console.log('Applying -' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
-            
+
             delayDecrementBtn.disabled = true;
             
             // Choose function based on shift key (SWAPPED: normal = timeline, shift = baseline)
@@ -1468,7 +1488,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var staggerInputField = document.getElementById('globalFrameInput');
 
     if (staggerIncrementBtn) {
-        staggerIncrementBtn.addEventListener('click', function() {
+        staggerIncrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('Stagger increment (+) clicked');
 
             if (!csInterface) {
@@ -1483,6 +1504,10 @@ document.addEventListener('DOMContentLoaded', function() {
             function proceedWithStaggerIncrement() {
                 // Get stagger frames from input field
                 var staggerFrames = parseFloat(staggerInputField.value) || 3;
+                // Apply 10x multiplier if Alt is held
+                if (isAltHeld) {
+                    staggerFrames *= 10;
+                }
                 
                 // Check if stagger direction is flipped (top to bottom)
                 var staggerActionBtn = document.getElementById('staggerActionBtn');
@@ -1577,21 +1602,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (staggerDecrementBtn) {
-        staggerDecrementBtn.addEventListener('click', function() {
+        staggerDecrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('Stagger decrement (-) clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Skip pre-check - let ExtendScript handle single layer vs multi-layer scenarios
             // This allows same-layer staggering to work
             proceedWithStaggerDecrement();
-            
+
             function proceedWithStaggerDecrement() {
                 // Get stagger frames from input field
                 var staggerFrames = parseFloat(staggerInputField.value) || 3;
+                // Apply 10x multiplier if Alt is held
+                if (isAltHeld) {
+                    staggerFrames *= 10;
+                }
                 
                 // Check if stagger direction is flipped (top to bottom)
                 var staggerActionBtn = document.getElementById('staggerActionBtn');
@@ -1710,44 +1740,52 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (xIncrementBtn && xDecrementBtn) {
         // X → button: Move selected keyframe right by 5px
-        xIncrementBtn.addEventListener('click', function() {
+        xIncrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('X Right arrow clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get current In/Out state
             var isInDirection = document.getElementById('xInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
-            
+
+            // Apply 10x multiplier if Alt is held
+            var multiplier = isAltHeld ? 10 : 1;
+
             // Call the ExtendScript function: positive = right
-            csInterface.evalScript('nudgeXPosition(1, "' + direction + '")', function(result) {
+            csInterface.evalScript('nudgeXPosition(1, "' + direction + '", ' + multiplier + ')', function(result) {
                 console.log('X nudge right result:', result);
-                
+
                 // Update display based on result
                 updateDistanceDisplay('x', result);
             });
         });
         
         // X ← button: Move selected keyframe left by 5px
-        xDecrementBtn.addEventListener('click', function() {
+        xDecrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('X Left arrow clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get current In/Out state
             var isInDirection = document.getElementById('xInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
-            
+
+            // Apply 10x multiplier if Alt is held
+            var multiplier = isAltHeld ? 10 : 1;
+
             // Call the ExtendScript function: negative = left
-            csInterface.evalScript('nudgeXPosition(-1, "' + direction + '")', function(result) {
+            csInterface.evalScript('nudgeXPosition(-1, "' + direction + '", ' + multiplier + ')', function(result) {
                 console.log('X nudge left result:', result);
-                
+
                 // Update display based on result
                 updateDistanceDisplay('x', result);
             });
@@ -1760,44 +1798,52 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (yIncrementBtn && yDecrementBtn) {
         // Y ↓ button: Move selected keyframe down by 5px
-        yIncrementBtn.addEventListener('click', function() {
+        yIncrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('Y Down arrow clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get current In/Out state
             var isInDirection = document.getElementById('yInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
-            
+
+            // Apply 10x multiplier if Alt is held
+            var multiplier = isAltHeld ? 10 : 1;
+
             // Call the ExtendScript function: positive = down
-            csInterface.evalScript('nudgeYPosition(1, "' + direction + '")', function(result) {
+            csInterface.evalScript('nudgeYPosition(1, "' + direction + '", ' + multiplier + ')', function(result) {
                 console.log('Y nudge down result:', result);
-                
+
                 // Update display based on result
                 updateDistanceDisplay('y', result);
             });
         });
         
         // Y ↑ button: Move selected keyframe up by 5px
-        yDecrementBtn.addEventListener('click', function() {
+        yDecrementBtn.addEventListener('click', function(event) {
+            var isAltHeld = event.altKey;
             console.log('Y Up arrow clicked');
-            
+
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
-            
+
             // Get current In/Out state
             var isInDirection = document.getElementById('yInBtn').classList.contains('selected');
             var direction = isInDirection ? 'in' : 'out';
-            
+
+            // Apply 10x multiplier if Alt is held
+            var multiplier = isAltHeld ? 10 : 1;
+
             // Call the ExtendScript function: negative = up
-            csInterface.evalScript('nudgeYPosition(-1, "' + direction + '")', function(result) {
+            csInterface.evalScript('nudgeYPosition(-1, "' + direction + '", ' + multiplier + ')', function(result) {
                 console.log('Y nudge up result:', result);
-                
+
                 // Update display based on result
                 updateDistanceDisplay('y', result);
             });

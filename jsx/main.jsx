@@ -8729,25 +8729,25 @@ function calculateDelaySnapWithIncrement(currentDelayMs, direction, incrementMs)
 }
 
 // X Position nudging functions
-function nudgeXPosition(pixelAmount, direction) {
+function nudgeXPosition(pixelAmount, direction, multiplier) {
     try {
-        return nudgePositionAxis('x', pixelAmount, direction);
+        return nudgePositionAxis('x', pixelAmount, direction, multiplier);
     } catch(e) {
         return "error|Failed to nudge X position: " + e.toString();
     }
 }
 
-// Y Position nudging functions  
-function nudgeYPosition(pixelAmount, direction) {
+// Y Position nudging functions
+function nudgeYPosition(pixelAmount, direction, multiplier) {
     try {
-        return nudgePositionAxis('y', pixelAmount, direction);
+        return nudgePositionAxis('y', pixelAmount, direction, multiplier);
     } catch(e) {
         return "error|Failed to nudge Y position: " + e.toString();
     }
 }
 
 // Core position nudging function with direct keyframe movement (5px increments)
-function nudgePositionAxis(axis, nudgeDirection, direction) {
+function nudgePositionAxis(axis, nudgeDirection, direction, multiplier) {
     try {
         // Clear previous debug messages
         DEBUG_JSX.clear();
@@ -8851,8 +8851,8 @@ function nudgePositionAxis(axis, nudgeDirection, direction) {
             // Use default 2x if we can't read the setting
         }
         
-        // Calculate movement amount: 5px base * resolution multiplier
-        var baseMovement = 5;
+        // Calculate movement amount: 5px base * resolution multiplier * Alt modifier (if held)
+        var baseMovement = 5 * (multiplier || 1);
         var scaledIncrement = baseMovement * resolutionMultiplier;
         
         DEBUG_JSX.log("Processing " + allPropertiesToNudge.length + " position properties");
