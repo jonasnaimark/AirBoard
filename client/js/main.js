@@ -1312,6 +1312,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     font-size: 10px;
                     font-weight: 400;
                     white-space: pre-line;
+                    text-align: center;
+                    line-height: 1.3;
                     border: 1px solid rgba(255, 255, 255, 0.12);
                     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
                     z-index: 1000;
@@ -1351,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (readKeyframesBtn) createTooltip(readKeyframesBtn, 'Read keyframes');
     if (staggerActionBtn) createTooltip(staggerActionBtn, 'Stagger direction');
-    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead');
+    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead\nShift: Keep delays');
     if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror keys');
 
     // Mirror Keys button handler
