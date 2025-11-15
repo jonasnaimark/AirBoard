@@ -5869,22 +5869,46 @@ function nudgeDelay(direction) {
                     var processedMarkerTimes = []; // Stores both old and new times
                     var markersProcessed = 0;
 
+                    // DEBUG: Show what keyframe times we're looping through
+                    var keyframeTimes = [];
+                    for (var debugIdx = 0; debugIdx < propData.keyframes.length; debugIdx++) {
+                        keyframeTimes.push(propData.keyframes[debugIdx].time.toFixed(6));
+                    }
+                    DEBUG_JSX.log("MARKER LOOP: Will check " + propData.keyframes.length + " keyframes at times: [" + keyframeTimes.join(", ") + "]");
+
                     for (var kfIdx = 0; kfIdx < propData.keyframes.length; kfIdx++) {
                         var keyframeData = propData.keyframes[kfIdx];
                         var oldKeyTime = keyframeData.time;
 
                         // Check if we've already processed a marker at this time (original OR moved location)
                         var alreadyProcessed = false;
+                        DEBUG_JSX.log("MARKER CHECK: Checking oldKeyTime " + oldKeyTime.toFixed(6) + "s against processedMarkerTimes: [" + processedMarkerTimes.join(", ") + "]");
                         for (var p = 0; p < processedMarkerTimes.length; p++) {
-                            if (Math.abs(processedMarkerTimes[p] - oldKeyTime) < markerEpsilon) {
+                            var diff = Math.abs(processedMarkerTimes[p] - oldKeyTime);
+                            DEBUG_JSX.log("  - Comparing with processedMarkerTimes[" + p + "] = " + processedMarkerTimes[p].toFixed(6) + ", diff = " + diff.toFixed(6) + ", epsilon = " + markerEpsilon);
+                            if (diff < markerEpsilon) {
                                 alreadyProcessed = true;
+                                DEBUG_JSX.log("  - MATCH! Skipping this keyframe");
                                 break;
                             }
                         }
 
-                        if (alreadyProcessed) continue;
+                        if (alreadyProcessed) {
+                            DEBUG_JSX.log("MARKER CHECK: Skipped oldKeyTime " + oldKeyTime.toFixed(6) + "s (already processed)");
+                            continue;
+                        }
+
+                        DEBUG_JSX.log("MARKER CHECK: Processing oldKeyTime " + oldKeyTime.toFixed(6) + "s (not in processed list)");
 
                         var newKeyTime = oldKeyTime + timeOffset;
+
+                        // EXTRA CHECK: Verify there's actually a marker at this position before calling smartSplitMergeMarker
+                        var markerExists = findMarkerAtTime(markerProp, oldKeyTime, markerEpsilon);
+                        if (!markerExists) {
+                            DEBUG_JSX.log("MARKER CHECK: No marker found at " + oldKeyTime.toFixed(6) + "s, skipping");
+                            continue;
+                        }
+                        DEBUG_JSX.log("MARKER CHECK: Marker confirmed at " + oldKeyTime.toFixed(6) + "s, calling smartSplitMergeMarker");
 
                         // Call smartSplitMergeMarker for this keyframe
                         var result = smartSplitMergeMarker(
@@ -5901,6 +5925,9 @@ function nudgeDelay(direction) {
                             processedMarkerTimes.push(oldKeyTime);
                             processedMarkerTimes.push(newKeyTime);
                             DEBUG_JSX.log("SMART MARKER: " + propData.property + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
+                            DEBUG_JSX.log("MARKER CHECK: Added [" + oldKeyTime.toFixed(6) + ", " + newKeyTime.toFixed(6) + "] to processedMarkerTimes. Array now: [" + processedMarkerTimes.join(", ") + "]");
+                        } else {
+                            DEBUG_JSX.log("MARKER CHECK: Result was '" + result + "', NOT adding to processedMarkerTimes");
                         }
                     }
 
@@ -7850,12 +7877,27 @@ function nudgeDelayTimelineMode(direction, frames) {
             if (!markerProp) continue;
 
             // NEW: Loop through ALL selected keyframes, not just first
+            // FIXED: Track processed marker times to prevent double-processing
+            var processedMarkerTimes = []; // Stores both old and new times
             var markersProcessed = 0;
+
             for (var kIdx = 0; kIdx < selKeys.length; kIdx++) {
                 var keyIndex = selKeys[kIdx];
 
                 // Get the OLD keyframe time (before movement)
                 var oldKeyTime = prop.keyTime(keyIndex);
+
+                // Check if we've already processed a marker at this time (original OR moved location)
+                var alreadyProcessed = false;
+                for (var p = 0; p < processedMarkerTimes.length; p++) {
+                    if (Math.abs(processedMarkerTimes[p] - oldKeyTime) < markerEpsilon) {
+                        alreadyProcessed = true;
+                        DEBUG_JSX.log("SMART MARKER: Skipping " + cached.propertyName + " @ " + oldKeyTime.toFixed(3) + "s (already processed)");
+                        break;
+                    }
+                }
+
+                if (alreadyProcessed) continue;
 
                 // Calculate NEW keyframe time (after movement)
                 var newKeyTime = oldKeyTime + timeOffset;
@@ -7874,6 +7916,9 @@ function nudgeDelayTimelineMode(direction, frames) {
                     if (result !== "no marker at old time" && result !== "no spring block for property") {
                         markersProcessed++;
                         markersSplitMerged++;
+                        // Track BOTH the original time AND the new time to prevent reprocessing
+                        processedMarkerTimes.push(oldKeyTime);
+                        processedMarkerTimes.push(newKeyTime);
                         DEBUG_JSX.log("SMART MARKER: " + cached.propertyName + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
                     }
                 } catch(smartMarkerError) {
@@ -12562,16 +12607,33 @@ function snapToPlayheadFromPanel(preserveDelays) {
 
                     // Check if we've already processed a marker at this time (original OR moved location)
                     var alreadyProcessed = false;
+                    $.writeln("SNAP MARKER CHECK: Checking oldKeyTime " + oldKeyTime.toFixed(6) + "s against processedMarkerTimes: [" + processedMarkerTimes.join(", ") + "]");
                     for (var p = 0; p < processedMarkerTimes.length; p++) {
-                        if (Math.abs(processedMarkerTimes[p] - oldKeyTime) < epsilon) {
+                        var diff = Math.abs(processedMarkerTimes[p] - oldKeyTime);
+                        $.writeln("  - Comparing with processedMarkerTimes[" + p + "] = " + processedMarkerTimes[p].toFixed(6) + ", diff = " + diff.toFixed(6) + ", epsilon = " + epsilon);
+                        if (diff < epsilon) {
                             alreadyProcessed = true;
+                            $.writeln("  - MATCH! Skipping this keyframe");
                             break;
                         }
                     }
 
-                    if (alreadyProcessed) continue;
+                    if (alreadyProcessed) {
+                        $.writeln("SNAP MARKER CHECK: Skipped oldKeyTime " + oldKeyTime.toFixed(6) + "s (already processed)");
+                        continue;
+                    }
+
+                    $.writeln("SNAP MARKER CHECK: Processing oldKeyTime " + oldKeyTime.toFixed(6) + "s (not in processed list)");
 
                     var newKeyTime = Math.max(0, oldKeyTime + timeOffset);
+
+                    // EXTRA CHECK: Verify there's actually a marker at this position before calling smartSplitMergeMarker
+                    var markerExists = findMarkerAtTime(markerProp, oldKeyTime, epsilon);
+                    if (!markerExists) {
+                        $.writeln("SNAP MARKER CHECK: No marker found at " + oldKeyTime.toFixed(6) + "s, skipping");
+                        continue;
+                    }
+                    $.writeln("SNAP MARKER CHECK: Marker confirmed at " + oldKeyTime.toFixed(6) + "s, calling smartSplitMergeMarker");
 
                     // Call smart split/merge for this keyframe
                     try {
@@ -12589,6 +12651,9 @@ function snapToPlayheadFromPanel(preserveDelays) {
                             processedMarkerTimes.push(oldKeyTime);
                             processedMarkerTimes.push(newKeyTime);
                             $.writeln("SNAP: Smart marker " + propId + " @ " + oldKeyTime.toFixed(3) + "s - " + result);
+                            $.writeln("SNAP MARKER CHECK: Added [" + oldKeyTime.toFixed(6) + ", " + newKeyTime.toFixed(6) + "] to processedMarkerTimes. Array now: [" + processedMarkerTimes.join(", ") + "]");
+                        } else {
+                            $.writeln("SNAP MARKER CHECK: Result was '" + result + "', NOT adding to processedMarkerTimes");
                         }
                     } catch(smartMarkerError) {
                         $.writeln("SNAP: Smart marker error for " + propId + " @ " + oldKeyTime.toFixed(3) + "s: " + smartMarkerError.toString());

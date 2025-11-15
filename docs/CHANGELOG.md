@@ -5,6 +5,36 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.89] - 2025-01-14 🐛 **FIX: Delay Nudging Marker Double-Processing (Complete Fix)**
+### 🐛 Fixed
+- **Delay Nudging (+/-)**: Fixed spring markers moving 2x too far when using delay nudge buttons
+- **Timeline Mode**: Spring markers now move correct distance when nudging keyframes in timeline mode
+- **Directional Bug**: Fixed asymmetric behavior where `-` worked correctly but `+` moved markers twice as far
+
+### 🔬 Technical Details
+- **Root Cause**: The delay nudging function (STEP 2A marker processing) was missing the `processedMarkerTimes` tracking that was added to snap-to-playhead in v4.16.88
+- **Same Bug, Different Location**: While v4.16.88 fixed snap-to-playhead, delay nudging had identical code without the fix
+- **Example of Bug**:
+  - Iteration 1: Keyframe at 5.100s → moved marker 5.100s → 5.150s ✓
+  - Iteration 2: Keyframe at 5.150s → found marker we JUST moved, moved AGAIN 5.150s → 5.200s ❌
+  - Result: Marker moved 100ms instead of 50ms
+- **Why `-` Worked but `+` Failed**:
+  - Moving backward: Marker moves to position BEFORE next keyframe's original time (no collision)
+  - Moving forward: Marker lands exactly where next keyframe was originally (collision = double processing)
+- **The Fix**: Added `processedMarkerTimes` array to STEP 2A marker processing (line 7881-7927)
+  - Tracks both original position and new position of each moved marker
+  - Subsequent keyframes skip processing if their time matches any tracked position
+  - Identical logic to the v4.16.88 fix, now applied to delay nudging path
+
+### 🎯 Impact
+- Delay nudging now moves markers exactly 50ms per click in both directions
+- Eliminates the confusing asymmetric behavior between + and -
+- Completes the marker double-processing fix started in v4.16.88
+- All marker movement operations (snap, delay, position) now use consistent tracking
+
+### 🔗 Associated Build
+- AirBoard-v4.16.89.zxp
+
 ## [4.16.88] - 2025-01-14 🐛 **FIX: Spring Marker Double-Processing**
 ### 🐛 Fixed
 - **Snap to Playhead**: Fixed spring markers being processed multiple times and incorrectly splitting
