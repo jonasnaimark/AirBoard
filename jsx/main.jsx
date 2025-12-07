@@ -14694,7 +14694,9 @@ function applyFitToShape(mode) {
                             id: uniqueId,
                             name: otherLayer.name,
                             position: originalComponents,
-                            originalComment: originalComment
+                            originalComment: originalComment,
+                            label: otherLayer.label,
+                            startTime: otherLayer.startTime
                         });
                         DEBUG_JSX.log("fitNone recorded '" + otherLayer.name + "' comp position: " + Math.round(originalComponents[0]) + ", " + Math.round(originalComponents[1]));
                     } catch(prePosError) {
@@ -15050,7 +15052,27 @@ function applyFitToShape(mode) {
             
             // Get the precomp layer
             var precomp = comp.layer(lowestIndex);
-            
+
+            // Apply label and startTime from original layers
+            if (precomp && fitNoneData && fitNoneData.layerData.length > 0) {
+                // Use the first layer's label (topmost selected layer)
+                var firstLayerLabel = fitNoneData.layerData[0].label;
+                if (firstLayerLabel !== undefined && firstLayerLabel !== null) {
+                    precomp.label = firstLayerLabel;
+                    DEBUG_JSX.log("fitNone applied label " + firstLayerLabel + " to precomp");
+                }
+
+                // Use the earliest startTime among all precomposed layers
+                var earliestStartTime = fitNoneData.layerData[0].startTime;
+                for (var st = 1; st < fitNoneData.layerData.length; st++) {
+                    if (fitNoneData.layerData[st].startTime < earliestStartTime) {
+                        earliestStartTime = fitNoneData.layerData[st].startTime;
+                    }
+                }
+                precomp.startTime = earliestStartTime;
+                DEBUG_JSX.log("fitNone set precomp startTime to " + earliestStartTime);
+            }
+
             // Make sure precomp was created and resize its composition
             if (precomp && precomp.source) {
                 var precompComp = precomp.source;
@@ -15089,7 +15111,21 @@ function applyFitToShape(mode) {
                     
                     setLayerPositionComponents(innerLayer, newX, newY, newZ);
                     DEBUG_JSX.log("fitNone recentered '" + innerLayer.name + "' to: " + Math.round(newX) + ", " + Math.round(newY));
-                    
+
+                    // Adjust inner layer's startTime relative to earliest layer (so layers start at beginning of precomp)
+                    if (storedInfo.startTime !== undefined) {
+                        // Calculate earliest startTime from all layer data
+                        var earliestStart = fitNoneData.layerData[0].startTime;
+                        for (var es = 1; es < fitNoneData.layerData.length; es++) {
+                            if (fitNoneData.layerData[es].startTime < earliestStart) {
+                                earliestStart = fitNoneData.layerData[es].startTime;
+                            }
+                        }
+                        // Offset this layer's startTime so earliest layer starts at 0
+                        innerLayer.startTime = storedInfo.startTime - earliestStart;
+                        DEBUG_JSX.log("fitNone adjusted '" + innerLayer.name + "' startTime to " + innerLayer.startTime);
+                    }
+
                     // Restore original comment
                     try {
                         innerLayer.comment = storedInfo.originalComment || "";

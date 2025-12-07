@@ -5,6 +5,21 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.90] - 2025-12-06 **Fit to Shape: Precomp Improvements**
+### Improved
+- **Color Label Inheritance**: Precomp now inherits the color label from the first (topmost) selected layer
+- **Timeline Positioning**: Precomp is now placed at the same timeline position as the original layer(s)
+- **Inner Layer Timing**: Layers inside the precomp start at frame 0, maintaining relative timing offsets
+
+### Technical Details
+- Captures `label` and `startTime` properties before precomposing
+- Sets precomp's `startTime` to the earliest start time among all selected layers
+- Offsets inner layers' start times so the earliest one begins at 0
+- Other layers maintain their relative timing (e.g., if Layer B was 1 second after Layer A, it starts at 1 second in precomp)
+
+### Associated Build
+- AirBoard-v4.16.90.zxp
+
 ## [4.16.89] - 2025-01-14 🐛 **FIX: Delay Nudging Marker Double-Processing (Complete Fix)**
 ### 🐛 Fixed
 - **Delay Nudging (+/-)**: Fixed spring markers moving 2x too far when using delay nudge buttons
