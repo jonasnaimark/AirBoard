@@ -14459,6 +14459,17 @@ function applyFitToShape(mode) {
             maskLayer = shapeLayer.duplicate();
             maskLayer.name = shapeLayer.name + " - Mask";
 
+            // CRITICAL: Turn off adjustment layer if the original was one
+            // Adjustment layers cannot be used as track mattes
+            try {
+                if (maskLayer.adjustmentLayer) {
+                    DEBUG_JSX.log("Turning off adjustment layer on mask (can't use as track matte)");
+                    maskLayer.adjustmentLayer = false;
+                }
+            } catch(adjError) {
+                DEBUG_JSX.log("Could not check/set adjustment layer: " + adjError.toString());
+            }
+
             // Clear any inherited parent or track matte from the duplicated layer
             try {
                 if (maskLayer.parent !== null) {

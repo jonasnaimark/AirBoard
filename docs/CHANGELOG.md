@@ -5,6 +5,18 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.92] - 2025-12-07 🔧 **Fit to Shape: Adjustment Layer Support**
+### 🔧 Fixed
+- **Adjustment Layer Shapes**: Fit to Shape now works when the shape layer is an adjustment layer
+- **Track Matte Error**: Fixed "Invalid parameters passed to setTrackMatte()" error
+
+### 🔬 Technical Details
+- **Root Cause**: Adjustment layers cannot be used as track mattes in After Effects
+- **The Fix**: When creating the mask layer (duplicate of shape), turn off `adjustmentLayer` property so it can be used as a track matte
+
+### 🔗 Associated Build
+- AirBoard-v4.16.92.zxp
+
 ## [4.16.91] - 2025-12-07 🔧 **Global Delay: Essential Properties Support**
 ### 🔧 Fixed
 - **Essential Properties Keyframes**: Global delay now properly moves keyframes on Essential Properties (Master Properties exposed on precomp layers)
