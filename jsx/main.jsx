@@ -87,7 +87,17 @@ function getFullPropertyPath(prop) {
 
         // Walk up the property hierarchy to build full path
         while (currentProp && currentProp.name) {
-            pathParts.unshift(currentProp.name);
+            var partName = currentProp.name;
+
+            // Include property index to handle duplicate names (e.g., multiple "Fill 1 Color" in Essential Properties)
+            // Use propertyIndex if available (built-in ExtendScript property)
+            try {
+                if (currentProp.propertyIndex !== undefined) {
+                    partName += "[" + currentProp.propertyIndex + "]";
+                }
+            } catch(e) {}
+
+            pathParts.unshift(partName);
 
             // Stop if we reach the layer level
             if (currentProp.propertyType === PropertyType.LAYER) {
@@ -7153,6 +7163,31 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
             }
         } catch(e) {
             // Not a camera layer or camera options not accessible
+        }
+
+        // 7.7. Essential Properties (Master Properties exposed on precomps)
+        try {
+            var essentialProps = layer.property("ADBE Layer Overrides");
+            if (essentialProps && essentialProps.numProperties > 0) {
+                DEBUG_JSX.log("🔍 Processing Essential Properties for " + layer.name + " (" + essentialProps.numProperties + " props)");
+                // Log each essential property for debugging
+                for (var ep = 1; ep <= essentialProps.numProperties; ep++) {
+                    var epProp = essentialProps.property(ep);
+                    if (epProp) {
+                        var epInfo = "  EP[" + ep + "]: " + epProp.name;
+                        epInfo += " | type=" + epProp.propertyType;
+                        epInfo += " | canVary=" + epProp.canVaryOverTime;
+                        epInfo += " | numKeys=" + (epProp.numKeys || 0);
+                        if (epProp.numProperties) {
+                            epInfo += " | numProps=" + epProp.numProperties;
+                        }
+                        DEBUG_JSX.log(epInfo);
+                    }
+                }
+                processPropertyGroup(essentialProps);
+            }
+        } catch(e) {
+            DEBUG_JSX.log("Essential Properties error: " + e.toString());
         }
 
         // 8. Time Remap - special layer property (not in any property group)

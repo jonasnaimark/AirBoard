@@ -5,6 +5,26 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.91] - 2025-12-07 🔧 **Global Delay: Essential Properties Support**
+### 🔧 Fixed
+- **Essential Properties Keyframes**: Global delay now properly moves keyframes on Essential Properties (Master Properties exposed on precomp layers)
+- **Duplicate Name Handling**: Fixed issue where multiple Essential Properties with the same name (e.g., multiple "Fill 1 Color") were incorrectly detected as duplicates
+
+### 🔬 Technical Details
+- **Root Cause**: The `moveKeyframesAfterTime` function wasn't processing Essential Properties (`ADBE Layer Overrides`) - it was missing from the list of property groups to check
+- **Secondary Issue**: Even after adding Essential Properties support, properties with duplicate names were being skipped due to the duplicate detection system using property paths that didn't include indices
+- **The Fix**:
+  1. Added Essential Properties processing via `layer.property("ADBE Layer Overrides")` in section 7.7
+  2. Modified `getFullPropertyPath()` to include `propertyIndex` for each property in the path, making `Fill 1 Color[2]` distinct from `Fill 1 Color[3]`
+
+### 🎯 Impact
+- Global delay now works with all Essential Properties keyframes
+- Properties with identical names (common in Essential Properties) are now correctly identified as unique
+- No more missing keyframes when using global delay on precomp layers with exposed master properties
+
+### 🔗 Associated Build
+- AirBoard-v4.16.91.zxp
+
 ## [4.16.90] - 2025-12-06 **Fit to Shape: Precomp Improvements**
 ### Improved
 - **Color Label Inheritance**: Precomp now inherits the color label from the first (topmost) selected layer
