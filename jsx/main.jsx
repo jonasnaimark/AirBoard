@@ -14520,13 +14520,14 @@ function applyFitToShape(mode) {
             // Parent mask layer to original shape layer
             maskLayer.parent = shapeLayer;
 
-            // Reset position and scale after parenting (fixes compound transform issue)
+            // Reset position, scale, and rotation after parenting (fixes compound transform issue)
             try {
                 maskLayer.property("Transform").property("Position").setValue([0, 0]);
                 maskLayer.property("Transform").property("Scale").setValue([100, 100]);
-                DEBUG_JSX.log("Reset mask position to [0, 0] and scale to [100, 100] relative to parent");
+                maskLayer.property("Transform").property("Rotation").setValue(0);
+                DEBUG_JSX.log("Reset mask position to [0, 0], scale to [100, 100], rotation to 0 relative to parent");
             } catch(relPosError) {
-                DEBUG_JSX.log("Could not reset relative position/scale: " + relPosError.toString());
+                DEBUG_JSX.log("Could not reset relative position/scale/rotation: " + relPosError.toString());
             }
 
             // Shy the mask layer to reduce clutter
@@ -14762,7 +14763,15 @@ function applyFitToShape(mode) {
             
             // Parent the other layer to the shape layer (not the mask layer)
             otherLayer.parent = shapeLayer;
-            
+
+            // Reset rotation to 0 after parenting (prevents double-rotation when parent animates)
+            try {
+                otherLayer.property("Transform").property("Rotation").setValue(0);
+                DEBUG_JSX.log("Reset content layer rotation to 0 relative to parent");
+            } catch(rotError) {
+                DEBUG_JSX.log("Could not reset content layer rotation: " + rotError.toString());
+            }
+
             // Set up track matte using the MASK layer (not the original shape layer)
             otherLayer.setTrackMatte(maskLayer, TrackMatteType.ALPHA);
             

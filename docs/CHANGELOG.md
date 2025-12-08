@@ -5,6 +5,18 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.93] - 2025-12-07 🔧 **Fit to Shape: Rotation Reset Fix**
+### 🔧 Fixed
+- **Rotation Double-Up**: Fixed mask and content layers over-rotating when shape layer has animated rotation
+- When shape layer rotates (e.g., -20° → 0°), mask and content now follow correctly instead of doubling
+
+### 🔬 Technical Details
+- **Root Cause**: After parenting, AE compensates local rotation to maintain visual position, causing double rotation when parent animates
+- **The Fix**: Reset Rotation to 0 on both mask layer and content layer after parenting
+
+### 🔗 Associated Build
+- AirBoard-v4.16.93.zxp
+
 ## [4.16.92] - 2025-12-07 🔧 **Fit to Shape: Adjustment Layer Support**
 ### 🔧 Fixed
 - **Adjustment Layer Shapes**: Fit to Shape now works when the shape layer is an adjustment layer
