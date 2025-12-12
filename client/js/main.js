@@ -1319,48 +1319,75 @@ document.addEventListener('DOMContentLoaded', function() {
     // Global tooltip creation function (reusable across all inputs)
     function createTooltip(element, text) {
             var tooltip = null;
+            var showTimeout = null;
+            var isShowing = false;
 
-            element.addEventListener('mouseenter', function() {
-                tooltip = document.createElement('div');
-                tooltip.textContent = text;
-                tooltip.style.cssText = `
-                    position: fixed;
-                    background-color: #1a1a1a;
-                    color: #ffffff;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 10px;
-                    font-weight: 400;
-                    white-space: pre-line;
-                    text-align: center;
-                    line-height: 1.3;
-                    border: 1px solid rgba(255, 255, 255, 0.12);
-                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-                    z-index: 1000;
-                    pointer-events: none;
-                    opacity: 0;
-                    transition: opacity 0.2s ease-in-out;
-                `;
-                
-                document.body.appendChild(tooltip);
-                
-                var rect = element.getBoundingClientRect();
-                tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
-                tooltip.style.top = (rect.top - tooltip.offsetHeight - 8) + 'px';
-                
-                setTimeout(() => tooltip.style.opacity = '1', 10);
-            });
-            
-            element.addEventListener('mouseleave', function() {
+            function removeTooltip() {
+                if (showTimeout) {
+                    clearTimeout(showTimeout);
+                    showTimeout = null;
+                }
                 if (tooltip) {
                     tooltip.style.opacity = '0';
-                    setTimeout(() => {
+                    setTimeout(function() {
                         if (tooltip && tooltip.parentNode) {
                             tooltip.parentNode.removeChild(tooltip);
                         }
                         tooltip = null;
+                        isShowing = false;
                     }, 200);
                 }
+            }
+
+            element.addEventListener('mouseenter', function() {
+                // Cancel any existing timeout
+                if (showTimeout) {
+                    clearTimeout(showTimeout);
+                }
+
+                // Wait 500ms before showing tooltip
+                showTimeout = setTimeout(function() {
+                    tooltip = document.createElement('div');
+                    tooltip.textContent = text;
+                    tooltip.style.cssText = `
+                        position: fixed;
+                        background-color: #1a1a1a;
+                        color: #ffffff;
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        font-size: 10px;
+                        font-weight: 400;
+                        white-space: pre-line;
+                        text-align: center;
+                        line-height: 1.3;
+                        border: 1px solid rgba(255, 255, 255, 0.12);
+                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                        z-index: 1000;
+                        pointer-events: none;
+                        opacity: 0;
+                        transition: opacity 0.2s ease-in-out;
+                    `;
+
+                    document.body.appendChild(tooltip);
+
+                    var rect = element.getBoundingClientRect();
+                    tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+                    tooltip.style.top = (rect.top - tooltip.offsetHeight - 8) + 'px';
+
+                    isShowing = true;
+                    setTimeout(function() {
+                        if (tooltip) tooltip.style.opacity = '1';
+                    }, 10);
+                }, 500);
+            });
+
+            element.addEventListener('mouseleave', function() {
+                removeTooltip();
+            });
+
+            // Hide tooltip on click (before or after it shows)
+            element.addEventListener('mousedown', function() {
+                removeTooltip();
             });
         }
     
