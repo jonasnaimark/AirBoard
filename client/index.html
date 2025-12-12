@@ -136,6 +136,8 @@
                             <path d="M36 7L36 55" stroke="white" stroke-width="4" stroke-linecap="round"/>
                             <rect x="59" y="21.1716" width="14" height="14" transform="rotate(45 59 21.1716)" stroke="white" stroke-width="4"/>
                             <rect x="13" y="21.1716" width="14" height="14" transform="rotate(45 13 21.1716)" stroke="white" stroke-width="4"/>
+                            <path d="M13 23.5L13 38.5L4 31L13 23.5Z" fill="white"/>
+                            <path d="M59 38.5V23.5L68 31L59 38.5Z" fill="white"/>
                         </svg>
                     </button>
                     <!-- 4. Stagger direction (moved from stagger row) -->
@@ -153,8 +155,8 @@
                     <div class="resolution-display" id="delayDisplay">
                         <span id="delayText" style="opacity: 0.75;">Delay</span>
                         <div class="stagger-controls">
-                            <button class="stagger-btn decrement" id="delayDecrementBtn" type="button">−</button>
-                            <button class="stagger-btn increment" id="delayIncrementBtn" type="button">+</button>
+                            <button class="stagger-btn decrement" id="delayDecrementBtn" type="button" title="Decrease delay&#10;Shift: Ignore precomps">−</button>
+                            <button class="stagger-btn increment" id="delayIncrementBtn" type="button" title="Increase delay&#10;Shift: Ignore precomps">+</button>
                         </div>
                     </div>
                 </div>
@@ -232,8 +234,8 @@
                 </div>
                 <div class="control-row">
                     <select id="nullType" class="dropdown">
-                        <option value="layers">Selected Layers</option>
-                        <option value="layers-padding">Selected Layers + Padding</option>
+                        <option value="layers">Layers</option>
+                        <option value="layers-padding">Layers + Padding</option>
                         <option value="vertex-nulls">Add Vertex Nulls</option>
                     </select>
                     <button id="addNull" class="main-button">Fit to Squircle</button>

@@ -1376,6 +1376,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead\nShift: Keep delays');
     if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror keys');
 
+    // Delay +/- button tooltips
+    if (delayDecrementBtn) createTooltip(delayDecrementBtn, 'Shift: Ignore precomps');
+    if (delayIncrementBtn) createTooltip(delayIncrementBtn, 'Shift: Ignore precomps');
+
     // Mirror Keys button handler
     if (mirrorKeysBtn) {
         mirrorKeysBtn.addEventListener('click', function(event) {
