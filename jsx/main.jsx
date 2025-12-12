@@ -6251,7 +6251,9 @@ function nudgeFromPlayhead(direction, frames, skipPrecomps) {
         
         // Track processed items to prevent double-processing
         var processedItems = {};
-        
+        // Track processed precomps by ID to prevent double-processing when same comp is used multiple times
+        var processedPrecomps = {};
+
         app.beginUndoGroup("Global Delay From Playhead");
         
         var comp = app.project.activeItem;
@@ -6420,7 +6422,7 @@ function nudgeFromPlayhead(direction, frames, skipPrecomps) {
                 // Only process if playhead is within the active content area
                 if (playheadTime >= contentStartTime && playheadTime < contentEndTime) {
                     DEBUG_JSX.log("    →Process PC (playhead in active area)");
-                    var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1);
+                    var precompResult = processPrecompContents(layer.source, layer, playheadTime, timeOffset, frameRate, 1, processedPrecomps);
                     movedKeyframes += precompResult.movedKeyframes;
                     movedLayers += precompResult.movedLayers;
                     movedLabels += precompResult.movedLabels || 0;
@@ -7331,17 +7333,30 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
 }
 
 // Helper function to process precomp contents recursively (up to 5 levels deep)
-function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOffset, frameRate, depth) {
+function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOffset, frameRate, depth, processedPrecomps) {
     var movedKeyframes = 0;
     var movedLayers = 0;
     var movedLabels = 0;
     var furthestTime = 0;
-    
+
+    // CRITICAL FIX: Check if this precomp has already been processed
+    // This prevents double-processing when the same comp is used multiple times
+    if (processedPrecomps && processedPrecomps[precomp.id]) {
+        DEBUG_JSX.log("    Skipping already processed precomp: " + precomp.name + " (ID:" + precomp.id + ")");
+        return { movedKeyframes: 0, movedLayers: 0, movedLabels: 0, furthestTime: 0 };
+    }
+
+    // Mark this precomp as processed
+    if (processedPrecomps) {
+        processedPrecomps[precomp.id] = true;
+        DEBUG_JSX.log("    Marking precomp as processed: " + precomp.name + " (ID:" + precomp.id + ")");
+    }
+
     if (depth > 5) {
         DEBUG_JSX.log("Max depth reached, skipping deeper precomps");
         return { movedKeyframes: 0, movedLayers: 0, movedLabels: 0, furthestTime: 0 };
     }
-    
+
     try {
         // Convert main comp playhead time to precomp's internal time
         var precompPlayheadTime = mainPlayheadTime - precompLayer.startTime;
@@ -7422,7 +7437,7 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
                     // Nested precomp layer spans the playhead - process its contents
                     DEBUG_JSX.log("    Nested[" + (depth + 1) + "]: " + layer.source.name);
                     var nestedPlayheadTime = precompPlayheadTime;
-                    var nestedResult = processPrecompContents(layer.source, layer, nestedPlayheadTime, timeOffset, frameRate, depth + 1);
+                    var nestedResult = processPrecompContents(layer.source, layer, nestedPlayheadTime, timeOffset, frameRate, depth + 1, processedPrecomps);
                     movedKeyframes += nestedResult.movedKeyframes;
                     movedLayers += nestedResult.movedLayers;
                     movedLabels += nestedResult.movedLabels || 0;
