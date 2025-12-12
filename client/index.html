@@ -136,11 +136,23 @@
                             <path d="M36 7L36 55" stroke="white" stroke-width="4" stroke-linecap="round"/>
                             <rect x="59" y="21.1716" width="14" height="14" transform="rotate(45 59 21.1716)" stroke="white" stroke-width="4"/>
                             <rect x="13" y="21.1716" width="14" height="14" transform="rotate(45 13 21.1716)" stroke="white" stroke-width="4"/>
-                            <path d="M13 23.5L13 38.5L4 31L13 23.5Z" fill="white"/>
-                            <path d="M59 38.5V23.5L68 31L59 38.5Z" fill="white"/>
                         </svg>
                     </button>
-                    <!-- 4. Stagger direction (moved from stagger row) -->
+                    <!-- 4. Trim in point -->
+                    <button class="stagger-btn" id="trimInBtn" type="button" title="Trim in point">
+                        <svg width="21" height="18" viewBox="0 0 72 62" fill="none">
+                            <path d="M60.0049 13L12.0049 13" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                            <rect x="13" y="31.1774" width="14" height="14" transform="rotate(45 13 31.1774)" stroke="white" stroke-width="4"/>
+                        </svg>
+                    </button>
+                    <!-- 5. Trim out point -->
+                    <button class="stagger-btn" id="trimOutBtn" type="button" title="Trim out point">
+                        <svg width="21" height="18" viewBox="0 0 72 62" fill="none">
+                            <path d="M60.0049 13L12.0049 13" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                            <rect x="59" y="31.1774" width="14" height="14" transform="rotate(45 59 31.1774)" stroke="white" stroke-width="4"/>
+                        </svg>
+                    </button>
+                    <!-- 6. Stagger direction (moved from stagger row) -->
                     <button class="stagger-btn" id="staggerActionBtn" type="button" title="Stagger direction">
                         <svg width="18" height="18" viewBox="0 0 62 62" fill="none">
                             <path d="M43 31L19 31" stroke="white" stroke-width="4" stroke-linecap="round"/>
@@ -149,14 +161,14 @@
                         </svg>
                     </button>
                     <!-- 5. Global frame number input (replaces 3 inputs below) -->
-                    <input class="stagger-input" id="globalFrameInput" type="number" value="3" min="0.1" max="99" step="0.1" data-tooltip="Frames">
+                    <input class="stagger-input" id="globalFrameInput" type="number" value="3" min="1" step="1" data-tooltip="Frames">
                 </div>
                 <div class="control-row">
                     <div class="resolution-display" id="delayDisplay">
                         <span id="delayText" style="opacity: 0.75;">Delay</span>
                         <div class="stagger-controls">
-                            <button class="stagger-btn decrement" id="delayDecrementBtn" type="button" title="Decrease delay&#10;Shift: Ignore precomps">−</button>
-                            <button class="stagger-btn increment" id="delayIncrementBtn" type="button" title="Increase delay&#10;Shift: Ignore precomps">+</button>
+                            <button class="stagger-btn decrement" id="delayDecrementBtn" type="button" title="Shift: Ignore precomps">−</button>
+                            <button class="stagger-btn increment" id="delayIncrementBtn" type="button" title="Shift: Ignore precomps">+</button>
                         </div>
                     </div>
                 </div>

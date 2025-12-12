@@ -234,16 +234,19 @@ body {
 /* Shared flex layout for controls */
 .control-row {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     margin-bottom: 10px;
     align-items: stretch;
 }
 
-/* Keyframe Nudger top row equal widths */
+/* Keyframe Nudger top row - 7 items with smaller gap */
+.keyframe-top-row {
+    gap: 6px !important; /* Reduced from 8px */
+}
+
 .keyframe-top-row > .stagger-btn,
 .keyframe-top-row > .stagger-input {
-    flex: 0 0 calc(20% - 8px); /* 5 items = 20% each, minus gap adjustment */
-    width: calc(20% - 8px);
+    flex: 1 1 0;
     min-width: 0;
     height: 35px;
     margin: 0;
@@ -293,6 +296,7 @@ body {
     background-color: #1a1a1a; /* Even darker background for input */
     border: 1px solid rgba(255, 255, 255, 0.16); /* Brighter border */
     text-align: center;
+    cursor: ns-resize; /* Up/down arrows for drag-to-scrub */
 }
 
 .keyframe-top-row .stagger-input:hover {
@@ -310,9 +314,10 @@ body {
 /* Make stagger +/- match delay/duration widths (original 3-button layout width) */
 #staggerRow .distance-controls {
     width: calc(33.33% - 12px); /* same container width as delay/duration originally had */
+    justify-content: flex-end;
 }
 #staggerRow .distance-controls .stagger-btn {
-    width: calc(50% - 3px); /* each button takes half of the container */
+    width: calc(50% - 4px); /* each button takes half of the container */
 }
 
 .control-row:last-child {
@@ -437,13 +442,14 @@ body {
     transform: translateY(-50%);
     width: calc(33.33% - 12px);
     display: flex;
-    gap: 6px;
+    justify-content: flex-end;
+    gap: 4px;
     pointer-events: all;
     padding: 0;
 }
 
 .resolution-display .stagger-controls .stagger-btn {
-    width: calc(50% - 3px);
+    width: calc(50% - 4px);
 }
 
 /* Distance controls - 4 buttons for In/Out/−/+ */
@@ -454,7 +460,7 @@ body {
     transform: translateY(-50%);
     width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
     display: flex;
-    gap: 6px; /* Same gap as other rows */
+    gap: 4px; /* Same gap as other rows */
     pointer-events: all; /* Allow button clicks */
     padding: 0;
 }
@@ -744,6 +750,14 @@ input.distance-input[data-tooltip]:hover::after {
     transform: translateX(-50%);
 }
 
+/* Increment button tooltips - shift left to avoid clipping */
+.stagger-btn.increment[title]::before,
+.stagger-btn.increment[title]::after {
+    left: auto;
+    right: 0;
+    transform: translateX(0);
+}
+
 .stagger-controls {
     position: absolute;
     right: 6px;
@@ -751,7 +765,7 @@ input.distance-input[data-tooltip]:hover::after {
     transform: translateY(-50%);
     width: calc(50% - 18px);
     display: flex;
-    gap: 6px;
+    gap: 4px;
     pointer-events: all;
     padding: 0;
 }
@@ -760,11 +774,12 @@ input.distance-input[data-tooltip]:hover::after {
 #delayDisplay .stagger-controls,
 #durationDisplay .stagger-controls {
     width: calc(33.33% - 12px); /* same container width as originally had */
+    justify-content: flex-end;
 }
 
 #delayDisplay .stagger-controls .stagger-btn,
 #durationDisplay .stagger-controls .stagger-btn {
-    width: calc(50% - 3px); /* each button takes half of the container */
+    width: calc(50% - 4px); /* each button takes half of the container */
 }
 
 .stagger-input {

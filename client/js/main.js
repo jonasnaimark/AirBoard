@@ -607,6 +607,57 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Global frame input replacing per-row inputs
     var globalFrameInputField = document.getElementById('globalFrameInput');
+
+    // Add drag-to-scrub functionality to frame input
+    if (globalFrameInputField) {
+        var isDragging = false;
+        var hasDragged = false;
+        var startY = 0;
+        var startValue = 0;
+        var dragSensitivity = 2; // How many pixels per 1 unit change
+        var dragThreshold = 3; // Pixels before drag starts
+
+        globalFrameInputField.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            hasDragged = false;
+            startY = e.clientY;
+            startValue = parseInt(globalFrameInputField.value) || 0;
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+
+            var deltaY = startY - e.clientY; // Inverted: drag up = increase
+
+            // Only start scrubbing after threshold
+            if (!hasDragged && Math.abs(deltaY) > dragThreshold) {
+                hasDragged = true;
+                globalFrameInputField.blur(); // Remove focus once dragging starts
+            }
+
+            if (!hasDragged) return;
+
+            var changeAmount = Math.round(deltaY / dragSensitivity);
+            var newValue = startValue + changeAmount;
+
+            // Clamp to min only
+            var min = parseInt(globalFrameInputField.getAttribute('min')) || 1;
+            newValue = Math.max(min, newValue);
+
+            // Round to whole number
+            newValue = Math.round(newValue);
+
+            globalFrameInputField.value = newValue;
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                hasDragged = false;
+            }
+        });
+    }
+
     // Duration +/- buttons - stretch keyframes with dynamic frame values
     if (durationIncrementBtn && durationDecrementBtn && globalFrameInputField) {
         // Create tooltip for global frame input
@@ -1357,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         border-radius: 4px;
                         font-size: 10px;
                         font-weight: 400;
-                        white-space: pre-line;
+                        white-space: nowrap;
                         text-align: center;
                         line-height: 1.3;
                         border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1371,7 +1422,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.appendChild(tooltip);
 
                     var rect = element.getBoundingClientRect();
-                    tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+                    var tooltipLeft = rect.left + rect.width / 2 - tooltip.offsetWidth / 2;
+
+                    // Prevent clipping on right edge - shift left if needed
+                    var rightEdge = tooltipLeft + tooltip.offsetWidth;
+                    var windowWidth = window.innerWidth;
+                    if (rightEdge > windowWidth - 8) {
+                        tooltipLeft = windowWidth - tooltip.offsetWidth - 8;
+                    }
+
+                    tooltip.style.left = tooltipLeft + 'px';
                     tooltip.style.top = (rect.top - tooltip.offsetHeight - 8) + 'px';
 
                     isShowing = true;
@@ -1396,12 +1456,16 @@ document.addEventListener('DOMContentLoaded', function() {
     var staggerActionBtn = document.getElementById('staggerActionBtn');
     var snapToPlayheadBtn = document.getElementById('snapToPlayheadBtn');
     var mirrorKeysBtn = document.getElementById('mirrorKeysBtn');
+    var trimInBtn = document.getElementById('trimInBtn');
+    var trimOutBtn = document.getElementById('trimOutBtn');
     var globalFrameInput = document.getElementById('globalFrameInput');
 
     if (readKeyframesBtn) createTooltip(readKeyframesBtn, 'Read keyframes');
     if (staggerActionBtn) createTooltip(staggerActionBtn, 'Stagger direction');
     if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead\nShift: Keep delays');
     if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror keys');
+    if (trimInBtn) createTooltip(trimInBtn, 'Trim in point');
+    if (trimOutBtn) createTooltip(trimOutBtn, 'Trim out point');
 
     // Delay +/- button tooltips
     if (delayDecrementBtn) createTooltip(delayDecrementBtn, 'Shift: Ignore precomps');
@@ -1459,6 +1523,44 @@ document.addEventListener('DOMContentLoaded', function() {
                     var errorMsg = result.split('|')[1] || 'Unknown error';
                     console.error('Mirror keys error:', errorMsg);
                     // Error alert is shown in ExtendScript for native AE dialog
+                }
+            });
+        });
+    }
+
+    // Trim In Point button handler
+    if (trimInBtn) {
+        trimInBtn.addEventListener('click', function() {
+            console.log('Trim In Point clicked');
+            if (!csInterface) return;
+
+            csInterface.evalScript('handleTrimInPoint()', function(result) {
+                console.log('Trim in point result:', result);
+                if (result && result.indexOf('error') === 0) {
+                    var errorMsg = result.split('|')[1] || 'Unknown error';
+                    console.error('Trim in point error:', errorMsg);
+                } else if (result && result.indexOf('success') === 0) {
+                    var successMsg = result.split('|')[1] || 'Trimmed';
+                    console.log('✓ ' + successMsg);
+                }
+            });
+        });
+    }
+
+    // Trim Out Point button handler
+    if (trimOutBtn) {
+        trimOutBtn.addEventListener('click', function() {
+            console.log('Trim Out Point clicked');
+            if (!csInterface) return;
+
+            csInterface.evalScript('handleTrimOutPoint()', function(result) {
+                console.log('Trim out point result:', result);
+                if (result && result.indexOf('error') === 0) {
+                    var errorMsg = result.split('|')[1] || 'Unknown error';
+                    console.error('Trim out point error:', errorMsg);
+                } else if (result && result.indexOf('success') === 0) {
+                    var successMsg = result.split('|')[1] || 'Trimmed';
+                    console.log('✓ ' + successMsg);
                 }
             });
         });
