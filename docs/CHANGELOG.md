@@ -5,6 +5,20 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.94] - 2025-12-11 ✨ **Tooltip UX Improvements**
+### ✨ Improved
+- **Delayed Tooltips**: Tooltips now wait 500ms before appearing (prevents tooltip spam on quick hovers)
+- **Click Cancels Tooltip**: Clicking before tooltip appears cancels it completely (no flash)
+- **Click Dismisses Tooltip**: Clicking after tooltip is visible fades it out smoothly
+
+### 🎯 Impact
+- UI feels more responsive and less intrusive when quickly clicking through buttons
+- Power users won't see tooltips during normal workflow
+- New users can still discover button functions by hovering longer
+
+### 🔗 Associated Build
+- AirBoard-v4.16.94.zxp
+
 ## [4.16.93] - 2025-12-07 🔧 **Fit to Shape: Rotation Reset Fix**
 ### 🔧 Fixed
 - **Rotation Double-Up**: Fixed mask and content layers over-rotating when shape layer has animated rotation
