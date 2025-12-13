@@ -13132,6 +13132,7 @@ function moveCompositionToFolder(comp, deviceType) {
         // Define subfolder names for each device type
         var subfolderMapping = {
             "iphone": "Native",
+            "iphone-402": "Native",
             "desktop": "Desktop",
             "iphone15": "Native",
             "iphone-simple": "Native",
@@ -13399,6 +13400,7 @@ function createDeviceComposition(deviceType, multiplier) {
         // Base device specifications (1x scale)
         var baseSpecs = {
             iphone: { width: 393, height: 852 },
+            "iphone-402": { width: 402, height: 874 },
             desktop: { width: 1440, height: 1028 },
             iphone15: { width: 475, height: 934 },
             "iphone-simple": { width: 475, height: 934 },
@@ -13426,6 +13428,8 @@ function createDeviceComposition(deviceType, multiplier) {
         var compName;
         if (deviceType === "iphone") {
             compName = "iPhone @" + multiplier + "x";
+        } else if (deviceType === "iphone-402") {
+            compName = "iPhone-402 @" + multiplier + "x";
         } else if (deviceType === "iphone15") {
             compName = "iPhone15 @" + multiplier + "x";
         } else if (deviceType === "iphone-simple") {
@@ -13456,7 +13460,7 @@ function createDeviceComposition(deviceType, multiplier) {
         comp.bgColor = [1, 1, 1];
         
         // If it's an iPhone type or Web Chrome, import and add the template
-        if (deviceType === "iphone" || deviceType === "iphone15" || deviceType === "iphone-simple" || deviceType === "web-chrome") {
+        if (deviceType === "iphone" || deviceType === "iphone-402" || deviceType === "iphone15" || deviceType === "iphone-simple" || deviceType === "web-chrome") {
             debugInfo.push("=== TEMPLATE IMPORT START ===");
             debugInfo.push("Extension root: " + extensionRoot);
             
@@ -13488,6 +13492,8 @@ function createDeviceComposition(deviceType, multiplier) {
                         templateName = "iPhone Simple - 393";
                     } else if (deviceType === "web-chrome") {
                         templateName = "Web Chrome - 1440";
+                    } else if (deviceType === "iphone-402") {
+                        templateName = "iPhone UI - 402";
                     } else {
                         templateName = "iPhone UI - 393";
                     }
@@ -14272,6 +14278,27 @@ function addComponentFromPanel(componentType, multiplier) {
             alert("Unknown component type: " + componentType);
             // app.endUndoGroup();
             return "error";
+        }
+
+        // For iPhone UI component, detect comp size and use matching template
+        if (componentType === "iphone-ui") {
+            var compWidth = comp.width;
+
+            // Check if width is a multiple of 393 or 402
+            var is393Multiple = (compWidth % 393 === 0);
+            var is402Multiple = (compWidth % 402 === 0);
+
+            if (is402Multiple && !is393Multiple) {
+                // Use iPhone UI - 402 template
+                data.compName = "iPhone UI - 402";
+                data.layerName = "iPhone UI - 402";
+            } else {
+                // Default to iPhone UI - 393 (handles 393 multiples and any edge cases)
+                data.compName = "iPhone UI - 393";
+                data.layerName = "iPhone UI - 393";
+            }
+
+            $.writeln("iPhone UI detection: comp width=" + compWidth + ", using template: " + data.compName);
         }
         
         // Template file path
@@ -19903,7 +19930,7 @@ function moveSelectedKeysToLayerOutPoint(layers, comp) {
  * - With selected keyframes: Move keyframes so first lands on layer's in point
  * - Without selected keyframes: Trim layer's in point to first keyframe
  */
-function handleTrimInPoint() {
+function handleTrimInPoint(setToMin) {
     try {
         app.beginUndoGroup("Trim In Point");
 
@@ -19921,6 +19948,25 @@ function handleTrimInPoint() {
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
             return "error|No layers selected";
+        }
+
+        // Shift mode: Extend all selected layers' in-point to 0 (comp start), keeping out-point fixed
+        if (setToMin) {
+            var layersAdjusted = 0;
+            for (var i = 0; i < selectedLayers.length; i++) {
+                try {
+                    var layer = selectedLayers[i];
+                    var originalOutPoint = layer.outPoint;
+                    layer.inPoint = 0;
+                    layer.outPoint = originalOutPoint; // Restore out-point to keep it pinned
+                    layersAdjusted++;
+                } catch(e) {
+                    // Some layers (like locked precomps) may not be adjustable
+                    $.writeln("Could not set min in-point for layer: " + selectedLayers[i].name + " - " + e.toString());
+                }
+            }
+            app.endUndoGroup();
+            return "success|Extended " + layersAdjusted + " layer(s) in-point to comp start";
         }
 
         var hasSelectedKeyframes = checkForSelectedKeyframes(selectedLayers);
@@ -19945,7 +19991,7 @@ function handleTrimInPoint() {
  * - With selected keyframes: Move keyframes so last lands on layer's out point
  * - Without selected keyframes: Trim layer's out point to last keyframe
  */
-function handleTrimOutPoint() {
+function handleTrimOutPoint(setToMax) {
     try {
         app.beginUndoGroup("Trim Out Point");
 
@@ -19963,6 +20009,25 @@ function handleTrimOutPoint() {
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
             return "error|No layers selected";
+        }
+
+        // Shift mode: Extend all selected layers' out-point to comp duration (comp end), keeping in-point fixed
+        if (setToMax) {
+            var layersAdjusted = 0;
+            for (var i = 0; i < selectedLayers.length; i++) {
+                try {
+                    var layer = selectedLayers[i];
+                    var originalInPoint = layer.inPoint;
+                    layer.outPoint = comp.duration;
+                    layer.inPoint = originalInPoint; // Restore in-point to keep it pinned
+                    layersAdjusted++;
+                } catch(e) {
+                    // Some layers (like precomps with shorter duration) may not extend that far
+                    $.writeln("Could not set max out-point for layer: " + selectedLayers[i].name + " - " + e.toString());
+                }
+            }
+            app.endUndoGroup();
+            return "success|Extended " + layersAdjusted + " layer(s) out-point to comp end";
         }
 
         var hasSelectedKeyframes = checkForSelectedKeyframes(selectedLayers);

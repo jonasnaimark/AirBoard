@@ -1408,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         border-radius: 4px;
                         font-size: 10px;
                         font-weight: 400;
-                        white-space: nowrap;
+                        white-space: pre-line;
                         text-align: center;
                         line-height: 1.3;
                         border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1464,8 +1464,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (staggerActionBtn) createTooltip(staggerActionBtn, 'Stagger direction');
     if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead\nShift: Keep delays');
     if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror keys');
-    if (trimInBtn) createTooltip(trimInBtn, 'Trim in point');
-    if (trimOutBtn) createTooltip(trimOutBtn, 'Trim out point');
+    if (trimInBtn) createTooltip(trimInBtn, 'Trim in-point\nShift: Min in-point');
+    if (trimOutBtn) createTooltip(trimOutBtn, 'Trim out-point\nShift: Max out-point');
 
     // Delay +/- button tooltips
     if (delayDecrementBtn) createTooltip(delayDecrementBtn, 'Shift: Ignore precomps');
@@ -1530,11 +1530,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Trim In Point button handler
     if (trimInBtn) {
-        trimInBtn.addEventListener('click', function() {
-            console.log('Trim In Point clicked');
+        trimInBtn.addEventListener('click', function(event) {
+            var isShiftHeld = event.shiftKey;
+            console.log('Trim In Point clicked' + (isShiftHeld ? ' [SHIFT - Min In-Point]' : ''));
             if (!csInterface) return;
 
-            csInterface.evalScript('handleTrimInPoint()', function(result) {
+            csInterface.evalScript('handleTrimInPoint(' + isShiftHeld + ')', function(result) {
                 console.log('Trim in point result:', result);
                 if (result && result.indexOf('error') === 0) {
                     var errorMsg = result.split('|')[1] || 'Unknown error';
@@ -1549,11 +1550,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Trim Out Point button handler
     if (trimOutBtn) {
-        trimOutBtn.addEventListener('click', function() {
-            console.log('Trim Out Point clicked');
+        trimOutBtn.addEventListener('click', function(event) {
+            var isShiftHeld = event.shiftKey;
+            console.log('Trim Out Point clicked' + (isShiftHeld ? ' [SHIFT - Max Out-Point]' : ''));
             if (!csInterface) return;
 
-            csInterface.evalScript('handleTrimOutPoint()', function(result) {
+            csInterface.evalScript('handleTrimOutPoint(' + isShiftHeld + ')', function(result) {
                 console.log('Trim out point result:', result);
                 if (result && result.indexOf('error') === 0) {
                     var errorMsg = result.split('|')[1] || 'Unknown error';
