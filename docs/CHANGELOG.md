@@ -5,6 +5,20 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.97] - 2025-12-12 🎨 **Control Row Layout Refinements**
+### 🎨 UI/UX Improvements
+- **Compact row spacing**: Reduced gaps between control rows (Frame multiplier, Delay, Duration, Stagger, X/Y distance) to 4px
+- **Wider controls**: Input and -/+ buttons are now 4px wider for easier targeting
+- **Frame multiplier input**: Now fills full row height with 6px border radius
+- **X/Y distance alignment**: 4-button controls now align properly with -/+ button rows above
+
+### 🔧 Technical Improvements
+- **CEP compatibility**: Replaced unsupported `:has()` selector with `compact-row` class
+- **Unified button alignment**: Added `justify-content: flex-end` to distance controls
+
+### 🔗 Associated Build
+- AirBoard-v4.16.97.zxp
+
 ## [4.16.94] - 2025-12-11 ✨ **Tooltip UX Improvements**
 ### ✨ Improved
 - **Delayed Tooltips**: Tooltips now wait 500ms before appearing (prevents tooltip spam on quick hovers)
