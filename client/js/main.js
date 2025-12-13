@@ -658,6 +658,165 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Frame slider functionality
+    var frameSliderHandle = document.getElementById('frameSliderHandle');
+    var frameSliderContainer = document.querySelector('.frame-slider-container');
+    var frameSliderTrack = document.querySelector('.frame-slider-track');
+    var frameSliderMarkers = document.querySelectorAll('.frame-slider-marker');
+
+    if (frameSliderHandle && frameSliderContainer && globalFrameInputField) {
+        var sliderSnapPoints = [1, 3, 9, 30, 60, 120];
+        var sliderMin = 1;
+        var sliderMax = 120;
+        var magneticRange = 0.08; // How close to snap point to trigger snapping (as percentage of track)
+
+        // Convert value to position (equal distance between snap points)
+        function valueToPosition(value) {
+            value = Math.max(sliderMin, Math.min(sliderMax, value));
+            // Find which segment the value falls into
+            for (var i = 0; i < sliderSnapPoints.length - 1; i++) {
+                if (value <= sliderSnapPoints[i + 1]) {
+                    var segmentStart = sliderSnapPoints[i];
+                    var segmentEnd = sliderSnapPoints[i + 1];
+                    var segmentProgress = (value - segmentStart) / (segmentEnd - segmentStart);
+                    return (i + segmentProgress) / (sliderSnapPoints.length - 1);
+                }
+            }
+            return 1;
+        }
+
+        // Convert position to value (equal distance between snap points)
+        function positionToValue(position) {
+            position = Math.max(0, Math.min(1, position));
+            var segmentIndex = position * (sliderSnapPoints.length - 1);
+            var i = Math.floor(segmentIndex);
+            if (i >= sliderSnapPoints.length - 1) return sliderSnapPoints[sliderSnapPoints.length - 1];
+            var segmentProgress = segmentIndex - i;
+            var segmentStart = sliderSnapPoints[i];
+            var segmentEnd = sliderSnapPoints[i + 1];
+            return segmentStart + segmentProgress * (segmentEnd - segmentStart);
+        }
+
+        // Find nearest snap point if within magnetic range
+        function applyMagneticSnap(position) {
+            for (var i = 0; i < sliderSnapPoints.length; i++) {
+                var snapPos = valueToPosition(sliderSnapPoints[i]);
+                if (Math.abs(position - snapPos) < magneticRange) {
+                    return snapPos;
+                }
+            }
+            return position;
+        }
+
+        var padding = 8;
+
+        // Update slider handle position (accounting for padding)
+        function updateSliderPosition(value) {
+            var position = valueToPosition(value);
+            var containerWidth = frameSliderContainer.offsetWidth;
+            var trackWidth = containerWidth - (padding * 2);
+            var leftPx = padding + (position * trackWidth);
+            frameSliderHandle.style.left = leftPx + 'px';
+        }
+
+        // Initialize marker positions (accounting for padding)
+        function positionMarkers() {
+            var containerWidth = frameSliderContainer.offsetWidth;
+            var trackWidth = containerWidth - (padding * 2);
+            frameSliderMarkers.forEach(function(marker) {
+                var value = parseInt(marker.getAttribute('data-value'));
+                var position = valueToPosition(value);
+                var leftPx = padding + (position * trackWidth);
+                marker.style.left = leftPx + 'px';
+            });
+        }
+
+        // Position markers initially and on resize
+        positionMarkers();
+        window.addEventListener('resize', function() {
+            positionMarkers();
+            updateSliderPosition(parseInt(globalFrameInputField.value) || 3);
+        });
+
+        frameSliderMarkers.forEach(function(marker) {
+            var value = parseInt(marker.getAttribute('data-value'));
+            // Click on marker to jump to value
+            marker.addEventListener('click', function() {
+                globalFrameInputField.value = value;
+                updateSliderPosition(value);
+            });
+            // Add tooltip showing frame number
+            createTooltip(marker, value.toString());
+        });
+
+        // Initialize slider position from input
+        updateSliderPosition(parseInt(globalFrameInputField.value) || 3);
+
+        // Slider dragging
+        var sliderDragging = false;
+
+        frameSliderHandle.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            sliderDragging = true;
+            frameSliderHandle.classList.add('dragging');
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!sliderDragging) return;
+
+            var rect = frameSliderContainer.getBoundingClientRect();
+            var padding = 8;
+            var position = (e.clientX - rect.left - padding) / (rect.width - padding * 2);
+            position = Math.max(0, Math.min(1, position));
+
+            // Apply magnetic snapping
+            var snappedPosition = applyMagneticSnap(position);
+            var value = Math.round(positionToValue(snappedPosition));
+
+            globalFrameInputField.value = value;
+            updateSliderPosition(value);
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (sliderDragging) {
+                sliderDragging = false;
+                frameSliderHandle.classList.remove('dragging');
+            }
+        });
+
+        // Click on track to jump to position
+        frameSliderTrack.addEventListener('click', function(e) {
+            var rect = frameSliderContainer.getBoundingClientRect();
+            var padding = 8;
+            var position = (e.clientX - rect.left - padding) / (rect.width - padding * 2);
+            position = Math.max(0, Math.min(1, position));
+
+            var snappedPosition = applyMagneticSnap(position);
+            var value = Math.round(positionToValue(snappedPosition));
+
+            globalFrameInputField.value = value;
+            updateSliderPosition(value);
+        });
+
+        // Sync slider when input changes (from scrubbing or typing)
+        var originalInputValue = globalFrameInputField.value;
+        setInterval(function() {
+            var currentValue = globalFrameInputField.value;
+            if (currentValue !== originalInputValue) {
+                originalInputValue = currentValue;
+                var numValue = parseInt(currentValue) || 1;
+                // Cap slider position at 120, but allow input to be higher
+                updateSliderPosition(Math.min(numValue, sliderMax));
+            }
+        }, 50);
+
+        // Also listen for input events
+        globalFrameInputField.addEventListener('input', function() {
+            var numValue = parseInt(globalFrameInputField.value) || 1;
+            updateSliderPosition(Math.min(numValue, sliderMax));
+        });
+    }
+
     // Duration +/- buttons - stretch keyframes with dynamic frame values
     if (durationIncrementBtn && durationDecrementBtn && globalFrameInputField) {
         // Create tooltip for global frame input

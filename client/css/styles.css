@@ -328,6 +328,100 @@ body {
     border-color: #4a90e2;
 }
 
+/* Frame slider styling */
+.frame-slider-container {
+    position: absolute;
+    left: 65px;
+    right: calc(33.33% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    height: 20px;
+    pointer-events: all;
+    padding: 0 8px;
+    box-sizing: border-box;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+}
+
+#frameMultiplierDisplay:hover .frame-slider-container,
+.frame-slider-container:hover {
+    opacity: 1;
+}
+
+#frameMultiplierDisplay {
+    pointer-events: all;
+}
+
+.frame-slider-track {
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    background-color: #3d3d3d;
+    border-radius: 1px;
+    transform: translateY(-50%);
+}
+
+.frame-slider-marker {
+    position: absolute;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    background-color: #3d3d3d;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.frame-slider-marker::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+}
+
+.frame-slider-marker:hover {
+    background-color: #6a6a6a;
+    transform: translate(-50%, -50%) scale(1.2);
+}
+
+.frame-slider-marker:active {
+    background-color: #808080;
+}
+
+.frame-slider-handle {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    background-color: transparent;
+    border: 2px solid #909090;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+.frame-slider-handle:hover {
+    border-color: #b0b0b0;
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.frame-slider-handle:active,
+.frame-slider-handle.dragging {
+    cursor: grabbing;
+    border-color: #c8c8c8;
+    transform: translate(-50%, -50%) scale(1.15);
+}
+
 /* Make stagger +/- match delay/duration widths (original 3-button layout width) */
 #staggerRow .distance-controls {
     width: calc(33.33% - 4px); /* same container width as delay/duration originally had */
