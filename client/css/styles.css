@@ -244,8 +244,7 @@ body {
     gap: 6px !important; /* Reduced from 8px */
 }
 
-.keyframe-top-row > .stagger-btn,
-.keyframe-top-row > .stagger-input {
+.keyframe-top-row > .stagger-btn {
     flex: 1 1 0;
     min-width: 0;
     height: 35px;
@@ -283,41 +282,60 @@ body {
     transform: scaleX(-1);
 }
 
-/* Ensure global input visually matches buttons in top row */
-.keyframe-top-row .stagger-input {
-    height: 35px !important;
-    line-height: 35px;
-    font-size: 12.5px;
-    padding: 2px 0 0 0; /* Lower text by 2px */
+/* Frame multiplier row - match delay/duration/stagger styling */
+#frameMultiplierDisplay {
+    background-color: #222222;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Make text in all 4 control rows brighter */
+#frameMultiplierDisplay span,
+#delayDisplay span,
+#durationDisplay span,
+#staggerDisplay span {
+    opacity: 0.9 !important;
+}
+
+#frameMultiplierDisplay .stagger-controls {
+    width: calc(33.33% - 4px);
+    justify-content: flex-end;
+    right: 0;
+    top: 0;
+    transform: none;
+    height: 100%;
+}
+
+#frameMultiplierDisplay .stagger-controls .stagger-input {
+    width: 100%;
+    height: 100%;
+    font-size: 11px;
+    padding: 0;
     box-sizing: border-box;
-    vertical-align: middle;
-    border-radius: 6px; /* Match top-row button border-radius */
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15); /* Match button box-shadow */
-    background-color: #1a1a1a; /* Even darker background for input */
-    border: 1px solid rgba(255, 255, 255, 0.16); /* Brighter border */
-    text-align: center;
-    cursor: ns-resize; /* Up/down arrows for drag-to-scrub */
-}
-
-.keyframe-top-row .stagger-input:hover {
-    border-color: rgba(255, 255, 255, 0.24);
-}
-
-.keyframe-top-row .stagger-input:focus {
+    border-radius: 6px;
     background-color: #1a1a1a;
-    border-color: #4a90e2;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    text-align: center;
+    cursor: ns-resize;
 }
 
-/* Non-selectable suffix "f" inside frame input */
+#frameMultiplierDisplay .stagger-controls .stagger-input:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    background-color: #222222;
+}
+
+#frameMultiplierDisplay .stagger-controls .stagger-input:focus {
+    background-color: #222222;
+    border-color: #4a90e2;
+}
 
 /* Make stagger +/- match delay/duration widths (original 3-button layout width) */
 #staggerRow .distance-controls {
-    width: calc(33.33% - 12px); /* same container width as delay/duration originally had */
+    width: calc(33.33% - 4px); /* same container width as delay/duration originally had */
     justify-content: flex-end;
+    gap: 6px;
 }
 #staggerRow .distance-controls .stagger-btn {
-    width: calc(50% - 4px); /* each button takes half of the container */
+    width: calc(50% - 6px); /* each button takes half of the container */
 }
 
 .control-row:last-child {
@@ -345,7 +363,6 @@ body {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     margin-bottom: 10px;
     flex-grow: 1;
     display: flex;
@@ -357,7 +374,6 @@ body {
 .main-button:hover {
     background-color: #3c3c3c;
     color: #ffffff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
 }
 
 .main-button:active {
@@ -440,28 +456,29 @@ body {
     right: 6px;
     top: 50%;
     transform: translateY(-50%);
-    width: calc(33.33% - 12px);
+    width: calc(33.33% - 4px);
     display: flex;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 6px;
     pointer-events: all;
     padding: 0;
 }
 
 .resolution-display .stagger-controls .stagger-btn {
-    width: calc(50% - 4px);
+    width: calc(50% - 6px);
 }
 
 /* Distance controls - 4 buttons for In/Out/−/+ */
 .keyframe-display .distance-controls {
     position: absolute;
-    right: 6px; /* 6px from right edge */
+    right: 6px;
     top: 50%;
     transform: translateY(-50%);
-    width: calc(50% - 18px); /* 50% minus gap, right padding, and 4px reduction */
+    width: calc(50% - 12px);
     display: flex;
-    gap: 4px; /* Same gap as other rows */
-    pointer-events: all; /* Allow button clicks */
+    justify-content: flex-end;
+    gap: 4px;
+    pointer-events: all;
     padding: 0;
 }
 
@@ -554,7 +571,6 @@ input.distance-input[data-tooltip]:hover::after {
     background-color: #2f2f2f;
     color: #cccccc;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     cursor: pointer;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     font-size: 11px; /* Slightly smaller font for 4 buttons */
@@ -570,7 +586,6 @@ input.distance-input[data-tooltip]:hover::after {
 .keyframe-display .distance-controls .distance-btn:hover {
     background-color: #3c3c3c;
     color: #ffffff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
 }
 
 .keyframe-display .distance-controls .distance-btn:active {
@@ -773,13 +788,18 @@ input.distance-input[data-tooltip]:hover::after {
 /* Delay/Duration: match original 3-button layout width */
 #delayDisplay .stagger-controls,
 #durationDisplay .stagger-controls {
-    width: calc(33.33% - 12px); /* same container width as originally had */
+    width: calc(33.33% - 4px); /* same container width as originally had */
     justify-content: flex-end;
 }
 
 #delayDisplay .stagger-controls .stagger-btn,
 #durationDisplay .stagger-controls .stagger-btn {
-    width: calc(50% - 4px); /* each button takes half of the container */
+    width: calc(50% - 6px); /* each button takes half of the container */
+}
+
+/* Reduced gaps between the 6 control rows */
+.compact-row {
+    margin-bottom: 4px !important;
 }
 
 .stagger-input {
@@ -836,7 +856,6 @@ input.distance-input[data-tooltip]:hover::after {
     background-color: #2f2f2f;
     color: #cccccc;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
     cursor: pointer;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     font-size: 16px;
@@ -854,7 +873,6 @@ input.distance-input[data-tooltip]:hover::after {
 .stagger-btn:hover {
     background-color: #3c3c3c;
     color: #ffffff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
 }
 
 .stagger-btn:active {
