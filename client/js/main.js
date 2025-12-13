@@ -1408,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         border-radius: 4px;
                         font-size: 10px;
                         font-weight: 400;
-                        white-space: pre-line;
+                        white-space: pre;
                         text-align: center;
                         line-height: 1.3;
                         border: 1px solid rgba(255, 255, 255, 0.12);
