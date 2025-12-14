@@ -745,8 +745,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 globalFrameInputField.value = value;
                 updateSliderPosition(value);
             });
-            // Add tooltip showing frame number
-            createTooltip(marker, value.toString());
+            // Add tooltip showing frame number (no delay)
+            createTooltip(marker, value.toString(), 0);
         });
 
         // Initialize slider position from input
@@ -1527,7 +1527,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupInOutToggle('yInBtn', 'yOutBtn');
     
     // Global tooltip creation function (reusable across all inputs)
-    function createTooltip(element, text) {
+    function createTooltip(element, text, delay) {
+            if (delay === undefined) delay = 500;
             var tooltip = null;
             var showTimeout = null;
             var isShowing = false;
@@ -1555,7 +1556,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     clearTimeout(showTimeout);
                 }
 
-                // Wait 500ms before showing tooltip
+                // Wait before showing tooltip
                 showTimeout = setTimeout(function() {
                     tooltip = document.createElement('div');
                     tooltip.textContent = text;
@@ -1597,7 +1598,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(function() {
                         if (tooltip) tooltip.style.opacity = '1';
                     }, 10);
-                }, 500);
+                }, delay);
             });
 
             element.addEventListener('mouseleave', function() {

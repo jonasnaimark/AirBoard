@@ -145,11 +145,238 @@ function trackLayerInOutPoints(layers) {
 }
 
 /**
+ * Extend a precomp to a target duration when a precomp layer's outPoint exceeds the precomp's duration
+ * Recursively extends parent comps up the chain
+ */
+function extendPrecompFromLayerToTarget(precompLayer, precomp, targetDuration) {
+    var newDuration = targetDuration;
+    var oldDuration = precomp.duration;
+
+    if (newDuration <= oldDuration + 0.001) {
+        return; // No extension needed
+    }
+
+    // Extend the precomp's duration
+    precomp.duration = newDuration;
+    DEBUG_JSX.log("  COMP EXTEND: '" + precomp.name + "' " + (oldDuration * 1000).toFixed(1) + "ms → " + (newDuration * 1000).toFixed(1) + "ms");
+
+    // Extend layers in the precomp that were at or beyond old duration
+    var layersExtended = 0;
+    for (var i = 1; i <= precomp.numLayers; i++) {
+        var layerInPrecomp = precomp.layer(i);
+        var layerEnd = layerInPrecomp.startTime + layerInPrecomp.outPoint;
+
+        if (layerEnd >= oldDuration - 0.001) {
+            var newOutPoint = newDuration - layerInPrecomp.startTime;
+            if (newOutPoint > 0) {
+                layerInPrecomp.outPoint = newOutPoint;
+                layersExtended++;
+            }
+        }
+    }
+
+    if (layersExtended > 0) {
+        DEBUG_JSX.log("  COMP EXTEND: Extended " + layersExtended + " layer(s) in '" + precomp.name + "'");
+    }
+
+    // Find parent comps that use this precomp and extend them
+    for (var c = 1; c <= app.project.numItems; c++) {
+        var item = app.project.item(c);
+        if (item instanceof CompItem && item !== precomp) {
+            for (var i = 1; i <= item.numLayers; i++) {
+                var parentLayer = item.layer(i);
+                if (parentLayer.source === precomp) {
+                    // Update parent layer's outPoint to match new precomp duration
+                    var parentLayerEnd = parentLayer.startTime + parentLayer.outPoint;
+                    if (parentLayer.outPoint < precomp.duration) {
+                        parentLayer.outPoint = precomp.duration;
+                        DEBUG_JSX.log("  COMP EXTEND: Updated parent layer '" + parentLayer.name + "' outPoint in '" + item.name + "'");
+
+                        // Check if parent layer is also a precomp layer and recurse
+                        if (parentLayer.outPoint > item.duration + 0.001) {
+                            // Parent comp needs extension too - find if parent comp is used as precomp
+                            var isParentUsedAsPrecomp = false;
+                            for (var pc = 1; pc <= app.project.numItems; pc++) {
+                                var parentParentItem = app.project.item(pc);
+                                if (parentParentItem instanceof CompItem && parentParentItem !== item) {
+                                    for (var ppi = 1; ppi <= parentParentItem.numLayers; ppi++) {
+                                        if (parentParentItem.layer(ppi).source === item) {
+                                            isParentUsedAsPrecomp = true;
+                                            break;
+                                        }
+                                    }
+                                    if (isParentUsedAsPrecomp) break;
+                                }
+                            }
+
+                            if (isParentUsedAsPrecomp) {
+                                extendPrecompFromLayerToTarget(parentLayer, item, precomp.duration);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Extend precomp durations up the chain when layer extends beyond comp
+ * Recursively extends parent comps until reaching the main comp
+ */
+function extendPrecompsUpChain(layer) {
+    var comp = layer.containingComp;
+    if (!comp) return;
+
+    var layerAbsoluteEnd = layer.startTime + layer.outPoint;
+
+    // Only extend if layer goes beyond comp duration
+    if (layerAbsoluteEnd <= comp.duration + 0.001) {
+        return; // No extension needed
+    }
+
+    // Check if this comp is used by another comp (i.e., it's a precomp)
+    var isUsedAsPrecomp = false;
+    for (var c = 1; c <= app.project.numItems; c++) {
+        var item = app.project.item(c);
+        if (item instanceof CompItem && item !== comp) {
+            for (var i = 1; i <= item.numLayers; i++) {
+                var parentLayer = item.layer(i);
+                if (parentLayer.source === comp) {
+                    isUsedAsPrecomp = true;
+                    break;
+                }
+            }
+            if (isUsedAsPrecomp) break;
+        }
+    }
+
+    // If this comp is not a precomp (i.e., it's the main comp), don't extend
+    if (!isUsedAsPrecomp) {
+        DEBUG_JSX.log("  COMP EXTEND: Skipping main comp '" + comp.name + "' (not used as precomp)");
+        return;
+    }
+
+    // Extend comp duration
+    var oldDuration = comp.duration;
+    var newDuration = layerAbsoluteEnd;
+    comp.duration = newDuration;
+    DEBUG_JSX.log("  COMP EXTEND: '" + comp.name + "' " + (oldDuration * 1000).toFixed(1) + "ms → " + (newDuration * 1000).toFixed(1) + "ms");
+
+    // Extend layers in comp that were at or beyond old comp duration
+    var layersExtended = 0;
+    for (var i = 1; i <= comp.numLayers; i++) {
+        var otherLayer = comp.layer(i);
+        var otherLayerEnd = otherLayer.startTime + otherLayer.outPoint;
+
+        // If layer was at or past old comp end, extend it to new duration
+        if (otherLayerEnd >= oldDuration - 0.001) {
+            var newOutPoint = newDuration - otherLayer.startTime;
+            if (newOutPoint > 0) {
+                otherLayer.outPoint = newOutPoint;
+                layersExtended++;
+            }
+        }
+    }
+
+    if (layersExtended > 0) {
+        DEBUG_JSX.log("  COMP EXTEND: Extended " + layersExtended + " layer(s) in '" + comp.name + "'");
+    }
+
+    // Find parent comps and recurse
+    for (var c = 1; c <= app.project.numItems; c++) {
+        var item = app.project.item(c);
+        if (item instanceof CompItem && item !== comp) {
+            for (var i = 1; i <= item.numLayers; i++) {
+                var parentLayer = item.layer(i);
+                if (parentLayer.source === comp) {
+                    // Update parent layer's outPoint to match new comp duration
+                    var newParentOutPoint = comp.duration - parentLayer.startTime;
+                    if (newParentOutPoint > 0) {
+                        parentLayer.outPoint = newParentOutPoint;
+                        DEBUG_JSX.log("  COMP EXTEND: Updated parent layer '" + parentLayer.name + "' in '" + item.name + "'");
+
+                        // Recurse to extend parent comp if needed
+                        extendPrecompsUpChain(parentLayer);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Update layer in/out points after nudging keyframes
  * Adjusts layer points if they were originally aligned with first/last selected keyframes
  */
 function updateLayerInOutPoints(layerData, keyframeDataArray) {
-    DEBUG_JSX.log("IN/OUT UPDATE: Called with " + layerData.length + " layers, " + (keyframeDataArray ? keyframeDataArray.length : 0) + " keyframes");
+    // CRITICAL: Capture ALL selection state BEFORE any processing starts
+    var allSelectionToRestore = [];
+    for (var i = 0; i < layerData.length; i++) {
+        var data = layerData[i];
+        var layer = data.layer;
+
+        function captureSelectionInGroup(propGroup, depth) {
+            depth = depth || 0;
+            if (depth > 10) return;
+            for (var p = 1; p <= propGroup.numProperties; p++) {
+                try {
+                    var prop = propGroup.property(p);
+                    if (!prop) continue;
+                    if (prop.propertyType === PropertyType.PROPERTY) {
+                        if (prop.canVaryOverTime && prop.numKeys > 0) {
+                            var selectedTimes = [];
+                            for (var k = 1; k <= prop.numKeys; k++) {
+                                if (prop.keySelected(k)) {
+                                    selectedTimes.push(prop.keyTime(k));
+                                }
+                            }
+                            if (selectedTimes.length > 0) {
+                                allSelectionToRestore.push({
+                                    layer: layer,
+                                    layerName: layer.name,
+                                    propName: prop.name,
+                                    selectedTimes: selectedTimes,
+                                    isPrecaptured: true
+                                });
+                            }
+                        }
+                    } else if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                               prop.propertyType === PropertyType.NAMED_GROUP) {
+                        captureSelectionInGroup(prop, depth + 1);
+                    }
+                } catch (propError) {}
+            }
+        }
+
+        try {
+            if (layer.transform) captureSelectionInGroup(layer.transform);
+            if (layer.effect && layer.effect.numProperties > 0) captureSelectionInGroup(layer.effect);
+            if (layer.mask && layer.mask.numProperties > 0) captureSelectionInGroup(layer.mask);
+            if (layer.text && layer.text.numProperties > 0) captureSelectionInGroup(layer.text);
+            if (layer.materialOption) captureSelectionInGroup(layer.materialOption);
+            if (layer.audio) captureSelectionInGroup(layer.audio);
+        } catch (e) {}
+
+        if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+            var timeRemapSelectedTimes = [];
+            for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                if (layer.timeRemap.keySelected(k)) {
+                    timeRemapSelectedTimes.push(layer.timeRemap.keyTime(k));
+                }
+            }
+            if (timeRemapSelectedTimes.length > 0) {
+                allSelectionToRestore.push({
+                    layer: layer,
+                    layerName: layer.name,
+                    propName: "Time Remap",
+                    isTimeRemap: true,
+                    selectedTimes: timeRemapSelectedTimes,
+                    isPrecaptured: true
+                });
+            }
+        }
+    }
 
     for (var i = 0; i < layerData.length; i++) {
         var data = layerData[i];
@@ -212,15 +439,311 @@ function updateLayerInOutPoints(layerData, keyframeDataArray) {
 
         // Update layer points if they were tracked
         if (data.trackInPoint && newEarliestTime !== null) {
-            DEBUG_JSX.log("IN/OUT UPDATE: Setting layer '" + layer.name + "' inPoint to " + newEarliestTime);
-            layer.inPoint = newEarliestTime;
+            var timeOffset = newEarliestTime - data.originalInPoint;
+
+            // Only apply in-point delay strategy if there's a meaningful time change
+            if (Math.abs(timeOffset) > 0.001) {
+                var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+                DEBUG_JSX.log("IN-POINT DELAY: '" + layer.name + "' moved " + (timeOffset * 1000).toFixed(1) + "ms" + (hasTimeRemap ? " (Time Remap)" : ""));
+
+                // Step 1: Shift the entire layer forward/backward by the nudge amount
+                var originalStartTime = layer.startTime;
+                var originalOutPointAbsolute = layer.startTime + layer.outPoint;
+                DEBUG_JSX.log("  Before: startTime=" + (originalStartTime * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms, absolute=" + (originalOutPointAbsolute * 1000).toFixed(1) + "ms");
+
+                layer.startTime += timeOffset;
+
+                // Step 2: Compensate out-point so it stays at same absolute timeline position
+                var originalOutPoint = layer.outPoint;
+                DEBUG_JSX.log("  outPoint BEFORE comp: " + (layer.outPoint * 1000).toFixed(1) + "ms");
+                layer.outPoint -= timeOffset;
+                DEBUG_JSX.log("  outPoint AFTER comp: " + (layer.outPoint * 1000).toFixed(1) + "ms (expected: " + ((originalOutPoint - timeOffset) * 1000).toFixed(1) + "ms)");
+
+                // Step 3: Move ALL keyframes back by timeOffset in layer time
+
+                var keyframesCompensated = 0;
+
+                // Helper function to process all properties in a group
+                function compensateKeyframesInGroup(propGroup, depth) {
+                    depth = depth || 0;
+                    if (depth > 10) return; // Prevent infinite recursion
+
+                    for (var p = 1; p <= propGroup.numProperties; p++) {
+                        try {
+                            var prop = propGroup.property(p);
+                            if (!prop) continue;
+
+                            if (prop.propertyType === PropertyType.PROPERTY) {
+                                if (prop.canVaryOverTime && prop.numKeys > 0) {
+                                    // Skip properties with separated dimensions (parent Position when X/Y are separate)
+                                    try {
+                                        if (prop.dimensionsSeparated === true) continue;
+                                    } catch(e) {}
+
+                                    // STEP 1: Capture ALL keyframe states first
+                                    var keyframeStates = [];
+                                    var selectedNewTimes = [];
+
+                                    for (var k = 1; k <= prop.numKeys; k++) {
+                                        var keyTime = prop.keyTime(k);
+                                        var isSelected = prop.keySelected(k);
+                                        var newTime = keyTime - timeOffset;
+
+                                        if (newTime >= 0) {
+                                            var state = captureKeyframeState(prop, k);
+                                            if (state) {
+                                                keyframeStates.push({
+                                                    oldTime: keyTime,
+                                                    newTime: newTime,
+                                                    isSelected: isSelected,
+                                                    state: state
+                                                });
+                                                if (isSelected) {
+                                                    selectedNewTimes.push(newTime);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // UPDATE pre-captured entry with new times
+                                    if (selectedNewTimes.length > 0) {
+                                        var foundEntry = false;
+                                        for (var e = 0; e < allSelectionToRestore.length; e++) {
+                                            if (allSelectionToRestore[e].layer === layer &&
+                                                allSelectionToRestore[e].propName === prop.name &&
+                                                allSelectionToRestore[e].isPrecaptured) {
+                                                allSelectionToRestore[e].selectedTimes = selectedNewTimes;
+                                                allSelectionToRestore[e].isPrecaptured = false;
+                                                foundEntry = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!foundEntry) {
+                                            allSelectionToRestore.push({
+                                                layer: layer,
+                                                layerName: layer.name,
+                                                propName: prop.name,
+                                                selectedTimes: selectedNewTimes
+                                            });
+                                        }
+                                    }
+
+                                    // STEP 2: Remove ALL keyframes (in reverse order)
+                                    for (var k = prop.numKeys; k >= 1; k--) {
+                                        prop.removeKey(k);
+                                    }
+
+                                    // STEP 3: Add ALL keyframes back at new times
+                                    for (var k = 0; k < keyframeStates.length; k++) {
+                                        var kfData = keyframeStates[k];
+                                        try {
+                                            var newIndex = prop.addKey(kfData.newTime);
+                                            restoreKeyframeState(prop, newIndex, kfData.state);
+                                            keyframesCompensated++;
+                                        } catch(addErr) {
+                                            // Silently skip errors during compensation
+                                        }
+                                    }
+                                }
+                            } else if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                                       prop.propertyType === PropertyType.NAMED_GROUP) {
+                                compensateKeyframesInGroup(prop, depth + 1);
+                            }
+                        } catch (propError) {
+                            // Silently skip property errors
+                        }
+                    }
+                }
+
+                // Process all property groups
+                try {
+                    if (layer.transform) compensateKeyframesInGroup(layer.transform);
+                    if (layer.effect && layer.effect.numProperties > 0) compensateKeyframesInGroup(layer.effect);
+                    if (layer.mask && layer.mask.numProperties > 0) compensateKeyframesInGroup(layer.mask);
+                    if (layer.text && layer.text.numProperties > 0) compensateKeyframesInGroup(layer.text);
+                    if (layer.materialOption) compensateKeyframesInGroup(layer.materialOption);
+                    if (layer.audio) compensateKeyframesInGroup(layer.audio);
+                } catch (e) {
+                    // Silently skip keyframe compensation errors
+                }
+
+                // Handle Time Remap
+                var timeRemapSelectedTimes = [];
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    // STEP 1: Capture ALL Time Remap keyframe states
+                    var timeRemapStates = [];
+                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                        var keyTime = layer.timeRemap.keyTime(k);
+                        var isSelected = layer.timeRemap.keySelected(k);
+                        var newTime = keyTime - timeOffset;
+
+                        if (newTime >= 0) {
+                            var state = captureKeyframeState(layer.timeRemap, k);
+                            if (state) {
+                                timeRemapStates.push({
+                                    oldTime: keyTime,
+                                    newTime: newTime,
+                                    isSelected: isSelected,
+                                    state: state
+                                });
+                                if (isSelected) {
+                                    timeRemapSelectedTimes.push(newTime);
+                                }
+                            }
+                        }
+                    }
+
+                    // UPDATE pre-captured Time Remap entry with new times (post-compensation)
+                    if (timeRemapSelectedTimes.length > 0) {
+                        var foundTimeRemapEntry = false;
+                        for (var e = 0; e < allSelectionToRestore.length; e++) {
+                            if (allSelectionToRestore[e].layer === layer &&
+                                allSelectionToRestore[e].propName === "Time Remap" &&
+                                allSelectionToRestore[e].isPrecaptured) {
+                                allSelectionToRestore[e].selectedTimes = timeRemapSelectedTimes;
+                                allSelectionToRestore[e].isPrecaptured = false;
+                                foundTimeRemapEntry = true;
+                                break;
+                            }
+                        }
+
+                        if (!foundTimeRemapEntry) {
+                            allSelectionToRestore.push({
+                                layer: layer,
+                                layerName: layer.name,
+                                propName: "Time Remap",
+                                isTimeRemap: true,
+                                selectedTimes: timeRemapSelectedTimes
+                            });
+                        }
+                    }
+
+                    // TIME REMAP: Use setValueAtTime pattern (add-before-delete)
+                    // STEP 2: ADD new keyframes FIRST
+                    for (var k = 0; k < timeRemapStates.length; k++) {
+                        var kfData = timeRemapStates[k];
+                        try {
+                            layer.timeRemap.setValueAtTime(kfData.newTime, kfData.state.value);
+                        } catch(addErr) {
+                            // Silently skip Time Remap setValueAtTime errors
+                        }
+                    }
+
+                    // STEP 3: Find and remove OLD keyframes
+                    var oldKeyIndicesToRemove = [];
+                    for (var k = 0; k < timeRemapStates.length; k++) {
+                        var oldTime = timeRemapStates[k].oldTime;
+                        for (var j = layer.timeRemap.numKeys; j >= 1; j--) {
+                            var keyTime = layer.timeRemap.keyTime(j);
+                            if (Math.abs(keyTime - oldTime) < 0.001) {
+                                var isNewKeyPosition = false;
+                                for (var n = 0; n < timeRemapStates.length; n++) {
+                                    if (Math.abs(keyTime - timeRemapStates[n].newTime) < 0.001) {
+                                        isNewKeyPosition = true;
+                                        break;
+                                    }
+                                }
+                                if (!isNewKeyPosition) {
+                                    var alreadyInList = false;
+                                    for (var r = 0; r < oldKeyIndicesToRemove.length; r++) {
+                                        if (oldKeyIndicesToRemove[r] === j) {
+                                            alreadyInList = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!alreadyInList) {
+                                        oldKeyIndicesToRemove.push(j);
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    oldKeyIndicesToRemove.sort(function(a, b) { return b - a; });
+                    for (var k = 0; k < oldKeyIndicesToRemove.length; k++) {
+                        try {
+                            layer.timeRemap.removeKey(oldKeyIndicesToRemove[k]);
+                        } catch(remErr) {
+                            // Silently skip Time Remap removeKey errors
+                        }
+                    }
+
+                    // STEP 4: Restore keyframe properties
+                    for (var k = 0; k < timeRemapStates.length; k++) {
+                        var kfData = timeRemapStates[k];
+                        for (var j = 1; j <= layer.timeRemap.numKeys; j++) {
+                            if (Math.abs(layer.timeRemap.keyTime(j) - kfData.newTime) < 0.001) {
+                                try {
+                                    restoreKeyframeState(layer.timeRemap, j, kfData.state);
+                                } catch(restoreErr) {
+                                    // Silently skip Time Remap restore errors
+                                }
+                                keyframesCompensated++;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Step 4: Move layer markers
+                if (layer.marker && layer.marker.numKeys > 0) {
+                    var markersToMove = [];
+                    for (var m = 1; m <= layer.marker.numKeys; m++) {
+                        var markerTime = layer.marker.keyTime(m);
+                        var markerValue = layer.marker.keyValue(m);
+                        var newMarkerTime = markerTime - timeOffset;
+                        if (newMarkerTime >= 0) {
+                            markersToMove.push({
+                                index: m,
+                                oldTime: markerTime,
+                                newTime: newMarkerTime,
+                                value: markerValue
+                            });
+                        }
+                    }
+                    for (var m = markersToMove.length - 1; m >= 0; m--) {
+                        var markerData = markersToMove[m];
+                        try {
+                            layer.marker.removeKey(markerData.index);
+                            var newMarkerIndex = layer.marker.addKey(markerData.newTime);
+                            layer.marker.setValueAtKey(newMarkerIndex, markerData.value);
+                        } catch (e) {
+                            // Silently skip marker errors
+                        }
+                    }
+                }
+            } else {
+                layer.inPoint = newEarliestTime;
+            }
         }
         if (data.trackOutPoint && newLatestTime !== null) {
-            DEBUG_JSX.log("IN/OUT UPDATE: Setting layer '" + layer.name + "' outPoint to " + newLatestTime);
+            DEBUG_JSX.log("OUTPOINT UPDATE: Setting layer '" + layer.name + "' outPoint to " + (newLatestTime * 1000).toFixed(1) + "ms");
             layer.outPoint = newLatestTime;
+
+            // PRECOMP EXTENSION: Check if layer is a precomp and needs extension
+            var hasTimeRemapForExt = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+            if (!hasTimeRemapForExt && layer.source && layer.source instanceof CompItem) {
+                var precomp = layer.source;
+                var intendedOutPoint = newLatestTime;
+
+                // Calculate nudge amount: how much the keyframes moved
+                var nudgeAmount = newLatestTime - data.originalOutPoint;
+                var newPrecompDuration = precomp.duration + nudgeAmount;
+
+                DEBUG_JSX.log("PRECOMP CHECK: nudgeAmount=" + (nudgeAmount * 1000).toFixed(1) + "ms, oldDuration=" + (precomp.duration * 1000).toFixed(1) + "ms, newDuration=" + (newPrecompDuration * 1000).toFixed(1) + "ms");
+
+                if (nudgeAmount > 0.001) {
+                    DEBUG_JSX.log("PRECOMP CHECK: Extending precomp '" + precomp.name + "' by nudge amount");
+                    extendPrecompFromLayerToTarget(layer, precomp, newPrecompDuration);
+                    // Now set the outPoint again since precomp is extended
+                    layer.outPoint = intendedOutPoint;
+                }
+            }
         }
 
         // Pin out point to last keyframe if needed
+        // Now works for Time Remap too since findLastKeyframe skips Time Remap
         if (data.trackInPoint && data.pinOutPointToLastKey && !data.trackOutPoint) {
             var currentLastKeyframeTime = null;
 
@@ -250,16 +773,114 @@ function updateLayerInOutPoints(layerData, keyframeDataArray) {
                 if (layer.audio) findLastKeyframeInGroupForUpdate(layer.audio);
             } catch (e) {}
 
-            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-                var lastKeyTime = layer.timeRemap.keyTime(layer.timeRemap.numKeys);
-                if (currentLastKeyframeTime === null || lastKeyTime > currentLastKeyframeTime) {
-                    currentLastKeyframeTime = lastKeyTime;
-                }
-            }
+            // Skip Time Remap - it has automatic end keyframe we don't want
 
             if (currentLastKeyframeTime !== null) {
-                DEBUG_JSX.log("IN/OUT UPDATE: Pinning layer '" + layer.name + "' outPoint to last keyframe at " + currentLastKeyframeTime);
+                var beforePinOutPoint = layer.outPoint;
                 layer.outPoint = currentLastKeyframeTime;
+                DEBUG_JSX.log("  PIN: outPoint " + (beforePinOutPoint * 1000).toFixed(1) + "ms → " + (currentLastKeyframeTime * 1000).toFixed(1) + "ms (absolute: " + ((layer.startTime + layer.outPoint) * 1000).toFixed(1) + "ms)");
+
+                // PRECOMP EXTENSION: Check if layer is a precomp and outPoint exceeds precomp duration
+                // Use abs(timeOffset) as the nudge amount (timeOffset is negative when moving back)
+                var hasTimeRemapForExt = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+                if (!hasTimeRemapForExt && layer.source && layer.source instanceof CompItem) {
+                    var precomp = layer.source;
+                    var absNudgeAmount = Math.abs(timeOffset);
+                    DEBUG_JSX.log("  PRECOMP CHECK (PIN): outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms, precomp.duration=" + (precomp.duration * 1000).toFixed(1) + "ms, absNudge=" + (absNudgeAmount * 1000).toFixed(1) + "ms");
+
+                    // If outPoint exceeds precomp duration, extend precomp by nudge amount only
+                    if (layer.outPoint > precomp.duration + 0.001 && absNudgeAmount > 0.001) {
+                        var newPrecompDuration = precomp.duration + absNudgeAmount;
+                        DEBUG_JSX.log("  PRECOMP CHECK (PIN): EXTENDING precomp by " + (absNudgeAmount * 1000).toFixed(1) + "ms to " + (newPrecompDuration * 1000).toFixed(1) + "ms");
+                        extendPrecompFromLayerToTarget(layer, precomp, newPrecompDuration);
+                    } else {
+                        DEBUG_JSX.log("  PRECOMP CHECK (PIN): No extension needed");
+                    }
+                }
+            }
+        }
+
+        // PRECOMP EXTENSION: If layer extends beyond comp, extend precomps up the chain
+        // Skip for Time Remap layers - they control their own timing independently
+        var hasTimeRemapForExtension = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+
+        if (!hasTimeRemapForExtension) {
+            var layerAbsoluteEnd = layer.startTime + layer.outPoint;
+            var containingComp = layer.containingComp;
+
+            if (containingComp && layerAbsoluteEnd > containingComp.duration + 0.001) {
+                extendPrecompsUpChain(layer);
+            }
+        }
+    }
+
+    // GLOBAL SELECTION RESTORATION
+    if (allSelectionToRestore.length > 0) {
+
+        // Helper function to find property by name (from KEYFRAME_SYSTEM_SUMMARY)
+        function findPropertyByName(searchLayer, targetName) {
+            function searchGroup(group) {
+                for (var i = 1; i <= group.numProperties; i++) {
+                    var prop = group.property(i);
+                    if (prop.name === targetName && prop.canVaryOverTime) {
+                        return prop;
+                    }
+                    if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                        prop.propertyType === PropertyType.NAMED_GROUP) {
+                        var found = searchGroup(prop);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            }
+            return searchGroup(searchLayer);
+        }
+
+        // Restore selection for each property
+        for (var sel = 0; sel < allSelectionToRestore.length; sel++) {
+            var selData = allSelectionToRestore[sel];
+            var targetLayer = selData.layer;
+
+            if (selData.isTimeRemap) {
+                if (targetLayer.timeRemapEnabled && targetLayer.timeRemap) {
+                    for (var k = 1; k <= targetLayer.timeRemap.numKeys; k++) {
+                        try {
+                            targetLayer.timeRemap.setSelectedAtKey(k, false);
+                        } catch(e) {}
+                    }
+                    for (var t = 0; t < selData.selectedTimes.length; t++) {
+                        var targetTime = selData.selectedTimes[t];
+                        for (var k = 1; k <= targetLayer.timeRemap.numKeys; k++) {
+                            if (Math.abs(targetLayer.timeRemap.keyTime(k) - targetTime) < 0.001) {
+                                try {
+                                    targetLayer.timeRemap.setSelectedAtKey(k, true);
+                                } catch(e) {}
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else {
+                var freshProp = findPropertyByName(targetLayer, selData.propName);
+                if (!freshProp) continue;
+
+                for (var k = 1; k <= freshProp.numKeys; k++) {
+                    try {
+                        freshProp.setSelectedAtKey(k, false);
+                    } catch(e) {}
+                }
+
+                for (var t = 0; t < selData.selectedTimes.length; t++) {
+                    var targetTime = selData.selectedTimes[t];
+                    for (var k = 1; k <= freshProp.numKeys; k++) {
+                        if (Math.abs(freshProp.keyTime(k) - targetTime) < 0.001) {
+                            try {
+                                freshProp.setSelectedAtKey(k, true);
+                            } catch(e) {}
+                            break;
+                        }
+                    }
+                }
             }
         }
     }
@@ -5554,29 +6175,25 @@ function nudgeDelay(direction) {
                             }
                         }
                         
-                        // Move layer markers in separate undo group
+                        // Move layer markers (no separate undo group - let parent nudge operation handle undo)
                         if (markersToMove.length > 0) {
-                            app.beginUndoGroup("Sync Layer Markers");
-                            
                             markersToMove.sort(function(a, b) { return b.markerIndex - a.markerIndex; });
-                            
+
                             for (var m = 0; m < markersToMove.length; m++) {
                                 var markerInfo = markersToMove[m];
-                                
+
                                 try {
                                     markerInfo.layer.marker.removeKey(markerInfo.markerIndex);
                                     var newMarkerIndex = markerInfo.layer.marker.addKey(markerInfo.newTime);
                                     markerInfo.layer.marker.setValueAtKey(newMarkerIndex, markerInfo.markerValue);
-                                    
+
                                     DEBUG_JSX.log("Moved layer marker '" + markerInfo.comment + "' from " + Math.round(markerInfo.oldTime * 1000) + "ms to " + Math.round(markerInfo.newTime * 1000) + "ms");
                                     debugInfo.push("Synced layer marker '" + markerInfo.comment + "'");
-                                    
+
                                 } catch(markerMoveError) {
                                     DEBUG_JSX.log("Failed to move layer marker: " + markerMoveError.toString());
                                 }
                             }
-                            
-                            app.endUndoGroup();
                         }
                         
                     } catch(markerSyncError) {
@@ -7957,17 +8574,72 @@ function getSelectionHashWithoutTimes() {
 function nudgeDelayTimelineMode(direction, frames) {
     try {
         DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames");
-        
+
         app.beginUndoGroup("Timeline Mode Nudge");
-        
+
         var comp = app.project.activeItem;
         if (!(comp && comp instanceof CompItem)) {
             app.endUndoGroup();
             return "error|No composition selected";
         }
-        
+
         var frameRate = comp.frameRate || 30;
         var timeOffset = (frames * direction) / frameRate; // Time offset in seconds
+
+        // CLAMP: Prevent nudging before frame 0
+        // Find the earliest selected keyframe time across all selected layers
+        if (timeOffset < 0) {
+            var earliestKeyTime = Infinity;
+            var selectedLayers = comp.selectedLayers;
+
+            for (var i = 0; i < selectedLayers.length; i++) {
+                var layer = selectedLayers[i];
+                var selectedProps = layer.selectedProperties;
+
+                for (var j = 0; j < selectedProps.length; j++) {
+                    var prop = selectedProps[j];
+                    if (!prop || !prop.canVaryOverTime || prop.numKeys === 0) continue;
+
+                    for (var k = 1; k <= prop.numKeys; k++) {
+                        if (prop.keySelected(k)) {
+                            var keyTime = prop.keyTime(k);
+                            // Convert to comp time
+                            var compTime = layer.startTime + keyTime;
+                            if (compTime < earliestKeyTime) {
+                                earliestKeyTime = compTime;
+                            }
+                        }
+                    }
+                }
+
+                // Also check Time Remap
+                if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                    for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                        if (layer.timeRemap.keySelected(k)) {
+                            var keyTime = layer.timeRemap.keyTime(k);
+                            var compTime = layer.startTime + keyTime;
+                            if (compTime < earliestKeyTime) {
+                                earliestKeyTime = compTime;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Clamp timeOffset so earliest keyframe doesn't go below 0
+            if (earliestKeyTime !== Infinity && earliestKeyTime + timeOffset < 0) {
+                var clampedOffset = -earliestKeyTime;
+                DEBUG_JSX.log("CLAMP: Limiting timeOffset from " + (timeOffset * 1000).toFixed(1) + "ms to " + (clampedOffset * 1000).toFixed(1) + "ms (earliest key at " + (earliestKeyTime * 1000).toFixed(1) + "ms)");
+                timeOffset = clampedOffset;
+
+                // If clamped to 0, nothing to do
+                if (Math.abs(timeOffset) < 0.001) {
+                    app.endUndoGroup();
+                    DEBUG_JSX.log("CLAMP: Already at frame 0, cannot nudge further back");
+                    return "error|Already at frame 0";
+                }
+            }
+        }
         
         // Check if selection changed and reset cumulative if needed
         // For timeline mode, use a special hash that doesn't include keyframe times
@@ -8740,17 +9412,6 @@ function nudgeDelayTimelineMode(direction, frames) {
         
         // Markers were already moved before keyframe operations to avoid selection interference
         
-        app.endUndoGroup();
-        
-        // Small delay to let After Effects process the undo group before restoring selections
-        // This prevents timing issues with selection restoration
-        try {
-            // Use app.refresh() to ensure UI updates are processed
-            app.refresh();
-        } catch(e) {
-            // Refresh might not be available, continue anyway
-        }
-        
         // STEP 3 & 4: RESTORE SELECTION WITH FRESH REFERENCES (only if we had selected keyframes originally)
         // NOTE: We now do immediate selection during keyframe creation, so this is a backup
         if (hasSelectedKeyframes) {
@@ -8831,6 +9492,9 @@ function nudgeDelayTimelineMode(direction, frames) {
         // Update layer in/out points to match nudged keyframes
         updateLayerInOutPoints(layerInOutData, allKeyframeDataTimeline);
 
+        // Close undo group
+        app.endUndoGroup();
+
         // Return success with the CUMULATIVE amount moved (with sign preserved)
         var cumulativeMs = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * 1000);
         var cumulativeFrames = Math.round(TIMELINE_MODE_CUMULATIVE_OFFSET * frameRate);
@@ -8838,7 +9502,7 @@ function nudgeDelayTimelineMode(direction, frames) {
         // Include debug messages in result for debug panel
         var debugMessages = DEBUG_JSX.getMessages();
         return "success|" + cumulativeMs + "|" + cumulativeFrames + "|Moved " + movedCount + " keyframes|" + debugMessages.join("|");
-        
+
     } catch(e) {
         app.endUndoGroup();
         
@@ -19378,6 +20042,8 @@ function findFirstKeyframeOnLayer(layer) {
     function checkProperty(prop) {
         if (!prop) return;
         if (prop.matchName === "ADBE Marker" || prop.name === "Marker" || prop.name === "Markers") return;
+        // Skip Time Remap - it has automatic start/end keyframes that we don't want to find
+        if (prop.matchName === "ADBE Time Remapping" || prop.name === "Time Remap") return;
 
         if (prop.propertyType === PropertyType.INDEXED_GROUP || prop.propertyType === PropertyType.NAMED_GROUP) {
             for (var i = 1; i <= prop.numProperties; i++) {
@@ -19409,6 +20075,8 @@ function findLastKeyframeOnLayer(layer) {
     function checkProperty(prop) {
         if (!prop) return;
         if (prop.matchName === "ADBE Marker" || prop.name === "Marker" || prop.name === "Markers") return;
+        // Skip Time Remap - it has an automatic end keyframe that we don't want to find
+        if (prop.matchName === "ADBE Time Remapping" || prop.name === "Time Remap") return;
 
         if (prop.propertyType === PropertyType.INDEXED_GROUP || prop.propertyType === PropertyType.NAMED_GROUP) {
             for (var i = 1; i <= prop.numProperties; i++) {
