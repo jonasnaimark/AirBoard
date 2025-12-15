@@ -21008,8 +21008,8 @@ function handleTrimInPoint(setToMin) {
                 try {
                     var layer = selectedLayers[i];
                     var shiftAmount = layer.startTime; // Amount to shift content forward
-                    var originalOutPoint = layer.outPoint;
-                    var originalAbsoluteOutPoint = layer.startTime + layer.outPoint;
+                    var originalOutPoint = layer.outPoint; // outPoint is already absolute comp time
+                    var originalTrimAmount = layer.inPoint - layer.startTime; // How much the layer was trimmed
 
                     // Check if this is a precomp/comp layer
                     var isPrecomp = layer.source && layer.source instanceof CompItem;
@@ -21119,11 +21119,21 @@ function handleTrimInPoint(setToMin) {
                         }
                     }
 
-                    // Move layer to comp start while keeping absolute out-point position
-                    // New outPoint = originalAbsoluteOutPoint since startTime becomes 0
+                    // Move layer to comp start while preserving out-point position and trim amount
+                    DEBUG_JSX.log("  BEFORE: startTime=" + (layer.startTime * 1000).toFixed(1) + "ms, inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms, trimAmount=" + (originalTrimAmount * 1000).toFixed(1) + "ms");
+
+                    // Set startTime to 0 first
                     layer.startTime = 0;
-                    layer.inPoint = 0;
-                    layer.outPoint = originalAbsoluteOutPoint;
+                    DEBUG_JSX.log("  After startTime=0: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
+
+                    // Restore outPoint (it's already absolute comp time, so just restore original value)
+                    layer.outPoint = originalOutPoint;
+                    DEBUG_JSX.log("  After outPoint restore: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
+
+                    // Set inPoint to maintain original trim amount (if layer was trimmed by 50ms, keep that 50ms trim)
+                    layer.inPoint = originalTrimAmount;
+                    DEBUG_JSX.log("  After inPoint set: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
+
                     layersAdjusted++;
                 } catch(e) {
                     // Some layers (like locked precomps) may not be adjustable
@@ -21196,10 +21206,20 @@ function handleTrimOutPoint(setToMax) {
                     var layer = selectedLayers[i];
                     var originalInPoint = layer.inPoint;
                     var originalOutPoint = layer.outPoint;
+                    var originalStartTime = layer.startTime;
 
                     // DEBUG: Log all Time Remap related properties
                     DEBUG_JSX.log("--- Layer " + (i+1) + ": '" + layer.name + "' ---");
+                    DEBUG_JSX.log("  originalInPoint=" + (originalInPoint * 1000).toFixed(1) + "ms");
                     DEBUG_JSX.log("  originalOutPoint=" + (originalOutPoint * 1000).toFixed(1) + "ms");
+                    DEBUG_JSX.log("  originalStartTime=" + (originalStartTime * 1000).toFixed(1) + "ms");
+                    if (layer.source) {
+                        if (layer.source instanceof CompItem) {
+                            DEBUG_JSX.log("  source.type=CompItem, duration=" + (layer.source.duration * 1000).toFixed(1) + "ms");
+                        } else {
+                            DEBUG_JSX.log("  source.type=" + (layer.source.mainSource ? layer.source.mainSource.constructor.name : "unknown"));
+                        }
+                    }
                     DEBUG_JSX.log("  layer.timeRemapEnabled=" + (layer.timeRemapEnabled ? "TRUE" : "FALSE"));
                     DEBUG_JSX.log("  layer.timeRemap exists=" + (layer.timeRemap ? "TRUE" : "FALSE"));
                     if (layer.timeRemap) {
@@ -21210,19 +21230,10 @@ function handleTrimOutPoint(setToMax) {
                     var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
                     DEBUG_JSX.log("  hasTimeRemap=" + (hasTimeRemap ? "TRUE" : "FALSE"));
 
-                    // Skip Time Remap layers that aren't already at comp end
-                    // Time Remap gives explicit control over timing - don't override user's intent
+                    // When user explicitly maxes outpoint (Shift), we extend all layers including Time Remap
+                    // The Shift modifier indicates explicit user intent to override normal behavior
                     if (hasTimeRemap) {
-                        var diff = Math.abs(originalOutPoint - comp.duration);
-                        var nearCompEnd = diff < 0.01;
-                        DEBUG_JSX.log("  TIME REMAP CHECK: diff=" + (diff * 1000).toFixed(1) + "ms, nearCompEnd=" + (nearCompEnd ? "TRUE" : "FALSE"));
-                        if (!nearCompEnd) {
-                            DEBUG_JSX.log("  => SKIPPED (Time Remap not at comp end)");
-                            layersSkipped++;
-                            continue;
-                        } else {
-                            DEBUG_JSX.log("  => WILL EXTEND (Time Remap already at comp end)");
-                        }
+                        DEBUG_JSX.log("  => WILL EXTEND (Time Remap, user explicitly requested max with Shift)");
                     } else {
                         DEBUG_JSX.log("  => WILL EXTEND (no Time Remap)");
                     }
@@ -21239,11 +21250,16 @@ function handleTrimOutPoint(setToMax) {
                         }
                     }
 
+                    // Set outPoint to comp end WITHOUT restoring inPoint
+                    // (restoring inPoint after changing outPoint can cause AE to recalculate outPoint)
+                    DEBUG_JSX.log("  BEFORE: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
                     layer.outPoint = comp.duration;
-                    layer.inPoint = originalInPoint; // Restore in-point to keep it pinned
+                    DEBUG_JSX.log("  AFTER: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
+
                     layersAdjusted++;
                 } catch(e) {
                     // Some layers (like precomps with shorter duration) may not extend that far
+                    DEBUG_JSX.log("  ERROR: " + e.toString());
                     $.writeln("Could not set max out-point for layer: " + selectedLayers[i].name + " - " + e.toString());
                 }
             }
