@@ -15013,14 +15013,14 @@ function createDeviceComposition(deviceType, multiplier) {
 
 // Gesture Templates functionality
 function addGestureFromPanel(gestureType, multiplier) {
-    // app.beginUndoGroup("Add Gesture");
-    
+    app.beginUndoGroup("Add Gesture");
+
     try {
         // Check if we have an active comp
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             alert("Please select a composition first.");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15047,7 +15047,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         var data = gestureData[gestureType];
         if (!data) {
             alert("Invalid gesture type");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15062,7 +15062,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         if (!templateFile.exists) {
             alert("Cannot find AirBoard Templates.aep file.");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15107,7 +15107,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         if (!gestureComp) {
             alert("Cannot find " + data.compName + " composition in template.");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15123,7 +15123,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         
         if (!sourceLayer) {
             alert("Cannot find layer '" + data.layerName + "' in " + data.compName);
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15145,7 +15145,7 @@ function addGestureFromPanel(gestureType, multiplier) {
         // Verify a new layer was added
         if (comp.numLayers <= layerCountBefore) {
             alert("Error: Gesture layer was not added to the composition.");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15244,27 +15244,27 @@ function addGestureFromPanel(gestureType, multiplier) {
             // If positioning fails, continue without repositioning
             $.writeln("Position adjustment failed: " + posError.toString());
         }
-        
-        // app.endUndoGroup();
+
+        app.endUndoGroup();
         return "success";
-        
+
     } catch(e) {
         alert("Error adding gesture: " + e.toString());
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return "error";
     }
 }
 
 // Add Component functionality (follows exact same pattern as gestures)
 function addComponentFromPanel(componentType, multiplier) {
+    app.beginUndoGroup("Add Component");
+
     try {
-        // app.beginUndoGroup("Add Component");
-        
         // Get active composition
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             alert("Please select a composition first.");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15295,7 +15295,7 @@ function addComponentFromPanel(componentType, multiplier) {
         var data = componentData[componentType];
         if (!data) {
             alert("Unknown component type: " + componentType);
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
 
@@ -15332,7 +15332,7 @@ function addComponentFromPanel(componentType, multiplier) {
         
         if (!templateFile.exists) {
             alert("Cannot find template file at: " + templatePath);
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15377,7 +15377,7 @@ function addComponentFromPanel(componentType, multiplier) {
         
         if (!componentComp) {
             alert("Cannot find " + data.compName + " composition in template.");
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15400,7 +15400,7 @@ function addComponentFromPanel(componentType, multiplier) {
         
         if (!sourceLayer && componentType !== "iphone-ui") {
             alert("Cannot find any layers in " + data.compName);
-            // app.endUndoGroup();
+            app.endUndoGroup();
             return "error";
         }
         
@@ -15433,7 +15433,7 @@ function addComponentFromPanel(componentType, multiplier) {
             // Verify a new layer was added
             if (comp.numLayers <= layerCountBefore) {
                 alert("Error: Component layer was not added to the composition.");
-                // app.endUndoGroup();
+                app.endUndoGroup();
                 return "error";
             }
             
@@ -15532,12 +15532,12 @@ function addComponentFromPanel(componentType, multiplier) {
         } catch(posError) {
             $.writeln("Position placement failed: " + posError.toString());
         }
-        
-        // app.endUndoGroup();
+
+        app.endUndoGroup();
         return "success";
     } catch(e) {
         alert("Error adding component: " + e.toString());
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return "error";
     }
 }
@@ -17053,13 +17053,13 @@ function addNulls(nullType) {
 
 // Apply the complete preset
 function applySquircle(useCompSize, resolutionMultiplier) {
-    // app.beginUndoGroup("Create Squircle");
-    
+    app.beginUndoGroup("Create Squircle");
+
     // Check if we have an active comp
     var comp = app.project.activeItem;
     if (!comp || !(comp instanceof CompItem)) {
         alert("Please select a composition first.");
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return;
     }
 
@@ -17090,17 +17090,17 @@ function applySquircle(useCompSize, resolutionMultiplier) {
     if (!ffxFile.exists) {
         alert("Cannot find SquircleComplete.ffx preset file.");
         layer.remove();
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return;
     }
-    
+
     // Apply the preset to the layer
     try {
         layer.applyPreset(ffxFile);
     } catch (e) {
         alert("applyPreset failed: " + e.toString());
         layer.remove();
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return;
     }
     
@@ -17195,8 +17195,8 @@ function applySquircle(useCompSize, resolutionMultiplier) {
 
     // Center the layer in the comp
     layer.transform.position.setValue([comp.width/2, comp.height/2]);
-    
-    // app.endUndoGroup();
+
+    app.endUndoGroup();
 }
 
 // Replace selected rectangle with squircle
