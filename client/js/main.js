@@ -2229,9 +2229,11 @@ document.addEventListener('DOMContentLoaded', function() {
         moreActionsBtn.addEventListener('click', function(event) {
             event.stopPropagation();
 
-            // Close any open custom-select-menus (gestures, device templates, etc.)
+            // Close any OTHER open custom-select-menus (gestures, device templates, etc.)
             document.querySelectorAll('.custom-select-menu.open').forEach(function(menu) {
-                menu.classList.remove('open');
+                if (menu !== moreActionsDropdown) {
+                    menu.classList.remove('open');
+                }
             });
 
             moreActionsDropdown.classList.toggle('open');
