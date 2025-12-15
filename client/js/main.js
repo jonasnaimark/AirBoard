@@ -337,6 +337,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
 
+                // Close any open custom-dropdown (moreActionsDropdown, etc.)
+                document.querySelectorAll('.custom-dropdown.open').forEach(function(dropdown) {
+                    dropdown.classList.remove('open');
+                });
+
                 // Close other menus
                 if (activeMenu && activeMenu !== menu) {
                     closeAllMenus();
@@ -2222,6 +2227,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Toggle dropdown on button click
         moreActionsBtn.addEventListener('click', function(event) {
             event.stopPropagation();
+
+            // Close any open custom-select-menus (gestures, device templates, etc.)
+            document.querySelectorAll('.custom-select-menu.open').forEach(function(menu) {
+                menu.classList.remove('open');
+            });
+
             moreActionsDropdown.classList.toggle('open');
             console.log('More actions dropdown toggled');
         });
