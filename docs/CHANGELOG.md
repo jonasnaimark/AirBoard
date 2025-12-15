@@ -5,6 +5,24 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.0] - 2025-12-15 🎨 **Dropdown System Unification**
+### 🎨 UI/UX Improvements
+- **Unified Dropdown System**: Merged Keyframe Nudger and gesture/device dropdowns into single consistent system
+- **Improved Dropdown Interactions**: Clicking one dropdown now closes any other open dropdown
+- **Rounded Hover States**: Keyframe Nudger dropdown options now have rounded hover backgrounds matching gesture dropdowns
+- **Device Dropdown Enhancement**: Removed scrim overlay, added custom chevron icon for more visible text
+- **Frame Slider Spacing**: Reduced left/right padding from 8px to 4px for tighter layout
+- **Input/Button Balance**: Fine-tuned number input and +/- button widths for better proportions
+- **Blur Dropdown Tightening**: Reduced vertical padding in Effects > Blur material type dropdown
+
+### 🔧 Technical Improvements
+- **CSS Consolidation**: Removed duplicate `.custom-dropdown` styles in favor of unified `.custom-select-menu`
+- **Event Handling**: Added cross-closing logic between different dropdown instances
+- **Specificity Fixes**: Updated selectors for frame multiplier input width override
+
+### 🔗 Associated Build
+- AirBoard-v4.17.0.zxp
+
 ## [4.16.98] - 2025-12-14 🔒 **Baked Spring Protection**
 ### 🔒 New Feature
 - **Baked Spring Protection**: Keyframes inside baked spring segments are now protected from being moved when the playhead is within that spring
