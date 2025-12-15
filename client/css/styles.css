@@ -1180,7 +1180,7 @@ input.distance-input[data-tooltip]:hover::after {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     z-index: 10000;
     display: none;
-    padding: 4px 0;
+    padding: 2px 0;
 }
 
 .custom-select-menu.open {
