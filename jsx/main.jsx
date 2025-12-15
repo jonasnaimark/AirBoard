@@ -14409,8 +14409,8 @@ function getOrCreatePlaceholderComp(baseWidth, baseHeight, multiplier) {
 // Device Templates functionality
 function createDeviceComposition(deviceType, multiplier) {
     var debugInfo = [];
-    // app.beginUndoGroup("Create Device Composition");
-    
+    app.beginUndoGroup("Create Device Composition");
+
     try {
         debugInfo.push("=== DEVICE CREATION START ===");
         debugInfo.push("Device type: " + deviceType);
@@ -15001,12 +15001,12 @@ function createDeviceComposition(deviceType, multiplier) {
         }
         
         debugInfo.push("=== DEVICE CREATION COMPLETE ===");
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return "success|" + debugInfo.join("|");
-        
+
     } catch(e) {
         debugInfo.push("❌ Error: " + e.toString());
-        // app.endUndoGroup();
+        app.endUndoGroup();
         return "error|" + debugInfo.join("|");
     }
 }
