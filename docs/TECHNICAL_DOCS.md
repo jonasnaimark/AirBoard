@@ -6,10 +6,142 @@
 
 ## Table of Contents
 
-1. [UI Patterns and Components](#ui-patterns-and-components)
-2. [Easing Systems](#easing-systems)
+1. [After Effects Layer Timing Model](#after-effects-layer-timing-model)
+2. [UI Patterns and Components](#ui-patterns-and-components)
+3. [Easing Systems](#easing-systems)
    - [CSS to After Effects Easing Conversion](#css-to-after-effects-easing-conversion)
    - [Keyframe Easing Preservation](#keyframe-easing-preservation)
+
+---
+
+# After Effects Layer Timing Model
+
+**Understanding startTime, inPoint, outPoint, and precomp duration**
+
+This is one of the most confusing aspects of After Effects scripting. Getting this wrong leads to layers that extend past comp ends, precomps that are the wrong duration, and hours of debugging.
+
+## The Three Timing Properties
+
+Every AE layer has three timing properties:
+
+| Property | What It Represents | Typical Value |
+|----------|-------------------|---------------|
+| `layer.startTime` | Where the layer appears on the comp timeline | 0s, 2s, etc. |
+| `layer.inPoint` | Where playback starts **within the source** | Usually 0 for non-trimmed layers |
+| `layer.outPoint` | Where playback ends **within the source** | End of source content |
+
+### The Key Insight
+
+**inPoint and outPoint are offsets into the SOURCE, not the comp timeline.**
+
+If a layer has:
+- `startTime = 2` (appears at 2 seconds in comp)
+- `inPoint = 1` (starts playing from 1 second into source)
+- `outPoint = 4` (stops at 4 seconds into source)
+
+The layer shows **3 seconds** of content (frames 1-4 from source), starting at the 2-second mark in the comp.
+
+## Critical Formulas
+
+### 1. Visible End in Comp Timeline
+```javascript
+// Where does this layer's visible content END in the comp?
+var layerVisibleEnd = layer.startTime + (layer.outPoint - layer.inPoint);
+```
+
+**NOT** `layer.startTime + layer.outPoint` (common mistake!)
+
+### 2. Required Precomp Duration
+```javascript
+// How long does the precomp source need to be?
+var requiredPrecompDuration = layer.outPoint - layer.inPoint;
+```
+
+**NOT** just `layer.outPoint` (this was our bug!)
+
+### 3. Visible Content Duration
+```javascript
+// How many seconds/frames of content does this layer show?
+var visibleDuration = layer.outPoint - layer.inPoint;
+```
+
+## Real Example (from our Extend Comp bug)
+
+Setup:
+- Layer in comp with `startTime = 49 frames` (about 2 seconds at 24fps)
+- `inPoint = 49 frames` (starts playing from frame 49 of precomp)
+- `outPoint = 600 frames` (stops at frame 600 of precomp)
+- Precomp duration: 551 frames (just enough for frames 49-600)
+
+**What we calculated wrong:**
+```javascript
+// WRONG: Extended precomp to outPoint value
+if (precomp.duration < newLayerOutPoint) {
+    extendPrecomp(precomp, newLayerOutPoint);  // Extended to 1100 frames!
+}
+```
+
+**The correct calculation:**
+```javascript
+// RIGHT: Precomp only needs (outPoint - inPoint) duration
+var requiredDuration = newLayerOutPoint - layer.inPoint;  // 1100 - 49 = 1051 frames
+if (precomp.duration < requiredDuration) {
+    extendPrecomp(precomp, requiredDuration);
+}
+```
+
+The precomp needed 1051 frames (500 more than original 551), not 1100 frames.
+
+## Common Pitfalls
+
+### Pitfall 1: Using outPoint as precomp duration
+```javascript
+// ❌ WRONG
+var neededDuration = layer.outPoint;
+
+// ✅ RIGHT
+var neededDuration = layer.outPoint - layer.inPoint;
+```
+
+### Pitfall 2: Using startTime + outPoint for visible end
+```javascript
+// ❌ WRONG
+var layerEnd = layer.startTime + layer.outPoint;
+
+// ✅ RIGHT
+var layerEnd = layer.startTime + (layer.outPoint - layer.inPoint);
+```
+
+### Pitfall 3: Forgetting inPoint when extending
+```javascript
+// ❌ WRONG: If extending layer by 500 frames, extend precomp by 500 frames
+precomp.duration = precomp.duration + 500;
+
+// ✅ RIGHT: Extend precomp to exactly what's needed
+var requiredDuration = newOutPoint - layer.inPoint;
+precomp.duration = Math.max(precomp.duration, requiredDuration);
+```
+
+## Visual Representation
+
+```
+Comp Timeline:     [-------|====== LAYER VISIBLE ======|-------]
+                   0       startTime                   visibleEnd
+
+Layer Source:      [------|====== PLAYED CONTENT =======|------]
+                   0      inPoint                       outPoint
+                          |<-- visibleDuration = outPoint - inPoint -->|
+
+Precomp needs:     Only needs to be (outPoint - inPoint) long
+                   NOT outPoint long!
+```
+
+## When This Matters
+
+1. **Extending comps** - Must calculate how much to extend precomps
+2. **Trimming layers** - Must understand what content is actually shown
+3. **Duplicating layers** - inPoint/outPoint carry over
+4. **Checking if layer is at comp end** - Use visibleEnd, not outPoint
 
 ---
 

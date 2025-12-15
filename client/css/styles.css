@@ -306,7 +306,7 @@ body {
 }
 
 #frameMultiplierDisplay .stagger-controls .stagger-input {
-    width: 100%;
+    width: calc(100% - 18px);
     height: 100%;
     font-size: 11px;
     padding: 0;
@@ -331,8 +331,8 @@ body {
 /* Frame slider styling */
 .frame-slider-container {
     position: absolute;
-    left: 65px;
-    right: calc(33.33% + 8px);
+    left: 68px;
+    right: calc(33.33% - 4px);
     top: 50%;
     transform: translateY(-50%);
     height: 20px;
@@ -398,28 +398,92 @@ body {
 .frame-slider-handle {
     position: absolute;
     top: 50%;
-    width: 12px;
-    height: 12px;
+    width: 7px;
+    height: 7px;
     background-color: transparent;
     border: 2px solid #909090;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     cursor: grab;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     box-sizing: border-box;
     z-index: 10;
+    opacity: 0.5;
 }
 
 .frame-slider-handle:hover {
+    width: 12px;
+    height: 12px;
     border-color: #b0b0b0;
-    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+
+/* Grow handle when hovering the slider container or parent row */
+.frame-slider-container:hover .frame-slider-handle,
+#frameMultiplierDisplay:hover .frame-slider-handle {
+    width: 12px;
+    height: 12px;
+    border-color: #b0b0b0;
+    opacity: 1;
+    transform: translate(-50%, -50%);
 }
 
 .frame-slider-handle:active,
 .frame-slider-handle.dragging {
+    width: 12px;
+    height: 12px;
     cursor: grabbing;
     border-color: #c8c8c8;
-    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+
+/* Custom dropdown menu */
+.dropdown-container {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.keyframe-top-row .dropdown-container .stagger-btn {
+    width: 100%;
+}
+
+.custom-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 120px;
+    background-color: #3a3a3a;
+    border: 1px solid #505050;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.custom-dropdown.open {
+    display: block;
+}
+
+.dropdown-item {
+    padding: 8px 12px;
+    color: #d0d0d0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    white-space: nowrap;
+}
+
+.dropdown-item:hover {
+    background-color: #4a4a4a;
+    color: #ffffff;
+}
+
+.dropdown-item:active {
+    background-color: #555555;
 }
 
 /* Make stagger +/- match delay/duration widths (original 3-button layout width) */
@@ -429,7 +493,7 @@ body {
     gap: 6px;
 }
 #staggerRow .distance-controls .stagger-btn {
-    width: calc(50% - 6px); /* each button takes half of the container */
+    width: calc(50% - 15px);
 }
 
 .control-row:last-child {
@@ -559,7 +623,7 @@ body {
 }
 
 .resolution-display .stagger-controls .stagger-btn {
-    width: calc(50% - 6px);
+    width: calc(50% - 15px);
 }
 
 /* Distance controls - 4 buttons for In/Out/−/+ */
@@ -574,6 +638,25 @@ body {
     gap: 4px;
     pointer-events: all;
     padding: 0;
+}
+
+/* Make position row (X/Y) containers wider to match stagger button widths */
+#xDistanceDisplay .distance-controls,
+#yDistanceDisplay .distance-controls {
+    width: calc(54% - 8px);
+    gap: 6px;
+}
+
+#xDistanceDisplay .distance-controls .in-out-btn,
+#yDistanceDisplay .distance-controls .in-out-btn {
+    width: auto;
+    padding: 0 8px;
+    flex: 0 0 auto;
+}
+
+#xDistanceDisplay .distance-controls .nudge-btn,
+#yDistanceDisplay .distance-controls .nudge-btn {
+    width: calc(25% - 4.5px);
 }
 
 .keyframe-display .distance-controls .distance-input {
@@ -660,7 +743,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .keyframe-display .distance-controls .distance-btn {
-    width: calc(25% - 4.5px); /* Each button takes exactly 25% minus gap adjustment (18px / 4 = 4.5px) */
+    width: calc(25% - 3.75px); /* Each button takes 25% minus gap adjustment to match stagger-btn proportions */
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
@@ -888,7 +971,7 @@ input.distance-input[data-tooltip]:hover::after {
 
 #delayDisplay .stagger-controls .stagger-btn,
 #durationDisplay .stagger-controls .stagger-btn {
-    width: calc(50% - 6px); /* each button takes half of the container */
+    width: calc(50% - 15px);
 }
 
 /* Reduced gaps between the 6 control rows */
@@ -1242,4 +1325,124 @@ input.distance-input[data-tooltip]:hover::after {
 
 ::-webkit-scrollbar-thumb:hover {
     background: #4a4a4a;
+}
+
+/* Extend Comp Dialog Styles */
+.dialog-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.dialog-overlay.active {
+    display: flex;
+}
+
+.extend-comp-dialog {
+    background-color: #2a2a2a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 16px;
+    min-width: 180px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dialog-label {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.dialog-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.dialog-input {
+    width: 100%;
+    background-color: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 12px;
+    padding: 6px 50px 6px 8px;
+    outline: none;
+    font-family: 'Adobe Clean', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    box-sizing: border-box;
+}
+
+.dialog-input:focus {
+    background-color: #1e1e1e;
+}
+
+.dialog-input::-webkit-inner-spin-button,
+.dialog-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.dialog-suffix {
+    position: absolute;
+    right: 8px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.dialog-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.dialog-btn {
+    background-color: #3a3a3a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 12px;
+    padding: 6px 16px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    font-family: 'Adobe Clean', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.dialog-btn:hover {
+    background-color: #4a4a4a;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dialog-btn:active {
+    background-color: #2a2a2a;
+}
+
+.dialog-btn.apply-btn {
+    background-color: #4a7fb0;
+    border-color: #4a7fb0;
+}
+
+.dialog-btn.apply-btn:hover {
+    background-color: #5a8fc0;
+    border-color: #5a8fc0;
+}
+
+.dialog-btn.apply-btn:active {
+    background-color: #3a6fa0;
 }

@@ -307,6 +307,173 @@ function extendPrecompFromLayerToTarget(precompLayer, precomp, targetDuration) {
 }
 
 /**
+ * Extend the active composition by a specified number of frames
+ * Also extends layers that are at or near the end of the comp
+ * Recursively extends precomps that are at the end
+ * @param {number} numFrames - Number of frames to extend by
+ * @returns {string} Status message in format "status|message"
+ */
+function extendCompByFrames(numFrames) {
+    try {
+        // Clear previous debug messages
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("extendCompByFrames called with " + numFrames + " frames");
+
+        // Get active composition
+        var comp = app.project.activeItem;
+        if (!(comp instanceof CompItem)) {
+            return "error|No active composition";
+        }
+
+        // Calculate the extension amount in seconds
+        var frameDuration = comp.frameDuration;
+        var extensionSeconds = numFrames * frameDuration;
+        var oldDuration = comp.duration;
+        var newDuration = oldDuration + extensionSeconds;
+
+        // Start undo group
+        app.beginUndoGroup("Extend Comp by " + numFrames + " Frames");
+
+        // Extend the comp's duration
+        comp.duration = newDuration;
+
+        // Track extended layers and precomps
+        var layersExtended = 0;
+        var precompsExtended = 0;
+
+        // Find and extend layers that were at or near the old duration end
+        for (var i = 1; i <= comp.numLayers; i++) {
+            var layer = comp.layer(i);
+            // Layer's visible end in comp = startTime + (outPoint - inPoint)
+            var layerVisibleEnd = layer.startTime + (layer.outPoint - layer.inPoint);
+
+            // Check if layer is at or beyond the old duration (with small tolerance)
+            if (layerVisibleEnd >= oldDuration - 0.001) {
+                // Check for Time Remap - skip layers with Time Remap enabled
+                var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+
+                if (hasTimeRemap) {
+                    // Skip Time Remap layers
+                    continue;
+                }
+
+                // DEBUG
+                DEBUG_JSX.log("Layer: " + layer.name);
+                DEBUG_JSX.log("  startTime: " + layer.startTime + " (" + Math.round(layer.startTime / frameDuration) + " frames)");
+                DEBUG_JSX.log("  inPoint: " + layer.inPoint + " (" + Math.round(layer.inPoint / frameDuration) + " frames)");
+                DEBUG_JSX.log("  old outPoint: " + layer.outPoint + " (" + Math.round(layer.outPoint / frameDuration) + " frames)");
+
+                // Simply add the extension amount to the existing outPoint
+                // This extends the layer by the same amount as the comp extension
+                var newLayerOutPoint = layer.outPoint + extensionSeconds;
+                DEBUG_JSX.log("  newLayerOutPoint: " + newLayerOutPoint + " (" + Math.round(newLayerOutPoint / frameDuration) + " frames)");
+
+                // If this layer is a precomp, extend the source FIRST (before setting layer outPoint)
+                // Otherwise AE may clamp the outPoint to the source's current duration
+                if (layer.source instanceof CompItem) {
+                    var precomp = layer.source;
+                    var precompOldDuration = precomp.duration;
+                    DEBUG_JSX.log("  precomp.duration before: " + precomp.duration + " (" + Math.round(precomp.duration / frameDuration) + " frames)");
+
+                    // The precomp only needs to be (outPoint - inPoint) long, since the layer
+                    // shows source content from frame 0 to (outPoint - inPoint)
+                    var requiredPrecompDuration = newLayerOutPoint - layer.inPoint;
+                    DEBUG_JSX.log("  requiredPrecompDuration: " + requiredPrecompDuration + " (" + Math.round(requiredPrecompDuration / frameDuration) + " frames)");
+
+                    // Check if precomp needs extension
+                    if (precomp.duration < requiredPrecompDuration) {
+                        // Recursively extend the precomp to match required duration
+                        extendPrecompRecursively(precomp, precompOldDuration, requiredPrecompDuration);
+                        precompsExtended++;
+                    }
+                    DEBUG_JSX.log("  precomp.duration after: " + precomp.duration + " (" + Math.round(precomp.duration / frameDuration) + " frames)");
+                }
+
+                // Now extend layer to new duration (after source is extended)
+                DEBUG_JSX.log("  Setting layer.outPoint to: " + newLayerOutPoint);
+                layer.outPoint = newLayerOutPoint;
+                DEBUG_JSX.log("  layer.outPoint after set: " + layer.outPoint + " (" + Math.round(layer.outPoint / frameDuration) + " frames)");
+                layersExtended++;
+            }
+        }
+
+        app.endUndoGroup();
+
+        var message = "Extended comp by " + numFrames + " frames";
+        if (layersExtended > 0) {
+            message += ", " + layersExtended + " layer(s)";
+        }
+        if (precompsExtended > 0) {
+            message += ", " + precompsExtended + " precomp(s)";
+        }
+
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|" + message + "|" + debugMessages.join("|");
+
+    } catch (e) {
+        app.endUndoGroup();
+        DEBUG_JSX.error("extendCompByFrames failed", e);
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+/**
+ * Recursively extend a precomp and its internal layers
+ * @param {CompItem} precomp - The precomp to extend
+ * @param {number} oldDuration - The original duration before extension
+ * @param {number} newDuration - The target duration
+ */
+function extendPrecompRecursively(precomp, oldDuration, newDuration) {
+    if (newDuration <= precomp.duration + 0.001) {
+        return; // No extension needed
+    }
+
+    var precompOldDuration = precomp.duration;
+
+    // Calculate extension amount
+    var precompExtensionAmount = newDuration - precompOldDuration;
+
+    // Extend the precomp's duration
+    precomp.duration = newDuration;
+
+    // Extend layers in the precomp that were at or beyond old duration
+    for (var i = 1; i <= precomp.numLayers; i++) {
+        var layer = precomp.layer(i);
+        // Layer's visible end = startTime + (outPoint - inPoint)
+        var layerVisibleEnd = layer.startTime + (layer.outPoint - layer.inPoint);
+
+        if (layerVisibleEnd >= precompOldDuration - 0.001) {
+            // Check for Time Remap - skip layers with Time Remap enabled
+            var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+
+            if (hasTimeRemap) {
+                // Skip Time Remap layers
+                continue;
+            }
+
+            // Simply add the extension amount to the existing outPoint
+            // This extends the layer by the same amount as the precomp extension
+            var newLayerOutPoint = layer.outPoint + precompExtensionAmount;
+
+            // If this layer is also a precomp, extend the source FIRST
+            // Otherwise AE may clamp the outPoint to the source's current duration
+            if (layer.source instanceof CompItem) {
+                var nestedPrecomp = layer.source;
+                // The precomp only needs to be (outPoint - inPoint) long
+                var requiredNestedDuration = newLayerOutPoint - layer.inPoint;
+                if (nestedPrecomp.duration < requiredNestedDuration) {
+                    extendPrecompRecursively(nestedPrecomp, nestedPrecomp.duration, requiredNestedDuration);
+                }
+            }
+
+            // Now extend layer to new duration (after source is extended)
+            layer.outPoint = newLayerOutPoint;
+        }
+    }
+}
+
+/**
  * Extend precomp durations up the chain when layer extends beyond comp
  * Recursively extends parent comps until reaching the main comp
  */
@@ -5878,6 +6045,11 @@ function nudgeDelay(direction) {
                         DEBUG_JSX.log("IN/OUT TRACK DELAY: propData.layer = " + (layer ? layer.name : "UNDEFINED"));
                         var keyframesToMove = [];
 
+                        // BAKED SPRING PROTECTION: Detect spring segments and protect if playhead is within
+                        var playheadTime = comp.time;
+                        var bakedSprings = detectBakedSpringSegments(prop);
+                        var protectedSpringCount = 0;
+
                         // PROTECTION: Capture the next keyframe to prevent AE from modifying it
                         var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
 
@@ -5888,8 +6060,18 @@ function nudgeDelay(direction) {
                         for (var k = 0; k < propData.keyframes.length; k++) {
                             var keyIndex = propData.keyframes[k].index;
                             var oldTime = propData.keyframes[k].time;
+
+                            // Check if this keyframe is in a baked spring that contains the playhead
+                            if (isKeyframeInProtectedSpring(keyIndex, oldTime, playheadTime, bakedSprings)) {
+                                protectedSpringCount++;
+                                if (protectedSpringCount === 1) {
+                                    DEBUG_JSX.log("  🔒 Protecting baked spring keys in timeline mode (playhead is within spring segment)");
+                                }
+                                continue;
+                            }
+
                             var newTime = oldTime + timelineOffset; // Maintain relative spacing
-                            
+
                             var keyData = {
                                 oldIndex: keyIndex,
                                 time: oldTime,
@@ -5936,7 +6118,12 @@ function nudgeDelay(direction) {
                             
                             keyframesToMove.push(keyData);
                         }
-                        
+
+                        // Log summary of protected spring keys
+                        if (protectedSpringCount > 0) {
+                            DEBUG_JSX.log("  🔒 Protected " + protectedSpringCount + " baked spring keyframes on " + getFullPropertyPath(prop));
+                        }
+
                         // Remove old keyframes (in reverse order to maintain indices)
                         keyframesToMove.sort(function(a, b) { return b.oldIndex - a.oldIndex; });
                         for (var k = 0; k < keyframesToMove.length; k++) {
@@ -6372,6 +6559,11 @@ function nudgeDelay(direction) {
                         var prop = propData.property;
                         var keyframesToMove = [];
 
+                        // BAKED SPRING PROTECTION: Detect spring segments and protect if playhead is within
+                        var playheadTime = comp.time;
+                        var bakedSprings = detectBakedSpringSegments(prop);
+                        var protectedSpringCount = 0;
+
                         // PROTECTION: Capture the next keyframe to prevent AE from modifying it
                         var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
 
@@ -6382,8 +6574,18 @@ function nudgeDelay(direction) {
                         for (var k = 0; k < propData.keyframes.length; k++) {
                             var keyIndex = propData.keyframes[k].index;
                             var oldTime = propData.keyframes[k].time;
+
+                            // Check if this keyframe is in a baked spring that contains the playhead
+                            if (isKeyframeInProtectedSpring(keyIndex, oldTime, playheadTime, bakedSprings)) {
+                                protectedSpringCount++;
+                                if (protectedSpringCount === 1) {
+                                    DEBUG_JSX.log("  🔒 Protecting baked spring keys in regular timeline mode (playhead is within spring segment)");
+                                }
+                                continue;
+                            }
+
                             var newTime = oldTime + timelineOffset; // Maintain relative spacing
-                            
+
                             var keyData = {
                                 oldIndex: keyIndex,
                                 time: oldTime,
@@ -6430,7 +6632,12 @@ function nudgeDelay(direction) {
                             
                             keyframesToMove.push(keyData);
                         }
-                        
+
+                        // Log summary of protected spring keys
+                        if (protectedSpringCount > 0) {
+                            DEBUG_JSX.log("  🔒 Protected " + protectedSpringCount + " baked spring keyframes on " + getFullPropertyPath(prop));
+                        }
+
                         // Remove old keyframes (reverse order)
                         keyframesToMove.sort(function(a, b) { return b.oldIndex - a.oldIndex; });
                         for (var k = 0; k < keyframesToMove.length; k++) {
@@ -6656,6 +6863,11 @@ function nudgeDelay(direction) {
                 var prop = propData.propObject;
                 var keyframesToMove = [];
 
+                // BAKED SPRING PROTECTION: Detect spring segments and protect if playhead is within
+                var playheadTime = comp.time;
+                var bakedSprings = detectBakedSpringSegments(prop);
+                var protectedSpringCount = 0;
+
                 // PROTECTION: Capture the next keyframe to prevent AE from modifying it
                 var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
 
@@ -6663,7 +6875,16 @@ function nudgeDelay(direction) {
                 for (var k = 0; k < propData.keyframes.length; k++) {
                     var keyframe = propData.keyframes[k];
                     var keyIndex = keyframe.index;
-                    
+
+                    // Check if this keyframe is in a baked spring that contains the playhead
+                    if (isKeyframeInProtectedSpring(keyIndex, keyframe.time, playheadTime, bakedSprings)) {
+                        protectedSpringCount++;
+                        if (protectedSpringCount === 1) {
+                            DEBUG_JSX.log("  🔒 Protecting baked spring keys in baseline mode (playhead is within spring segment)");
+                        }
+                        continue;
+                    }
+
                     try {
                         var keyData = {
                             oldIndex: keyIndex,
@@ -6702,7 +6923,12 @@ function nudgeDelay(direction) {
                         throw new Error("Failed to collect keyframe data for index " + keyIndex + ": " + collectError.toString());
                     }
                 }
-                
+
+                // Log summary of protected spring keys
+                if (protectedSpringCount > 0) {
+                    DEBUG_JSX.log("  🔒 Protected " + protectedSpringCount + " baked spring keyframes on " + getFullPropertyPath(prop));
+                }
+
                 // Remove old keyframes in reverse order to avoid index shifts
                 var indices = [];
                 for (var k = 0; k < keyframesToMove.length; k++) {
@@ -7517,6 +7743,97 @@ function nudgeFromPlayhead(direction, frames, skipPrecomps) {
     }
 }
 
+// Helper function to detect baked spring segments in a property
+// Returns array of spring segments: [{startIndex, endIndex, startTime, endTime}, ...]
+function detectBakedSpringSegments(prop) {
+    var springs = [];
+
+    // After Effects label indices (may vary by version, but these are standard)
+    var LABEL_BLUE = 8;      // Blue label marks spring boundaries
+    var LABEL_SEAFOAM = 7;   // Sea foam label marks baked spring keys
+
+    try {
+        if (!prop || !prop.canVaryOverTime || prop.numKeys < 3) {
+            return springs; // Need at least 3 keys for a spring (blue, seafoam, blue)
+        }
+
+        var i = 1;
+        while (i <= prop.numKeys) {
+            var label = prop.keyLabel(i);
+
+            // Found a blue key - potential spring start
+            if (label === LABEL_BLUE) {
+                var springStartIndex = i;
+                var springStartTime = prop.keyTime(i);
+
+                // Look ahead for the matching blue end key
+                var j = i + 1;
+                var allSeafoam = true;
+                var foundEndBlue = false;
+
+                while (j <= prop.numKeys) {
+                    var nextLabel = prop.keyLabel(j);
+
+                    if (nextLabel === LABEL_BLUE) {
+                        // Found end blue key
+                        foundEndBlue = true;
+
+                        // Verify all keys between start and end are seafoam
+                        if (allSeafoam && j > i + 1) { // Must have at least 1 seafoam key between
+                            // Valid baked spring detected!
+                            springs.push({
+                                startIndex: springStartIndex,
+                                endIndex: j,
+                                startTime: springStartTime,
+                                endTime: prop.keyTime(j)
+                            });
+                            DEBUG_JSX.log("    🔒 Baked spring detected: keys " + springStartIndex + "-" + j + " (" + springStartTime.toFixed(2) + "s - " + prop.keyTime(j).toFixed(2) + "s)");
+                        }
+
+                        // Move to this blue key and continue searching
+                        i = j;
+                        break;
+                    } else if (nextLabel === LABEL_SEAFOAM) {
+                        // Valid seafoam key, continue
+                        j++;
+                    } else {
+                        // Not seafoam - this is not a valid spring
+                        allSeafoam = false;
+                        break;
+                    }
+                }
+
+                if (!foundEndBlue) {
+                    // No matching end blue found, move to next key
+                    i++;
+                }
+            } else {
+                i++;
+            }
+        }
+    } catch(e) {
+        DEBUG_JSX.log("    Warning: Could not detect baked springs: " + e.toString());
+    }
+
+    return springs;
+}
+
+// Helper function to check if a keyframe is within a baked spring segment that contains the playhead
+function isKeyframeInProtectedSpring(keyIndex, keyTime, playheadTime, bakedSprings) {
+    for (var i = 0; i < bakedSprings.length; i++) {
+        var spring = bakedSprings[i];
+
+        // Check if playhead is within this spring segment
+        if (playheadTime >= spring.startTime && playheadTime <= spring.endTime) {
+            // Playhead is in this spring - protect ALL keys in the spring
+            if (keyIndex >= spring.startIndex && keyIndex <= spring.endIndex) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Helper function to move keyframes after specific time on a single layer
 function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
     var movedCount = 0;
@@ -7806,6 +8123,10 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                     }
                     var nextKeyData = protectKeyIndex ? captureKeyframeState(prop, protectKeyIndex) : null;
 
+                    // Detect baked spring segments for protection
+                    var bakedSprings = detectBakedSpringSegments(prop);
+                    var protectedSpringCount = 0;
+
                     // Move keyframes that are at or after cutoff time
                     var keyframesToMove = [];
                     for (var j = 1; j <= prop.numKeys; j++) {
@@ -7825,7 +8146,16 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                                 DEBUG_JSX.log("  Skip: " + prop.name + "[" + j + "] (duplicate)");
                                 continue;
                             }
-                            
+
+                            // Check if this keyframe is in a baked spring that contains the playhead
+                            if (isKeyframeInProtectedSpring(j, keyTime, cutoffTime, bakedSprings)) {
+                                protectedSpringCount++;
+                                if (protectedSpringCount === 1) {
+                                    DEBUG_JSX.log("  🔒 Protecting baked spring keys (playhead is within spring segment)");
+                                }
+                                continue;
+                            }
+
                             var newTime = keyTime + timeOffset;
                             keyframesToMove.push({
                                 index: j,
@@ -7846,7 +8176,12 @@ function moveKeyframesAfterTime(layer, cutoffTime, timeOffset, processedKeys) {
                             }
                         }
                     }
-                    
+
+                    // Log summary of protected spring keys
+                    if (protectedSpringCount > 0) {
+                        DEBUG_JSX.log("  🔒 Protected " + protectedSpringCount + " baked spring keyframes on " + prop.name);
+                    }
+
                     if (keyframesToMove.length === 0) {
                         continue; // No keyframes to move
                     }
@@ -20974,5 +21309,377 @@ function handleTrimOutPoint(setToMax) {
     } catch(e) {
         app.endUndoGroup();
         return "error|" + e.toString();
+    }
+}
+
+// ============================================================================
+// COPY/PASTE KEYFRAMES
+// ============================================================================
+
+// Global clipboard storage for copy/paste
+var KEYFRAME_CLIPBOARD = null;
+
+/**
+ * Get unique property match path using matchNames
+ * This creates a path like "ADBE Transform Group|ADBE Position" for exact matching
+ */
+function getPropertyMatchPath(prop) {
+    var pathParts = [];
+    var current = prop;
+
+    while (current) {
+        if (current.matchName && current.propertyType !== undefined) {
+            // Don't include layer-level match names (these vary by layer type)
+            var mn = current.matchName;
+            var isLayerLevel = (
+                mn.indexOf("ADBE Layer") !== -1 ||      // "ADBE Layer Styles", etc.
+                mn.indexOf("ADBE Root") !== -1 ||       // "ADBE Root Vectors Group"
+                mn === "ADBE Vector Layer" ||           // Shape layer type
+                mn === "ADBE AV Layer" ||               // AV layer type
+                mn === "ADBE Text Layer" ||             // Text layer type
+                mn === "ADBE Camera Layer" ||           // Camera layer type
+                mn === "ADBE Light Layer" ||            // Light layer type
+                mn === "ADBE Solid" ||                  // Solid layer type
+                mn === "ADBE Null"                      // Null layer type
+            );
+            if (!isLayerLevel) {
+                pathParts.unshift(mn);
+            }
+        }
+        current = current.parentProperty;
+    }
+
+    return pathParts.join("|");
+}
+
+/**
+ * Find a property on a layer by its match path
+ * Returns null if not found
+ */
+function findPropertyByMatchPath(layer, targetPathStr) {
+    if (!targetPathStr) return null;
+
+    var targetPath = targetPathStr.split("|");
+
+    // Filter out any layer-level match names that might be in the path
+    var filteredPath = [];
+    for (var i = 0; i < targetPath.length; i++) {
+        var mn = targetPath[i];
+        var isLayerLevel = (
+            mn.indexOf("ADBE Layer") !== -1 ||
+            mn.indexOf("ADBE Root") !== -1 ||
+            mn === "ADBE Vector Layer" ||
+            mn === "ADBE AV Layer" ||
+            mn === "ADBE Text Layer" ||
+            mn === "ADBE Camera Layer" ||
+            mn === "ADBE Light Layer" ||
+            mn === "ADBE Solid" ||
+            mn === "ADBE Null"
+        );
+        if (!isLayerLevel) {
+            filteredPath.push(mn);
+        }
+    }
+
+    if (filteredPath.length === 0) return null;
+
+    function findRecursive(propGroup, pathIndex) {
+        if (pathIndex >= filteredPath.length) {
+            return null;
+        }
+
+        var targetMatchName = filteredPath[pathIndex];
+
+        for (var i = 1; i <= propGroup.numProperties; i++) {
+            var prop;
+            try {
+                prop = propGroup.property(i);
+            } catch(e) {
+                continue;
+            }
+            if (!prop) continue;
+
+            if (prop.matchName === targetMatchName) {
+                if (pathIndex === filteredPath.length - 1) {
+                    // Found the final property
+                    return prop;
+                } else if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                           prop.propertyType === PropertyType.NAMED_GROUP) {
+                    // Continue searching in this group
+                    var found = findRecursive(prop, pathIndex + 1);
+                    if (found) return found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    return findRecursive(layer, 0);
+}
+
+/**
+ * Copy selected keyframes from a single layer
+ * Copies all selected keyframes from all selected properties, plus markers in range
+ */
+function copySelectedKeyframes() {
+    try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("copySelectedKeyframes called");
+
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "error|No active composition";
+        }
+
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "error|No layer selected";
+        }
+
+        if (selectedLayers.length > 1) {
+            return "error|Copy works on multiple properties but just one layer.\nPlease select only one layer.";
+        }
+
+        var layer = selectedLayers[0];
+        var selectedProps = layer.selectedProperties;
+
+        // Collect all selected keyframes
+        var copiedProperties = [];
+        var allKeyframeTimes = [];
+
+        for (var i = 0; i < selectedProps.length; i++) {
+            var prop = selectedProps[i];
+            if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+            if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+
+            var selectedKeyframes = [];
+            for (var k = 1; k <= prop.numKeys; k++) {
+                if (prop.keySelected(k)) {
+                    var keyData = captureKeyframeState(prop, k);
+                    if (keyData) {
+                        selectedKeyframes.push(keyData);
+                        allKeyframeTimes.push(keyData.time);
+                    }
+                }
+            }
+
+            if (selectedKeyframes.length > 0) {
+                copiedProperties.push({
+                    matchPath: getPropertyMatchPath(prop),
+                    name: prop.name,
+                    keyframes: selectedKeyframes
+                });
+            }
+        }
+
+        // Also check Time Remap
+        if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+            var selectedKeyframes = [];
+            for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
+                if (layer.timeRemap.keySelected(k)) {
+                    var keyData = captureKeyframeState(layer.timeRemap, k);
+                    if (keyData) {
+                        selectedKeyframes.push(keyData);
+                        allKeyframeTimes.push(keyData.time);
+                    }
+                }
+            }
+
+            if (selectedKeyframes.length > 0) {
+                copiedProperties.push({
+                    matchPath: getPropertyMatchPath(layer.timeRemap),
+                    name: "Time Remap",
+                    keyframes: selectedKeyframes
+                });
+            }
+        }
+
+        if (copiedProperties.length === 0) {
+            return "error|No keyframes selected to copy";
+        }
+
+        // Find earliest and latest keyframe times
+        allKeyframeTimes.sort(function(a, b) { return a - b; });
+        var firstKeyframeTime = allKeyframeTimes[0];
+        var lastKeyframeTime = allKeyframeTimes[allKeyframeTimes.length - 1];
+
+        // Convert keyframe times to relative times (relative to first keyframe)
+        for (var p = 0; p < copiedProperties.length; p++) {
+            var keyframes = copiedProperties[p].keyframes;
+            for (var k = 0; k < keyframes.length; k++) {
+                keyframes[k].relativeTime = keyframes[k].time - firstKeyframeTime;
+            }
+        }
+
+        // Collect markers within keyframe range
+        var copiedMarkers = [];
+        if (layer.marker && layer.marker.numKeys > 0) {
+            for (var m = 1; m <= layer.marker.numKeys; m++) {
+                var markerTime = layer.marker.keyTime(m);
+                if (markerTime >= firstKeyframeTime && markerTime <= lastKeyframeTime) {
+                    copiedMarkers.push({
+                        relativeTime: markerTime - firstKeyframeTime,
+                        markerValue: layer.marker.keyValue(m)
+                    });
+                }
+            }
+        }
+
+        // Store in global clipboard
+        KEYFRAME_CLIPBOARD = {
+            properties: copiedProperties,
+            markers: copiedMarkers,
+            firstKeyframeTime: firstKeyframeTime,
+            sourceLayerName: layer.name
+        };
+
+        // Build success message
+        var keyframeCount = 0;
+        for (var p = 0; p < copiedProperties.length; p++) {
+            keyframeCount += copiedProperties[p].keyframes.length;
+        }
+
+        var msg = "Copied " + keyframeCount + " keyframe" + (keyframeCount > 1 ? "s" : "");
+        msg += " from " + copiedProperties.length + " propert" + (copiedProperties.length > 1 ? "ies" : "y");
+        if (copiedMarkers.length > 0) {
+            msg += " (+" + copiedMarkers.length + " marker" + (copiedMarkers.length > 1 ? "s" : "") + ")";
+        }
+
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "success|" + msg + "|" + debugMessages.join("|");
+    } catch(e) {
+        DEBUG_JSX.log("Copy error: " + e.toString());
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+/**
+ * Paste keyframes to selected layers at playhead position
+ * Pastes to matching properties, reports any missing properties
+ */
+function pasteKeyframes() {
+    try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("pasteKeyframes called");
+
+        if (!KEYFRAME_CLIPBOARD || !KEYFRAME_CLIPBOARD.properties || KEYFRAME_CLIPBOARD.properties.length === 0) {
+            return "error|Nothing to paste. Copy keyframes first.";
+        }
+
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "error|No active composition";
+        }
+
+        var selectedLayers = [];
+        for (var i = 0; i < comp.selectedLayers.length; i++) {
+            selectedLayers.push(comp.selectedLayers[i]);
+        }
+
+        if (selectedLayers.length === 0) {
+            return "error|No layers selected to paste onto";
+        }
+
+        app.beginUndoGroup("Paste Keyframes");
+
+        var playheadTime = comp.time;
+        var keyframesPasted = 0;
+        var markersPasted = 0;
+        var propertiesPasted = 0;
+        var missingProperties = []; // Track which properties couldn't be found
+
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
+
+            // Paste each property's keyframes
+            for (var p = 0; p < KEYFRAME_CLIPBOARD.properties.length; p++) {
+                var propData = KEYFRAME_CLIPBOARD.properties[p];
+                var targetProp = findPropertyByMatchPath(layer, propData.matchPath);
+
+                if (!targetProp) {
+                    // Track missing property (avoid duplicates)
+                    var alreadyListed = false;
+                    for (var m = 0; m < missingProperties.length; m++) {
+                        if (missingProperties[m] === propData.name) {
+                            alreadyListed = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyListed) {
+                        missingProperties.push(propData.name);
+                    }
+                    continue;
+                }
+
+                // Paste keyframes
+                var keyframes = propData.keyframes;
+                var newKeyIndices = [];
+
+                for (var k = 0; k < keyframes.length; k++) {
+                    var kf = keyframes[k];
+                    var newTime = playheadTime + kf.relativeTime;
+
+                    // Add keyframe at new time
+                    var newIdx = targetProp.addKey(newTime);
+                    newKeyIndices.push(newIdx);
+
+                    // Restore all keyframe properties (value, easing, label, etc.)
+                    restoreKeyframeState(targetProp, newIdx, kf);
+
+                    keyframesPasted++;
+                }
+
+                // Select the pasted keyframes
+                for (var k = 0; k < newKeyIndices.length; k++) {
+                    try { targetProp.setSelectedAtKey(newKeyIndices[k], true); } catch(e) {}
+                }
+
+                propertiesPasted++;
+            }
+
+            // Paste markers to this layer
+            for (var m = 0; m < KEYFRAME_CLIPBOARD.markers.length; m++) {
+                var markerData = KEYFRAME_CLIPBOARD.markers[m];
+                var newMarkerTime = playheadTime + markerData.relativeTime;
+
+                try {
+                    var newMarkerIdx = layer.marker.addKey(newMarkerTime);
+                    layer.marker.setValueAtKey(newMarkerIdx, markerData.markerValue);
+                    markersPasted++;
+                } catch(e) {
+                    DEBUG_JSX.log("Failed to paste marker: " + e.toString());
+                }
+            }
+        }
+
+        app.endUndoGroup();
+
+        var debugMessages = DEBUG_JSX.getMessages();
+
+        // Build result message
+        var msg = "";
+        if (keyframesPasted > 0) {
+            msg = "Pasted " + keyframesPasted + " keyframe" + (keyframesPasted > 1 ? "s" : "");
+            msg += " to " + selectedLayers.length + " layer" + (selectedLayers.length > 1 ? "s" : "");
+            if (markersPasted > 0) {
+                msg += " (+" + markersPasted + " marker" + (markersPasted > 1 ? "s" : "") + ")";
+            }
+            if (missingProperties.length > 0) {
+                msg += "\nMissing: " + missingProperties.join(", ");
+                return "warning|" + msg + "|" + debugMessages.join("|");
+            }
+            return "success|" + msg + "|" + debugMessages.join("|");
+        } else if (missingProperties.length > 0) {
+            return "error|Could not find properties: " + missingProperties.join(", ") + "|" + debugMessages.join("|");
+        } else {
+            return "error|No keyframes pasted|" + debugMessages.join("|");
+        }
+    } catch(e) {
+        app.endUndoGroup();
+        DEBUG_JSX.log("Paste error: " + e.toString());
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
     }
 }

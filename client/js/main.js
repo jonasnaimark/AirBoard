@@ -769,9 +769,8 @@ document.addEventListener('DOMContentLoaded', function() {
             var position = (e.clientX - rect.left - padding) / (rect.width - padding * 2);
             position = Math.max(0, Math.min(1, position));
 
-            // Apply magnetic snapping
-            var snappedPosition = applyMagneticSnap(position);
-            var value = Math.round(positionToValue(snappedPosition));
+            // No magnetic snapping - use position directly
+            var value = Math.round(positionToValue(position));
 
             globalFrameInputField.value = value;
             updateSliderPosition(value);
@@ -791,8 +790,8 @@ document.addEventListener('DOMContentLoaded', function() {
             var position = (e.clientX - rect.left - padding) / (rect.width - padding * 2);
             position = Math.max(0, Math.min(1, position));
 
-            var snappedPosition = applyMagneticSnap(position);
-            var value = Math.round(positionToValue(snappedPosition));
+            // No magnetic snapping - use position directly
+            var value = Math.round(positionToValue(position));
 
             globalFrameInputField.value = value;
             updateSliderPosition(value);
@@ -2079,7 +2078,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (staggerActionBtn) {
         staggerActionBtn.addEventListener('click', function() {
             console.log('Stagger action button clicked');
-            
+
             // Toggle the flipped class
             if (staggerActionBtn.classList.contains('flipped')) {
                 staggerActionBtn.classList.remove('flipped');
@@ -2092,7 +2091,87 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
+    // More Actions Dropdown Menu
+    var moreActionsBtn = document.getElementById('moreActionsBtn');
+    var moreActionsDropdown = document.getElementById('moreActionsDropdown');
+
+    if (moreActionsBtn && moreActionsDropdown) {
+        // Toggle dropdown on button click
+        moreActionsBtn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            moreActionsDropdown.classList.toggle('open');
+            console.log('More actions dropdown toggled');
+        });
+
+        // Handle dropdown item clicks
+        var dropdownItems = moreActionsDropdown.querySelectorAll('.dropdown-item');
+        dropdownItems.forEach(function(item) {
+            item.addEventListener('click', function(event) {
+                event.stopPropagation();
+                var action = this.getAttribute('data-action');
+                console.log('Dropdown action selected:', action);
+
+                // Close dropdown
+                moreActionsDropdown.classList.remove('open');
+
+                // Handle the action
+                if (action === 'copy-keys') {
+                    console.log('Copy keys action triggered');
+                    if (csInterface) {
+                        csInterface.evalScript('copySelectedKeyframes()', function(result) {
+                            console.log('Copy keyframes result:', result);
+                            if (result) {
+                                var parts = result.split('|');
+                                var status = parts[0];
+                                var message = parts[1] || '';
+                                if (status === 'success') {
+                                    console.log('✓ ' + message);
+                                } else if (status === 'error') {
+                                    console.error('Copy error:', message);
+                                }
+                            }
+                        });
+                    }
+                } else if (action === 'paste-keys') {
+                    console.log('Paste keys action triggered');
+                    if (csInterface) {
+                        csInterface.evalScript('pasteKeyframes()', function(result) {
+                            console.log('Paste keyframes result:', result);
+                            if (result) {
+                                var parts = result.split('|');
+                                var status = parts[0];
+                                var message = parts[1] || '';
+                                if (status === 'success' || status === 'warning') {
+                                    console.log('✓ ' + message);
+                                } else if (status === 'error') {
+                                    console.error('Paste error:', message);
+                                }
+                            }
+                        });
+                    }
+                } else if (action === 'extend-comp') {
+                    console.log('Extend comp action triggered');
+                    // Show the extend comp dialog
+                    var overlay = document.getElementById('extendCompOverlay');
+                    var input = document.getElementById('extendCompInput');
+                    if (overlay && input) {
+                        overlay.classList.add('active');
+                        input.value = '';
+                        input.focus();
+                    }
+                }
+            });
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!moreActionsDropdown.contains(event.target) && event.target !== moreActionsBtn) {
+                moreActionsDropdown.classList.remove('open');
+            }
+        });
+    }
+
     // X Distance +/- buttons
     var xIncrementBtn = document.getElementById('xIncrementBtn');
     var xDecrementBtn = document.getElementById('xDecrementBtn');
@@ -2763,6 +2842,106 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load saved preferences on startup
     loadResolutionPreference();
     
+    // Extend Comp Dialog event handlers
+    var extendCompOverlay = document.getElementById('extendCompOverlay');
+    var extendCompInput = document.getElementById('extendCompInput');
+    var extendCompApply = document.getElementById('extendCompApply');
+    var extendCompCancel = document.getElementById('extendCompCancel');
+
+    // Cancel button - close dialog
+    if (extendCompCancel) {
+        extendCompCancel.addEventListener('click', function() {
+            if (extendCompOverlay) {
+                extendCompOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    // Apply button - extend comp by input value
+    if (extendCompApply) {
+        extendCompApply.addEventListener('click', function() {
+            if (!extendCompInput) return;
+
+            var numFrames = parseInt(extendCompInput.value, 10);
+
+            // Validate input
+            if (!numFrames || numFrames <= 0) {
+                alert('Please enter a valid positive number of frames.');
+                return;
+            }
+
+            // Close dialog
+            if (extendCompOverlay) {
+                extendCompOverlay.classList.remove('active');
+            }
+
+            // Call JSX function
+            if (csInterface) {
+                csInterface.evalScript('extendCompByFrames(' + numFrames + ')', function(result) {
+                    console.log('Extend comp result:', result);
+                    if (result) {
+                        var parts = result.split('|');
+                        var status = parts[0];
+                        var message = parts[1] || '';
+
+                        // Extract debug messages (starting from index 2)
+                        var debugMessages = [];
+                        for (var i = 2; i < parts.length; i++) {
+                            if (parts[i] && parts[i].trim()) {
+                                debugMessages.push(parts[i]);
+                            }
+                        }
+
+                        // Display debug messages in panel
+                        if (debugMessages.length > 0) {
+                            var debugLog = document.getElementById('debug-log');
+                            if (debugLog) {
+                                debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">📏 Extend Comp:</div>';
+                                for (var j = 0; j < debugMessages.length; j++) {
+                                    debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                                }
+                                debugLog.scrollTop = debugLog.scrollHeight;
+                            }
+                        }
+
+                        if (status === 'success') {
+                            console.log('✓ ' + message);
+                        } else if (status === 'error') {
+                            console.error('Extend comp error:', message);
+                            alert('Error: ' + message);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    // Allow Enter key to apply
+    if (extendCompInput) {
+        extendCompInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (extendCompApply) {
+                    extendCompApply.click();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                if (extendCompOverlay) {
+                    extendCompOverlay.classList.remove('active');
+                }
+            }
+        });
+    }
+
+    // Close dialog when clicking overlay background
+    if (extendCompOverlay) {
+        extendCompOverlay.addEventListener('click', function(e) {
+            if (e.target === extendCompOverlay) {
+                extendCompOverlay.classList.remove('active');
+            }
+        });
+    }
+
     // Load section preferences after a brief delay to ensure DOM is ready
     setTimeout(function() {
         loadSectionOrder();
