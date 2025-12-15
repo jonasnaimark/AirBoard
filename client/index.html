@@ -36,27 +36,27 @@
                     </div>
                 </div>
                 <div class="section-content" data-section="device-templates">
-                <div class="control-row">
-                    <select id="deviceType" class="dropdown">
-                        <option value="iphone">iPhone - 393</option>
-                        <option value="iphone-402">iPhone - 402</option>
-                        <option value="desktop">Web - 1440</option>
-                        <option disabled>──────────</option>
-                        <option value="iphone15">iPhone 15 - 393</option>
-                        <option value="iphone-simple">iPhone Simple - 393</option>
-                        <option value="web-chrome">Web Chrome - 1440</option>
-                    </select>
-                    <button id="addDevice" class="main-button">Make Comp</button>
-                </div>
-                <div class="control-row">
-                    <div class="resolution-display" id="resolutionDisplay">
-                        <span id="resolutionText">Resolution: 2x</span>
-                        <div class="stagger-controls">
-                            <button class="stagger-btn decrement" type="button">−</button>
-                            <button class="stagger-btn increment" type="button">+</button>
-                        </div>
+                <div class="control-row device-row">
+                    <div class="unified-dropdown-container">
+                        <select id="deviceType" class="dropdown">
+                            <option value="iphone">iPhone - 393</option>
+                            <option value="iphone-402">iPhone - 402</option>
+                            <option value="desktop">Web - 1440</option>
+                            <option disabled>──────────</option>
+                            <option value="iphone15">iPhone 15 - 393</option>
+                            <option value="iphone-simple">iPhone Simple - 393</option>
+                            <option value="web-chrome">Web Chrome - 1440</option>
+                        </select>
+                        <select id="resolutionMultiplier" class="dropdown resolution-dropdown">
+                            <option value="1">1x</option>
+                            <option value="2" selected>2x</option>
+                            <option value="3">3x</option>
+                            <option value="4">4x</option>
+                            <option value="5">5x</option>
+                            <option value="6">6x</option>
+                        </select>
                     </div>
-                    <input type="hidden" id="resolutionMultiplier" value="2">
+                    <button id="addDevice" class="main-button">Make Comp</button>
                 </div>
                 </div>
             </section>

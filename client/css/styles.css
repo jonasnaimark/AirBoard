@@ -507,6 +507,18 @@ body {
 
 .control-row .main-button {
     margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+/* Device row uses explicit grid for 50/50 split */
+.device-row {
+    display: grid !important;
+    grid-template-columns: calc(50% - 3px) calc(50% - 5px); /* Right column 2px thinner */
+    gap: 8px;
+}
+
+.device-row > * {
+    width: auto !important; /* Override calc width */
 }
 
 /* Main button styles */
@@ -1212,6 +1224,93 @@ input.distance-input[data-tooltip]:hover::after {
     height: 1px;
     background-color: #505050;
     margin: 4px 8px;
+}
+
+/* Unified device + resolution dropdown container */
+.unified-dropdown-container {
+    display: flex;
+    gap: 0; /* No gap between the two dropdowns */
+    /* Don't override - let it use the same width as other rows */
+    min-width: 0; /* Allow flex shrinking */
+    position: relative;
+}
+
+/* Scrim overlay to fade text before chevron */
+.unified-dropdown-container::before {
+    content: '';
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    right: 56px; /* Position further left to fade visible text */
+    width: 12px;
+    background: linear-gradient(to left, #222222 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Chevron icon on top of scrim */
+.unified-dropdown-container::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 38px; /* 32px (2x width) + 6px offset */
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23cccccc' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+    background-size: 12px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+#deviceType {
+    flex: 1; /* Take up remaining space */
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    /* Fade background to transparent - starts earlier to avoid hard clip */
+    background: linear-gradient(to right, #222222 calc(100% - 30px), transparent calc(100% - 5px)) !important;
+    padding-right: 24px !important; /* Space for chevron */
+    border-color: #4a4a4a; /* Match Make Comp button border */
+}
+
+#deviceType:hover {
+    border-color: #666666;
+}
+
+#resolutionMultiplier {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none; /* Remove left border - deviceType's right border serves as divider */
+    border-color: #4a4a4a; /* Match Make Comp button border */
+}
+
+#resolutionMultiplier:hover {
+    border-color: #666666;
+}
+
+/* Make divider respond to hovering either dropdown */
+.unified-dropdown-container:hover #deviceType {
+    border-right-color: #666666;
+}
+
+/* Square resolution dropdown - no chevron, compact, outline only */
+.resolution-dropdown {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 36px;
+    padding: 0 !important;
+    text-align: center;
+    text-align-last: center;
+    background-image: none !important;
+    background-color: #333333 !important; /* Match Make Comp button */
+    box-shadow: none !important;
+    flex-shrink: 0;
+}
+
+.resolution-dropdown:focus,
+.resolution-dropdown:active {
+    box-shadow: none !important;
 }
 
 /* Removed .resolution-input - now uses .control-row for consistency */

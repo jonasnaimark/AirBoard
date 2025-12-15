@@ -241,8 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var addShimmerButton = document.getElementById('addShimmer');
     var addBlurButton = document.getElementById('addBlur');
     var resolutionInput = document.getElementById('resolutionMultiplier');
-    var resolutionText = document.getElementById('resolutionText');
-    
+
     // Custom dropdown functionality - replaces native select dropdown with styled menu
     function initializeCustomDropdowns() {
         var selects = document.querySelectorAll('select.dropdown');
@@ -558,14 +557,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize custom dropdowns
     initializeCustomDropdowns();
 
-    // Function to update resolution display text only
-    function updateResolutionDisplay() {
-        var currentValue = resolutionInput.value;
-        console.log('Updating display to:', currentValue);
-        resolutionText.textContent = 'Resolution: ' + currentValue + 'x';
-        console.log('Display updated to:', resolutionText.textContent);
-    }
-    
     // Function to save resolution preference
     function saveResolutionPreference(multiplier) {
         if (csInterface) {
@@ -584,11 +575,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 var savedResolution = parseInt(result);
                 if (savedResolution >= 1 && savedResolution <= 6) {
                     resolutionInput.value = savedResolution;
-                    updateResolutionDisplay();
                     console.log('Loaded resolution preference:', savedResolution);
                 }
             });
         }
+    }
+
+    // Add change listener for resolution dropdown to save preference
+    if (resolutionInput) {
+        resolutionInput.addEventListener('change', function() {
+            var multiplier = parseInt(resolutionInput.value);
+            console.log('Resolution changed to:', multiplier);
+            saveResolutionPreference(multiplier);
+        });
     }
     
     // Function to save section order
@@ -717,38 +716,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
-    // Get the increment/decrement buttons and attach event listeners
-    var incrementBtn = document.querySelector('#resolutionDisplay .stagger-controls .stagger-btn.increment');
-    var decrementBtn = document.querySelector('#resolutionDisplay .stagger-controls .stagger-btn.decrement');
-    
-    incrementBtn.addEventListener('click', function() {
-        console.log('Increment clicked');
-        var currentValue = parseInt(resolutionInput.value);
-        console.log('Current value:', currentValue);
-        var maxValue = 6; // Max resolution multiplier
-        if (currentValue < maxValue) {
-            resolutionInput.value = currentValue + 1;
-            console.log('New value:', resolutionInput.value);
-            updateResolutionDisplay();
-            // Save the new preference
-            saveResolutionPreference(parseInt(resolutionInput.value));
-        }
-    });
-    
-    decrementBtn.addEventListener('click', function() {
-        console.log('Decrement clicked');
-        var currentValue = parseInt(resolutionInput.value);
-        console.log('Current value:', currentValue);
-        var minValue = 1; // Min resolution multiplier
-        if (currentValue > minValue) {
-            resolutionInput.value = currentValue - 1;
-            console.log('New value:', resolutionInput.value);
-            updateResolutionDisplay();
-            // Save the new preference
-            saveResolutionPreference(parseInt(resolutionInput.value));
-        }
-    });
     
     // Keyframe Reader Controls
     var durationValue = document.getElementById('durationValue');
