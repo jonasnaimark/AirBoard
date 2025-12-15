@@ -145,6 +145,77 @@ function trackLayerInOutPoints(layers) {
 }
 
 /**
+ * Shift layers inside a precomp to keep visual content at same absolute positions
+ * - Layers NOT at frame 0: shift startTime forward by shiftAmount
+ * - Layers AT frame 0: keep at frame 0 but extend outPoint by shiftAmount
+ */
+function shiftPrecompContent(precomp, shiftAmount) {
+    if (Math.abs(shiftAmount) < 0.001) return;
+
+    DEBUG_JSX.log("SHIFT PRECOMP: '" + precomp.name + "' shiftAmount=" + (shiftAmount * 1000).toFixed(1) + "ms, numLayers=" + precomp.numLayers);
+
+    var layersShifted = 0;
+    var layersExtended = 0;
+
+    // Process each layer in the precomp
+    for (var layerIdx = 1; layerIdx <= precomp.numLayers; layerIdx++) {
+        try {
+            var layer = precomp.layer(layerIdx);
+            var originalStartTime = layer.startTime;
+            var wasAtFrameZero = Math.abs(originalStartTime) < 0.001;
+            var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+
+            DEBUG_JSX.log("  Layer '" + layer.name + "': startTime=" + (originalStartTime * 1000).toFixed(1) + "ms, @0=" + wasAtFrameZero + ", timeRemapEnabled=" + layer.timeRemapEnabled + ", hasKeys=" + (layer.timeRemap ? layer.timeRemap.numKeys : "N/A"));
+
+            if (wasAtFrameZero) {
+                // Layer at frame 0: keep it at 0, extend outPoint by shiftAmount
+                if (hasTimeRemap) {
+                    // For Time Remap layers at frame 0: extend outPoint AND add a Time Remap key
+                    var oldOutPoint = layer.outPoint;
+                    var newOutPoint = oldOutPoint + shiftAmount;
+                    // Get the last Time Remap value (what source time was shown at the end)
+                    var lastKeyIdx = layer.timeRemap.numKeys;
+                    var lastKeyTime = layer.timeRemap.keyTime(lastKeyIdx);
+                    var lastKeyValue = layer.timeRemap.keyValue(lastKeyIdx);
+
+                    DEBUG_JSX.log("TIME REMAP @0: '" + layer.name + "' oldOut=" + (oldOutPoint * 1000).toFixed(1) + "ms, newOut=" + (newOutPoint * 1000).toFixed(1) + "ms, lastTRval=" + (lastKeyValue * 1000).toFixed(1) + "ms");
+
+                    // Extend layer outPoint
+                    layer.outPoint = newOutPoint;
+                    // Add a new Time Remap key at the new outPoint, holding the same source time
+                    layer.timeRemap.setValueAtTime(newOutPoint, lastKeyValue);
+                    layersExtended++;
+                } else {
+                    // Normal layer at frame 0
+                    DEBUG_JSX.log("NORMAL @0: '" + layer.name + "' extending outPoint by " + (shiftAmount * 1000).toFixed(1) + "ms");
+                    layer.outPoint = layer.outPoint + shiftAmount;
+                    layersExtended++;
+                }
+            } else {
+                // Layer NOT at frame 0: shift startTime forward
+                DEBUG_JSX.log("SHIFT: '" + layer.name + "' startTime " + (originalStartTime * 1000).toFixed(1) + "ms → " + ((originalStartTime + shiftAmount) * 1000).toFixed(1) + "ms" + (hasTimeRemap ? " (Time Remap)" : ""));
+
+                var oldInPoint = layer.inPoint;
+                var oldOutPoint = layer.outPoint;
+
+                // For BOTH Time Remap and normal layers: just shift startTime
+                // After Effects automatically adjusts inPoint/outPoint in comp time
+                DEBUG_JSX.log("  BEFORE: in=" + (oldInPoint * 1000).toFixed(1) + "ms, out=" + (oldOutPoint * 1000).toFixed(1) + "ms" + (hasTimeRemap ? ", TR keys=" + layer.timeRemap.numKeys : ""));
+                layer.startTime = originalStartTime + shiftAmount;
+                DEBUG_JSX.log("  AFTER: in=" + (layer.inPoint * 1000).toFixed(1) + "ms, out=" + (layer.outPoint * 1000).toFixed(1) + "ms" + (hasTimeRemap ? ", TR keys=" + layer.timeRemap.numKeys : ""));
+
+                layersShifted++;
+            }
+        } catch(e) {
+            $.writeln("    ERROR shifting layer " + layerIdx + ": " + e.toString());
+            DEBUG_JSX.log("    ERROR shifting layer " + layerIdx + ": " + e.toString());
+        }
+    }
+
+    DEBUG_JSX.log("  SHIFT PRECOMP LAYERS: Shifted " + layersShifted + " layers forward, extended " + layersExtended + " layers at frame 0");
+}
+
+/**
  * Extend a precomp to a target duration when a precomp layer's outPoint exceeds the precomp's duration
  * Recursively extends parent comps up the chain
  */
@@ -162,21 +233,36 @@ function extendPrecompFromLayerToTarget(precompLayer, precomp, targetDuration) {
 
     // Extend layers in the precomp that were at or beyond old duration
     var layersExtended = 0;
+    var layersSkipped = 0;
     for (var i = 1; i <= precomp.numLayers; i++) {
         var layerInPrecomp = precomp.layer(i);
         var layerEnd = layerInPrecomp.startTime + layerInPrecomp.outPoint;
 
+        DEBUG_JSX.log("    Precomp layer " + i + ": '" + layerInPrecomp.name + "' end=" + (layerEnd * 1000).toFixed(1) + "ms");
+
         if (layerEnd >= oldDuration - 0.001) {
-            var newOutPoint = newDuration - layerInPrecomp.startTime;
-            if (newOutPoint > 0) {
-                layerInPrecomp.outPoint = newOutPoint;
-                layersExtended++;
+            // Check for Time Remap - skip layers with Time Remap enabled
+            var hasTimeRemap = layerInPrecomp.timeRemapEnabled && layerInPrecomp.timeRemap && layerInPrecomp.timeRemap.numKeys > 0;
+            DEBUG_JSX.log("      At old duration, timeRemapEnabled=" + (layerInPrecomp.timeRemapEnabled ? "TRUE" : "FALSE") + ", numKeys=" + (layerInPrecomp.timeRemap ? layerInPrecomp.timeRemap.numKeys : "N/A") + ", hasTimeRemap=" + (hasTimeRemap ? "TRUE" : "FALSE"));
+
+            if (hasTimeRemap) {
+                DEBUG_JSX.log("      SKIP: Has Time Remap, not extending");
+                layersSkipped++;
+            } else {
+                var newOutPoint = newDuration - layerInPrecomp.startTime;
+                if (newOutPoint > 0) {
+                    layerInPrecomp.outPoint = newOutPoint;
+                    layersExtended++;
+                    DEBUG_JSX.log("      EXTENDED to " + (newOutPoint * 1000).toFixed(1) + "ms");
+                }
             }
+        } else {
+            DEBUG_JSX.log("      Not at old duration, leaving unchanged");
         }
     }
 
     if (layersExtended > 0) {
-        DEBUG_JSX.log("  COMP EXTEND: Extended " + layersExtended + " layer(s) in '" + precomp.name + "'");
+        DEBUG_JSX.log("  COMP EXTEND: Extended " + layersExtended + " layer(s) in '" + precomp.name + "'" + (layersSkipped > 0 ? " (skipped " + layersSkipped + " Time Remap layers)" : ""));
     }
 
     // Find parent comps that use this precomp and extend them
@@ -20600,12 +20686,15 @@ function moveSelectedKeysToLayerOutPoint(layers, comp) {
  */
 function handleTrimInPoint(setToMin) {
     try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("handleTrimInPoint called, setToMin=" + setToMin);
+
         app.beginUndoGroup("Trim In Point");
 
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             app.endUndoGroup();
-            return "error|No active composition";
+            return "error|No active composition|" + DEBUG_JSX.getMessages().join("|");
         }
 
         var selectedLayers = [];
@@ -20615,26 +20704,145 @@ function handleTrimInPoint(setToMin) {
 
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
-            return "error|No layers selected";
+            return "error|No layers selected|" + DEBUG_JSX.getMessages().join("|");
         }
 
         // Shift mode: Extend all selected layers' in-point to 0 (comp start), keeping out-point fixed
         if (setToMin) {
+            DEBUG_JSX.log("Shift mode: extending to comp start");
             var layersAdjusted = 0;
+            var layersSkipped = 0;
             for (var i = 0; i < selectedLayers.length; i++) {
                 try {
                     var layer = selectedLayers[i];
+                    var shiftAmount = layer.startTime; // Amount to shift content forward
                     var originalOutPoint = layer.outPoint;
+                    var originalAbsoluteOutPoint = layer.startTime + layer.outPoint;
+
+                    // Check if this is a precomp/comp layer
+                    var isPrecomp = layer.source && layer.source instanceof CompItem;
+
+                    // SKIP precomp/comp layers - too complex, not worth it for now
+                    if (isPrecomp) {
+                        DEBUG_JSX.log("SKIP PRECOMP: layer='" + layer.name + "' (precomp layers not supported for min in-point)");
+                        layersSkipped++;
+                        continue;
+                    }
+
+                    DEBUG_JSX.log("SHIFT TRIM IN: layer='" + layer.name + "' shiftAmount=" + (shiftAmount * 1000).toFixed(1) + "ms");
+
+                    // This block is no longer needed since we skip precomps
+                    if (false && shiftAmount > 0.001) {
+                        var precomp = layer.source;
+                        var oldDuration = precomp.duration;
+
+                        DEBUG_JSX.log("  Processing precomp '" + precomp.name + "' (hasTimeRemap=" + hasTimeRemap + ")");
+
+                        // Step 1: Extend precomp duration FIRST (so layer outPoints aren't clamped)
+                        var newDuration = oldDuration + shiftAmount;
+                        precomp.duration = newDuration;
+                        DEBUG_JSX.log("  Extended precomp duration: " + (oldDuration * 1000).toFixed(1) + "ms → " + (newDuration * 1000).toFixed(1) + "ms");
+
+                        // Step 2: NOW shift all layers inside the precomp
+                        shiftPrecompContent(precomp, shiftAmount);
+
+                        // Step 3: Extend layers that were at the old end
+                        for (var j = 1; j <= precomp.numLayers; j++) {
+                            var layerInPrecomp = precomp.layer(j);
+                            var layerEnd = layerInPrecomp.startTime + layerInPrecomp.outPoint;
+                            // After shifting, layers that were at oldDuration are now at oldDuration + shiftAmount
+                            if (layerEnd >= newDuration - 0.001) {
+                                var newOutPointForInner = newDuration - layerInPrecomp.startTime;
+                                if (newOutPointForInner > 0) {
+                                    layerInPrecomp.outPoint = newOutPointForInner;
+                                }
+                            }
+                        }
+                    }
+
+                    // Shift keyframes ON the precomp layer itself (in main comp) so they stay at same absolute positions
+                    if (shiftAmount > 0.001) {
+                        // Helper to shift keyframes in a property group
+                        function shiftLayerKeyframes(propGroup, depth) {
+                            depth = depth || 0;
+                            if (depth > 10) return;
+                            for (var p = 1; p <= propGroup.numProperties; p++) {
+                                try {
+                                    var prop = propGroup.property(p);
+                                    if (!prop) continue;
+                                    if (prop.propertyType === PropertyType.PROPERTY) {
+                                        if (prop.canVaryOverTime && prop.numKeys > 0) {
+                                            try { if (prop.dimensionsSeparated === true) continue; } catch(e) {}
+                                            var keyframeStates = [];
+                                            for (var k = 1; k <= prop.numKeys; k++) {
+                                                var state = captureKeyframeState(prop, k);
+                                                if (state) {
+                                                    keyframeStates.push({
+                                                        oldTime: prop.keyTime(k),
+                                                        newTime: prop.keyTime(k) + shiftAmount,
+                                                        state: state
+                                                    });
+                                                }
+                                            }
+                                            for (var k = prop.numKeys; k >= 1; k--) prop.removeKey(k);
+                                            for (var k = 0; k < keyframeStates.length; k++) {
+                                                try {
+                                                    var newIndex = prop.addKey(keyframeStates[k].newTime);
+                                                    restoreKeyframeState(prop, newIndex, keyframeStates[k].state);
+                                                } catch(addErr) {}
+                                            }
+                                        }
+                                    } else if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                                               prop.propertyType === PropertyType.NAMED_GROUP) {
+                                        shiftLayerKeyframes(prop, depth + 1);
+                                    }
+                                } catch (propError) {}
+                            }
+                        }
+
+                        // Shift keyframes on all property groups
+                        try {
+                            if (layer.transform) shiftLayerKeyframes(layer.transform);
+                            if (layer.effect && layer.effect.numProperties > 0) shiftLayerKeyframes(layer.effect);
+                            if (layer.mask && layer.mask.numProperties > 0) shiftLayerKeyframes(layer.mask);
+                            if (layer.audio) shiftLayerKeyframes(layer.audio);
+                        } catch (e) {}
+
+                        // Shift layer markers
+                        if (layer.marker && layer.marker.numKeys > 0) {
+                            var markersToMove = [];
+                            for (var m = 1; m <= layer.marker.numKeys; m++) {
+                                markersToMove.push({
+                                    oldTime: layer.marker.keyTime(m),
+                                    newTime: layer.marker.keyTime(m) + shiftAmount,
+                                    value: layer.marker.keyValue(m)
+                                });
+                            }
+                            for (var m = layer.marker.numKeys; m >= 1; m--) {
+                                try { layer.marker.removeKey(m); } catch(e) {}
+                            }
+                            for (var m = 0; m < markersToMove.length; m++) {
+                                try { layer.marker.setValueAtTime(markersToMove[m].newTime, markersToMove[m].value); } catch(e) {}
+                            }
+                        }
+                    }
+
+                    // Move layer to comp start while keeping absolute out-point position
+                    // New outPoint = originalAbsoluteOutPoint since startTime becomes 0
+                    layer.startTime = 0;
                     layer.inPoint = 0;
-                    layer.outPoint = originalOutPoint; // Restore out-point to keep it pinned
+                    layer.outPoint = originalAbsoluteOutPoint;
                     layersAdjusted++;
                 } catch(e) {
                     // Some layers (like locked precomps) may not be adjustable
-                    $.writeln("Could not set min in-point for layer: " + selectedLayers[i].name + " - " + e.toString());
+                    DEBUG_JSX.log("ERROR for layer " + selectedLayers[i].name + ": " + e.toString());
                 }
             }
+            DEBUG_JSX.log("FINISHED: Adjusted " + layersAdjusted + " layers" + (layersSkipped > 0 ? ", skipped " + layersSkipped + " precomp layers" : ""));
             app.endUndoGroup();
-            return "success|Extended " + layersAdjusted + " layer(s) in-point to comp start";
+            var msgs = DEBUG_JSX.getMessages();
+            DEBUG_JSX.log("Total debug messages: " + msgs.length);
+            return "success|Extended " + layersAdjusted + " layer(s) in-point to comp start|" + msgs.join("|");
         }
 
         var hasSelectedKeyframes = checkForSelectedKeyframes(selectedLayers);
@@ -20649,8 +20857,9 @@ function handleTrimInPoint(setToMin) {
             return result;
         }
     } catch(e) {
+        DEBUG_JSX.error("handleTrimInPoint failed", e);
         app.endUndoGroup();
-        return "error|" + e.toString();
+        return "error|" + e.toString() + "|" + DEBUG_JSX.getMessages().join("|");
     }
 }
 
@@ -20661,12 +20870,15 @@ function handleTrimInPoint(setToMin) {
  */
 function handleTrimOutPoint(setToMax) {
     try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("handleTrimOutPoint called, setToMax=" + setToMax);
+
         app.beginUndoGroup("Trim Out Point");
 
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             app.endUndoGroup();
-            return "error|No active composition";
+            return "error|No active composition|" + DEBUG_JSX.getMessages().join("|");
         }
 
         var selectedLayers = [];
@@ -20676,16 +20888,65 @@ function handleTrimOutPoint(setToMax) {
 
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
-            return "error|No layers selected";
+            return "error|No layers selected|" + DEBUG_JSX.getMessages().join("|");
         }
 
         // Shift mode: Extend all selected layers' out-point to comp duration (comp end), keeping in-point fixed
         if (setToMax) {
+            DEBUG_JSX.log("=== MAX OUT-POINT DEBUG ===");
+            DEBUG_JSX.log("comp.duration=" + (comp.duration * 1000).toFixed(1) + "ms");
+            DEBUG_JSX.log("selectedLayers.length=" + selectedLayers.length);
+
             var layersAdjusted = 0;
+            var layersSkipped = 0;
             for (var i = 0; i < selectedLayers.length; i++) {
                 try {
                     var layer = selectedLayers[i];
                     var originalInPoint = layer.inPoint;
+                    var originalOutPoint = layer.outPoint;
+
+                    // DEBUG: Log all Time Remap related properties
+                    DEBUG_JSX.log("--- Layer " + (i+1) + ": '" + layer.name + "' ---");
+                    DEBUG_JSX.log("  originalOutPoint=" + (originalOutPoint * 1000).toFixed(1) + "ms");
+                    DEBUG_JSX.log("  layer.timeRemapEnabled=" + (layer.timeRemapEnabled ? "TRUE" : "FALSE"));
+                    DEBUG_JSX.log("  layer.timeRemap exists=" + (layer.timeRemap ? "TRUE" : "FALSE"));
+                    if (layer.timeRemap) {
+                        DEBUG_JSX.log("  layer.timeRemap.numKeys=" + layer.timeRemap.numKeys);
+                    }
+
+                    // Check if layer has Time Remap
+                    var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
+                    DEBUG_JSX.log("  hasTimeRemap=" + (hasTimeRemap ? "TRUE" : "FALSE"));
+
+                    // Skip Time Remap layers that aren't already at comp end
+                    // Time Remap gives explicit control over timing - don't override user's intent
+                    if (hasTimeRemap) {
+                        var diff = Math.abs(originalOutPoint - comp.duration);
+                        var nearCompEnd = diff < 0.01;
+                        DEBUG_JSX.log("  TIME REMAP CHECK: diff=" + (diff * 1000).toFixed(1) + "ms, nearCompEnd=" + (nearCompEnd ? "TRUE" : "FALSE"));
+                        if (!nearCompEnd) {
+                            DEBUG_JSX.log("  => SKIPPED (Time Remap not at comp end)");
+                            layersSkipped++;
+                            continue;
+                        } else {
+                            DEBUG_JSX.log("  => WILL EXTEND (Time Remap already at comp end)");
+                        }
+                    } else {
+                        DEBUG_JSX.log("  => WILL EXTEND (no Time Remap)");
+                    }
+
+                    // PRECOMP EXTENSION: If layer is a precomp (without Time Remap) and comp.duration exceeds precomp.duration, extend it
+                    if (!hasTimeRemap && layer.source && layer.source instanceof CompItem) {
+                        var precomp = layer.source;
+                        var targetOutPoint = comp.duration - layer.startTime;
+
+                        if (targetOutPoint > precomp.duration + 0.001) {
+                            var extensionAmount = targetOutPoint - precomp.duration;
+                            DEBUG_JSX.log("SHIFT TRIM: Extending precomp '" + precomp.name + "' by " + (extensionAmount * 1000).toFixed(1) + "ms to " + (targetOutPoint * 1000).toFixed(1) + "ms");
+                            extendPrecompFromLayerToTarget(layer, precomp, targetOutPoint);
+                        }
+                    }
+
                     layer.outPoint = comp.duration;
                     layer.inPoint = originalInPoint; // Restore in-point to keep it pinned
                     layersAdjusted++;
@@ -20695,7 +20956,8 @@ function handleTrimOutPoint(setToMax) {
                 }
             }
             app.endUndoGroup();
-            return "success|Extended " + layersAdjusted + " layer(s) out-point to comp end";
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "success|Extended " + layersAdjusted + " layer(s) out-point to comp end" + (layersSkipped > 0 ? " (skipped " + layersSkipped + " Time Remap layers)" : "") + "|" + debugMessages.join("|");
         }
 
         var hasSelectedKeyframes = checkForSelectedKeyframes(selectedLayers);

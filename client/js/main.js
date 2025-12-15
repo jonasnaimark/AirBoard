@@ -1704,6 +1704,23 @@ document.addEventListener('DOMContentLoaded', function() {
                     var successMsg = result.split('|')[1] || 'Trimmed';
                     console.log('✓ ' + successMsg);
                 }
+
+                // Extract and display debug messages
+                var parts = result.split('|');
+                var debugMessages = [];
+                for (var i = 2; i < parts.length; i++) {
+                    debugMessages.push(parts[i]);
+                }
+                if (debugMessages.length > 0) {
+                    var debugLog = document.getElementById('debug-log');
+                    if (debugLog) {
+                        debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🎬 Trim In Point' + (isShiftHeld ? ' (Min)' : '') + ':</div>';
+                        for (var j = 0; j < debugMessages.length; j++) {
+                            debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                        }
+                        debugLog.scrollTop = debugLog.scrollHeight;
+                    }
+                }
             });
         });
     }
@@ -1717,7 +1734,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
             csInterface.evalScript('handleTrimOutPoint(' + isShiftHeld + ')', function(result) {
                 console.log('Trim out point result:', result);
-                if (result && result.indexOf('error') === 0) {
+
+                if (result && result.indexOf('|') !== -1) {
+                    var parts = result.split('|');
+                    var status = parts[0];
+
+                    // Extract debug messages if present (starting from index 2)
+                    var debugMessages = [];
+                    if (parts.length > 2) {
+                        debugMessages = parts.slice(2);
+                    }
+
+                    // Display debug messages in panel if available
+                    if (debugMessages.length > 0) {
+                        var debugLog = document.getElementById('debug-log');
+                        if (debugLog) {
+                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4aff9e; font-weight: bold;">📐 Trim Out Point Debug:</div>';
+                            for (var j = 0; j < debugMessages.length; j++) {
+                                debugLog.innerHTML += '<div style="margin: 2px 0 2px 8px; color: #cccccc; font-size: 11px;">' + debugMessages[j] + '</div>';
+                            }
+                            debugLog.scrollTop = debugLog.scrollHeight;
+                        }
+                    }
+
+                    if (status === 'error') {
+                        var errorMsg = parts[1] || 'Unknown error';
+                        console.error('Trim out point error:', errorMsg);
+                    } else if (status === 'success') {
+                        var successMsg = parts[1] || 'Trimmed';
+                        console.log('✓ ' + successMsg);
+                    }
+                } else if (result && result.indexOf('error') === 0) {
                     var errorMsg = result.split('|')[1] || 'Unknown error';
                     console.error('Trim out point error:', errorMsg);
                 } else if (result && result.indexOf('success') === 0) {
