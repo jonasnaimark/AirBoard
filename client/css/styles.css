@@ -1012,7 +1012,7 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .stagger-btn {
-    width: calc(25% - 5.5px);
+    width: calc(25% - 4.5px);
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
