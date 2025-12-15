@@ -337,10 +337,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
 
-                // Close any open custom-dropdown (moreActionsDropdown, etc.)
-                document.querySelectorAll('.custom-dropdown.open').forEach(function(dropdown) {
-                    dropdown.classList.remove('open');
-                });
+                // Close any open Keyframe Nudger dropdown (moreActionsDropdown, etc.)
+                var moreActionsDropdown = document.getElementById('moreActionsDropdown');
+                if (moreActionsDropdown && moreActionsDropdown.classList.contains('open')) {
+                    moreActionsDropdown.classList.remove('open');
+                }
 
                 // Close other menus
                 if (activeMenu && activeMenu !== menu) {
@@ -2238,7 +2239,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Handle dropdown item clicks
-        var dropdownItems = moreActionsDropdown.querySelectorAll('.dropdown-item');
+        var dropdownItems = moreActionsDropdown.querySelectorAll('.custom-select-option');
         dropdownItems.forEach(function(item) {
             item.addEventListener('click', function(event) {
                 event.stopPropagation();

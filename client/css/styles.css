@@ -450,42 +450,12 @@ body {
     width: 100%;
 }
 
-.custom-dropdown {
-    display: none;
+/* Keyframe Nudger dropdown positioning (uses unified .custom-select-menu) */
+.dropdown-container .custom-select-menu {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
-    min-width: 120px;
-    background-color: #3a3a3a;
-    border: 1px solid #505050;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     z-index: 1000;
-    padding: 2px 0;
-}
-
-.custom-dropdown.open {
-    display: block;
-}
-
-.dropdown-item {
-    padding: 8px 12px;
-    margin: 2px 4px;
-    color: #d0d0d0;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-    white-space: nowrap;
-    border-radius: 4px;
-}
-
-.dropdown-item:hover {
-    background-color: #4a4a4a;
-    color: #ffffff;
-}
-
-.dropdown-item:active {
-    background-color: #555555;
 }
 
 /* Make stagger +/- match delay/duration widths (original 3-button layout width) */
