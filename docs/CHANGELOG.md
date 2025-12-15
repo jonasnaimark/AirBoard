@@ -5,6 +5,31 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.98] - 2025-12-14 🔒 **Baked Spring Protection**
+### 🔒 New Feature
+- **Baked Spring Protection**: Keyframes inside baked spring segments are now protected from being moved when the playhead is within that spring
+- Works with both **Global Delay Nudging** (moving all keyframes after playhead) and **Keyframe Nudger** (moving selected keyframes)
+- Baked springs are detected by the **Blue → Sea Foam → Blue** keyframe label pattern (created by Sproing plugin)
+
+### 🔬 Technical Details
+- **Detection**: `detectBakedSpringSegments()` scans properties for the Blue-SeaFoam-Blue pattern
+- **Protection**: `isKeyframeInProtectedSpring()` checks if playhead is within a spring segment
+- **Coverage**: Protection integrated into all keyframe nudging modes:
+  - Global delay nudging (`moveKeyframesAfterTime`)
+  - Forced timeline mode
+  - Regular timeline mode
+  - Baseline mode
+- Debug logging shows when springs are detected and keyframes protected
+
+### 🎨 UI Improvements
+- **Apply Button**: Darkened dialog Apply button colors for better visual balance
+
+### 📚 Documentation
+- Added "After Effects Layer Timing Model" section to TECHNICAL_DOCS.md explaining startTime, inPoint, outPoint relationships
+
+### 🔗 Associated Build
+- AirBoard-v4.16.98.zxp
+
 ## [4.16.97] - 2025-12-12 🎨 **Control Row Layout Refinements**
 ### 🎨 UI/UX Improvements
 - **Compact row spacing**: Reduced gaps between control rows (Frame multiplier, Delay, Duration, Stagger, X/Y distance) to 4px
