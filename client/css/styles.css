@@ -461,7 +461,7 @@ body {
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     z-index: 1000;
-    overflow: hidden;
+    padding: 0;
 }
 
 .custom-dropdown.open {
@@ -470,11 +470,13 @@ body {
 
 .dropdown-item {
     padding: 8px 12px;
+    margin: 2px 4px;
     color: #d0d0d0;
     font-size: 12px;
     cursor: pointer;
     transition: background-color 0.15s ease;
     white-space: nowrap;
+    border-radius: 4px;
 }
 
 .dropdown-item:hover {
