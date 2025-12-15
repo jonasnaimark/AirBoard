@@ -1207,25 +1207,12 @@ input.distance-input[data-tooltip]:hover::after {
     position: relative;
 }
 
-/* Scrim overlay to fade text before chevron */
-.unified-dropdown-container::before {
-    content: '';
-    position: absolute;
-    top: 1px;
-    bottom: 1px;
-    right: 56px; /* Position further left to fade visible text */
-    width: 12px;
-    background: linear-gradient(to left, #222222 0%, transparent 100%);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* Chevron icon on top of scrim */
+/* Chevron icon for device dropdown */
 .unified-dropdown-container::after {
     content: '';
     position: absolute;
     top: 50%;
-    right: 38px; /* 32px (2x width) + 6px offset */
+    right: 38px;
     transform: translateY(-50%);
     width: 12px;
     height: 12px;
@@ -1236,13 +1223,13 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 #deviceType {
-    flex: 1; /* Take up remaining space */
+    flex: 1;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-    /* Fade background to transparent - starts earlier to avoid hard clip */
-    background: linear-gradient(to right, #222222 calc(100% - 30px), transparent calc(100% - 5px)) !important;
-    padding-right: 24px !important; /* Space for chevron */
-    border-color: #4a4a4a; /* Match Make Comp button border */
+    background-color: #222222 !important;
+    background-image: none !important;
+    padding-right: 20px !important;
+    border-color: #4a4a4a;
 }
 
 #deviceType:hover {
