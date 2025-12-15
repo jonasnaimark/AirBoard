@@ -8799,41 +8799,6 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
     };
 }
 
-// Dynamic frame-based delay nudging functions
-function nudgeDelayWithFrames(direction, frames) {
-    try {
-        DEBUG_JSX.log("nudgeDelayWithFrames called with direction: " + direction + ", frames: " + frames);
-        
-        // Reset timeline mode cumulative offset when switching to normal mode
-        TIMELINE_MODE_CUMULATIVE_OFFSET = 0;
-        
-        var comp = app.project.activeItem;
-        if (!(comp && comp instanceof CompItem)) {
-            return "error|No composition selected";
-        }
-        
-        // Check if nothing is selected - trigger global delay
-        var selectedLayers = comp.selectedLayers;
-        if (selectedLayers.length === 0) {
-            DEBUG_JSX.log("No layers selected - triggering global delay with " + frames + " frames, direction " + direction);
-            // Shift+click baseline mode function -> Skip precomps when no selection
-            return nudgeFromPlayhead(direction, frames, true);
-        }
-        
-        var frameRate = comp.frameRate || 30;
-        var framesToMs = (frames / frameRate) * 1000;
-        
-        DEBUG_JSX.log("Converting " + frames + " frames to " + framesToMs + "ms at " + frameRate + "fps");
-        
-        // Use the existing nudgeDelay function but modify the snapping logic
-        return nudgeDelayWithCustomIncrement(direction, framesToMs);
-        
-    } catch(e) {
-        var debugMessages = DEBUG_JSX.getMessages();
-        return "error|Failed to nudge delay with frames: " + e.toString() + "|" + debugMessages.join("|");
-    }
-}
-
 // Timeline mode - moves ALL selected keyframes by the same amount (no baseline logic)
 // Uses the complete 4-step selection preservation pattern from KEYFRAME_SYSTEM_SUMMARY.md
 // Global variable to track cumulative timeline mode offset
@@ -8992,9 +8957,14 @@ function getSelectionHashWithoutTimes() {
     }
 }
 
-function nudgeDelayTimelineMode(direction, frames) {
+function nudgeDelayTimelineMode(direction, frames, skipPrecomps) {
     try {
-        DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames");
+        // Default skipPrecomps to false if not provided
+        if (skipPrecomps === undefined) {
+            skipPrecomps = false;
+        }
+
+        DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames" + (skipPrecomps ? " (skip precomps)" : ""));
 
         app.beginUndoGroup("Timeline Mode Nudge");
 
@@ -9079,10 +9049,10 @@ function nudgeDelayTimelineMode(direction, frames) {
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
             // GLOBAL DELAY: When nothing is selected, nudge everything after playhead
-            // Pass false for skipPrecomps (normal behavior - process precomps)
+            // Pass skipPrecomps based on shift key (true = ignore precomps)
             app.endUndoGroup();
-            DEBUG_JSX.log("GLOBAL DELAY: No selection, nudging from playhead with " + frames + " frames");
-            return nudgeFromPlayhead(direction, frames, false);
+            DEBUG_JSX.log("GLOBAL DELAY: No selection, nudging from playhead with " + frames + " frames" + (skipPrecomps ? " (skipping precomps)" : ""));
+            return nudgeFromPlayhead(direction, frames, skipPrecomps);
         }
 
         // Track layer in/out points BEFORE nudging
@@ -9942,42 +9912,6 @@ function testTimelineModeFunction() {
     return "success|Timeline mode function exists and is callable|" + debugMessages.join("|");
 }
 
-
-// Helper function for delay nudging with custom increment values
-function nudgeDelayWithCustomIncrement(direction, incrementMs) {
-    // Use the existing nudgeDelay logic but replace calculateDelaySnap calls with dynamic version
-    try {
-        DEBUG_JSX.log("nudgeDelayWithCustomIncrement called with direction: " + direction + ", incrementMs: " + incrementMs);
-        
-        // Store the original calculateDelaySnap function
-        var originalCalculateDelaySnap = calculateDelaySnap;
-        
-        // Set global variable for forced timeline mode to use
-        CUSTOM_INCREMENT_MS = incrementMs;
-        
-        // Temporarily replace the global calculateDelaySnap function
-        calculateDelaySnap = function(currentDelayMs, dir) {
-            return calculateDelaySnapWithIncrement(currentDelayMs, dir, incrementMs);
-        };
-        
-        // Call the existing nudgeDelay function which has baseline selection restoration
-        var result = nudgeDelay(direction);
-        
-        // Restore the original function and reset custom increment
-        calculateDelaySnap = originalCalculateDelaySnap;
-        CUSTOM_INCREMENT_MS = 0;
-        
-        return result;
-        
-    } catch(e) {
-        // Make sure to restore the original function and reset custom increment even if there's an error
-        if (originalCalculateDelaySnap) {
-            calculateDelaySnap = originalCalculateDelaySnap;
-        }
-        CUSTOM_INCREMENT_MS = 0;
-        return "error|Failed to nudge delay with custom increment: " + e.toString();
-    }
-}
 
 // Helper function for duration stretching with custom increment values
 function stretchKeyframesWithCustomIncrement(direction, incrementMs) {

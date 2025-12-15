@@ -1154,6 +1154,66 @@ input.distance-input[data-tooltip]:hover::after {
     }
 }
 
+/* Custom Select Menu - portal style to avoid clipping */
+.custom-select-menu {
+    position: fixed;
+    min-width: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #3a3a3a;
+    border: 1px solid #505050;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 10000;
+    display: none;
+    padding: 4px 0;
+}
+
+.custom-select-menu.open {
+    display: block;
+}
+
+.custom-select-option {
+    padding: 6px 8px;
+    margin: 2px 4px;
+    color: #d0d0d0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    white-space: nowrap;
+    border-radius: 4px;
+}
+
+.custom-select-option:hover {
+    background-color: #4a4a4a;
+    color: #ffffff;
+}
+
+.custom-select-option:active {
+    background-color: #555555;
+}
+
+.custom-select-option.selected {
+    background-color: #4a7fb0;
+    color: #ffffff;
+}
+
+.custom-select-option.selected:hover {
+    background-color: #5a8fc0;
+}
+
+.custom-select-option.disabled {
+    color: #666666;
+    cursor: default;
+    pointer-events: none;
+}
+
+.custom-select-separator {
+    height: 1px;
+    background-color: #505050;
+    margin: 4px 8px;
+}
+
 /* Removed .resolution-input - now uses .control-row for consistency */
 
 .resolution-label {

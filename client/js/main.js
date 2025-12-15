@@ -243,6 +243,160 @@ document.addEventListener('DOMContentLoaded', function() {
     var resolutionInput = document.getElementById('resolutionMultiplier');
     var resolutionText = document.getElementById('resolutionText');
     
+    // Custom dropdown functionality - replaces native select dropdown with styled menu
+    function initializeCustomDropdowns() {
+        var selects = document.querySelectorAll('select.dropdown');
+        var activeMenu = null;
+        var activeSelect = null;
+
+        // Close all menus
+        function closeAllMenus() {
+            document.querySelectorAll('.custom-select-menu').forEach(function(menu) {
+                menu.classList.remove('open');
+            });
+            activeMenu = null;
+            activeSelect = null;
+        }
+
+        // Create custom menu from select options
+        function createCustomMenu(select) {
+            var menu = document.createElement('div');
+            menu.className = 'custom-select-menu';
+            menu.dataset.selectId = select.id;
+
+            var options = select.querySelectorAll('option');
+            options.forEach(function(option) {
+                // Handle separators (disabled options with dashes)
+                if (option.disabled && option.textContent.trim().match(/^[─\-]+$/)) {
+                    var separator = document.createElement('div');
+                    separator.className = 'custom-select-separator';
+                    menu.appendChild(separator);
+                } else {
+                    var item = document.createElement('div');
+                    item.className = 'custom-select-option';
+                    item.textContent = option.textContent;
+                    item.dataset.value = option.value;
+
+                    if (option.disabled) {
+                        item.classList.add('disabled');
+                    }
+
+                    if (option.selected) {
+                        item.classList.add('selected');
+                    }
+
+                    menu.appendChild(item);
+                }
+            });
+
+            // Add to body for portal effect (avoids clipping)
+            document.body.appendChild(menu);
+            return menu;
+        }
+
+        // Position menu below select
+        function positionMenu(menu, select) {
+            var rect = select.getBoundingClientRect();
+
+            // Position below select
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 4) + 'px';
+            menu.style.minWidth = rect.width + 'px';
+
+            // Check if menu goes off bottom of viewport
+            requestAnimationFrame(function() {
+                var menuRect = menu.getBoundingClientRect();
+                if (menuRect.bottom > window.innerHeight - 10) {
+                    // Position above select instead
+                    menu.style.top = (rect.top - menuRect.height - 4) + 'px';
+                }
+
+                // Check if menu goes off right edge
+                if (menuRect.right > window.innerWidth - 10) {
+                    menu.style.left = (window.innerWidth - menuRect.width - 10) + 'px';
+                }
+            });
+        }
+
+        // Update selected state in menu
+        function updateMenuSelection(menu, value) {
+            menu.querySelectorAll('.custom-select-option').forEach(function(option) {
+                if (option.dataset.value === value) {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+        }
+
+        // Initialize each select
+        selects.forEach(function(select) {
+            var menu = createCustomMenu(select);
+
+            // Prevent native dropdown on mousedown/click
+            select.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Close other menus
+                if (activeMenu && activeMenu !== menu) {
+                    closeAllMenus();
+                }
+
+                // Toggle this menu
+                if (menu.classList.contains('open')) {
+                    closeAllMenus();
+                } else {
+                    positionMenu(menu, select);
+                    menu.classList.add('open');
+                    activeMenu = menu;
+                    activeSelect = select;
+                }
+            });
+
+            // Handle option clicks
+            menu.addEventListener('click', function(e) {
+                if (e.target.classList.contains('custom-select-option') &&
+                    !e.target.classList.contains('disabled')) {
+                    var value = e.target.dataset.value;
+                    select.value = value;
+
+                    // Trigger change event
+                    var event = new Event('change', { bubbles: true });
+                    select.dispatchEvent(event);
+
+                    // Update visual selection
+                    updateMenuSelection(menu, value);
+
+                    // Close menu
+                    closeAllMenus();
+                }
+            });
+        });
+
+        // Close menus when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('select.dropdown') &&
+                !e.target.closest('.custom-select-menu')) {
+                closeAllMenus();
+            }
+        });
+
+        // Close menus on window resize or scroll
+        window.addEventListener('resize', closeAllMenus);
+        window.addEventListener('scroll', closeAllMenus, true);
+
+        // Close menus on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && activeMenu) {
+                closeAllMenus();
+                if (activeSelect) {
+                    activeSelect.focus();
+                }
+            }
+        });
+    }
+
     // Accordion functionality
     function initializeAccordion() {
         var accordionToggles = document.querySelectorAll('.accordion-toggle');
@@ -397,10 +551,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize accordion on page load
     initializeAccordion();
-    
+
     // Initialize section reordering
     initializeSectionReordering();
-    
+
+    // Initialize custom dropdowns
+    initializeCustomDropdowns();
+
     // Function to update resolution display text only
     function updateResolutionDisplay() {
         var currentValue = resolutionInput.value;
@@ -995,9 +1152,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Tooltip already created above if present
 
         delayIncrementBtn.addEventListener('click', function(event) {
-            var isShiftHeld = event.shiftKey;
             var isAltHeld = event.altKey;
-            console.log('Delay increment (nudge forward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]') + (isAltHeld ? ' [ALT - 10x]' : ''));
+            var isShiftHeld = event.shiftKey;
+            console.log('Delay increment (nudge forward) clicked' + (isAltHeld ? ' [ALT - 10x]' : '') + (isShiftHeld ? ' [SHIFT - Skip precomps]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1010,17 +1167,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isAltHeld) {
                 delayFrames *= 10;
             }
-            console.log('Applying +' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
+            console.log('Applying +' + delayFrames + ' frame delay nudge (timeline mode - all keyframes move together)');
 
             delayIncrementBtn.disabled = true;
-            
-            // Choose function based on shift key (SWAPPED: normal = timeline, shift = baseline)
-            var script = isShiftHeld 
-                ? 'nudgeDelayWithFrames(1, ' + delayFrames + ')'   // SHIFT: Baseline mode - respect baseline
-                : 'nudgeDelayTimelineMode(1, ' + delayFrames + ')';  // NORMAL: Timeline mode - move all keyframes
-            
+
+            // Timeline mode with optional skipPrecomps for global delay
+            var script = 'nudgeDelayTimelineMode(1, ' + delayFrames + ', ' + isShiftHeld + ')';
+
             csInterface.evalScript(script, function(result) {
-                console.log('Delay nudge forward result' + (isShiftHeld ? ' [BASELINE MODE]' : ' [TIMELINE MODE]') + ':', result);
+                console.log('Delay nudge forward result:', result);
                 handleDelayResult(result, delayIncrementBtn);
             });
         });
@@ -1082,9 +1237,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         delayDecrementBtn.addEventListener('click', function(event) {
-            var isShiftHeld = event.shiftKey;
             var isAltHeld = event.altKey;
-            console.log('Delay decrement (nudge backward) clicked' + (isShiftHeld ? ' [SHIFT - Baseline Mode]' : ' [Normal - Timeline Mode]'));
+            var isShiftHeld = event.shiftKey;
+            console.log('Delay decrement (nudge backward) clicked' + (isAltHeld ? ' [ALT - 10x]' : '') + (isShiftHeld ? ' [SHIFT - Skip precomps]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1097,17 +1252,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isAltHeld) {
                 delayFrames *= 10;
             }
-            console.log('Applying -' + delayFrames + ' frame delay nudge' + (isShiftHeld ? ' (baseline mode - baseline stays fixed)' : ' (timeline mode - all keyframes move)'));
+            console.log('Applying -' + delayFrames + ' frame delay nudge (timeline mode - all keyframes move together)');
 
             delayDecrementBtn.disabled = true;
-            
-            // Choose function based on shift key (SWAPPED: normal = timeline, shift = baseline)
-            var script = isShiftHeld 
-                ? 'nudgeDelayWithFrames(-1, ' + delayFrames + ')'   // SHIFT: Baseline mode - respect baseline
-                : 'nudgeDelayTimelineMode(-1, ' + delayFrames + ')';  // NORMAL: Timeline mode - move all keyframes
-            
+
+            // Timeline mode with optional skipPrecomps for global delay
+            var script = 'nudgeDelayTimelineMode(-1, ' + delayFrames + ', ' + isShiftHeld + ')';
+
             csInterface.evalScript(script, function(result) {
-                console.log('Delay nudge backward result' + (isShiftHeld ? ' [BASELINE MODE]' : ' [TIMELINE MODE]') + ':', result);
+                console.log('Delay nudge backward result:', result);
                 handleDelayResult(result, delayDecrementBtn);
             });
         });
@@ -1621,7 +1774,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (readKeyframesBtn) createTooltip(readKeyframesBtn, 'Read keyframes');
     if (staggerActionBtn) createTooltip(staggerActionBtn, 'Stagger direction');
-    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead\nShift: Keep delays');
+    if (snapToPlayheadBtn) createTooltip(snapToPlayheadBtn, 'Snap to playhead\nShift: Remove delays');
     if (mirrorKeysBtn) createTooltip(mirrorKeysBtn, 'Mirror keys');
     if (trimInBtn) createTooltip(trimInBtn, 'Trim in-point\nShift: Min in-point');
     if (trimOutBtn) createTooltip(trimOutBtn, 'Trim out-point\nShift: Max out-point');
@@ -1781,7 +1934,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (snapToPlayheadBtn) {
         snapToPlayheadBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
-            console.log('Snap to Playhead clicked' + (isShiftHeld ? ' [SHIFT - Preserve Delays]' : ' [Normal - Per-Property]'));
+            // Default: preserve delays, Shift: remove delays (per-property snapping)
+            var preserveDelays = !isShiftHeld;
+            console.log('Snap to Playhead clicked' + (isShiftHeld ? ' [SHIFT - Remove Delays]' : ' [Normal - Preserve Delays]'));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1789,11 +1944,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Call ExtendScript function with shift state
-            // Normal: per-property snapping (each property's earliest → playhead)
-            // Shift: global offset (preserve all relative delays)
-            var script = 'snapToPlayheadFromPanel(' + isShiftHeld + ')';
+            // Normal: global offset (preserve all relative delays)
+            // Shift: per-property snapping (each property's earliest → playhead)
+            var script = 'snapToPlayheadFromPanel(' + preserveDelays + ')';
             csInterface.evalScript(script, function(result) {
-                console.log('Snap to playhead result' + (isShiftHeld ? ' [PRESERVE DELAYS]' : ' [PER-PROPERTY]') + ':', result);
+                console.log('Snap to playhead result' + (preserveDelays ? ' [PRESERVE DELAYS]' : ' [REMOVE DELAYS]') + ':', result);
 
                 if (result && result.indexOf('|') !== -1) {
                     var parts = result.split('|');
