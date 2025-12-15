@@ -1168,6 +1168,11 @@ input.distance-input[data-tooltip]:hover::after {
     border-radius: 4px;
 }
 
+/* Tighter padding for blur/material dropdown (many options) */
+.custom-select-menu[data-select-id="materialType"] .custom-select-option {
+    padding: 5px 8px;
+}
+
 .custom-select-option:hover {
     background-color: #4a4a4a;
     color: #ffffff;
