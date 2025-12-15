@@ -15013,16 +15013,15 @@ function createDeviceComposition(deviceType, multiplier) {
 
 // Gesture Templates functionality
 function addGestureFromPanel(gestureType, multiplier) {
-    app.beginUndoGroup("Add Gesture");
-
     try {
         // Check if we have an active comp
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
             alert("Please select a composition first.");
-            app.endUndoGroup();
             return "error";
         }
+
+        app.beginUndoGroup("Add Gesture");
         
         // Define gesture compositions and layers
         var gestureData = {
@@ -15201,12 +15200,6 @@ function addGestureFromPanel(gestureType, multiplier) {
                 scalePercentage = 100; // Default to 100% if unexpected value
         }
         
-        try {
-            gestureLayer.transform.scale.setValue([scalePercentage, scalePercentage]);
-        } catch(scaleError) {
-            $.writeln("Scale application failed: " + scaleError.toString());
-        }
-        
         // Set layer start time to current playhead position
         try {
             var playheadTime = comp.time;
@@ -15214,38 +15207,68 @@ function addGestureFromPanel(gestureType, multiplier) {
         } catch(timeError) {
             $.writeln("Playhead positioning failed: " + timeError.toString());
         }
-        
-        // Handle positioning - check if property has keyframes  
+
+        // Handle scaling and positioning - use parent method to preserve spatial curves
+        var tempShape = null;
+        var centerX = comp.width / 2;
+        var centerY = comp.height / 2;
+
         try {
             if (gestureLayer.transform.position.numKeys > 0) {
-                // If there are keyframes, offset all keyframe values to center based on second keyframe
+                // Get the reference position to determine where to place the temp layer
                 var referencePos;
                 if (gestureLayer.transform.position.numKeys >= 2) {
-                    // Use second keyframe as reference for centering
                     referencePos = gestureLayer.transform.position.keyValue(2);
                 } else {
-                    // Fallback to first keyframe if only one exists
                     referencePos = gestureLayer.transform.position.keyValue(1);
                 }
-                var offsetX = (comp.width/2) - referencePos[0];
-                var offsetY = (comp.height/2) - referencePos[1];
-                
-                for (var p = 1; p <= gestureLayer.transform.position.numKeys; p++) {
-                    var keyTime = gestureLayer.transform.position.keyTime(p);
-                    var keyValue = gestureLayer.transform.position.keyValue(p);
-                    var centeredValue = [keyValue[0] + offsetX, keyValue[1] + offsetY];
-                    gestureLayer.transform.position.setValueAtTime(keyTime, centeredValue);
-                }
+
+                // Create empty shape layer BEFORE ending undo group - we'll remove it after
+                tempShape = comp.layers.addShape();
+                tempShape.name = "TEMP_SCALE";
+                tempShape.transform.position.setValue(referencePos);
+
+                // Parent gesture to shape - gesture stays visually in place
+                gestureLayer.parent = tempShape;
+
+                // Move shape to center - gesture follows (animation moves with it)
+                tempShape.transform.position.setValue([centerX, centerY]);
+
+                // Scale shape - scales gesture AND its animation path proportionally
+                tempShape.transform.scale.setValue([scalePercentage, scalePercentage]);
+
+                // Unparent - AE converts child positions to world space preserving spatial bezier
+                gestureLayer.parent = null;
             } else {
-                // No keyframes, just set the value
-                gestureLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+                // No keyframes - just center
+                gestureLayer.transform.position.setValue([centerX, centerY]);
             }
-        } catch(posError) {
-            // If positioning fails, continue without repositioning
-            $.writeln("Position adjustment failed: " + posError.toString());
+
+            // Apply layer scale for visual size
+            gestureLayer.transform.scale.setValue([scalePercentage, scalePercentage]);
+
+        } catch(scaleError) {
+            $.writeln("Scale/position adjustment failed: " + scaleError.toString());
+            // Fallback: basic centering
+            try {
+                gestureLayer.transform.position.setValue([comp.width/2, comp.height/2]);
+                gestureLayer.transform.scale.setValue([scalePercentage, scalePercentage]);
+            } catch(e) {
+                $.writeln("Fallback positioning failed: " + e.toString());
+            }
         }
 
         app.endUndoGroup();
+
+        // Remove temp shape AFTER undo group closes - this won't be part of undo
+        if (tempShape) {
+            try {
+                tempShape.remove();
+            } catch(e) {
+                $.writeln("Failed to remove temp shape: " + e.toString());
+            }
+        }
+
         return "success";
 
     } catch(e) {
