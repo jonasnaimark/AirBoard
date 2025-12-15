@@ -337,7 +337,7 @@ body {
     transform: translateY(-50%);
     height: 20px;
     pointer-events: all;
-    padding: 0 8px;
+    padding: 0 4px;
     box-sizing: border-box;
     opacity: 0.5;
     transition: opacity 0.2s ease;
@@ -355,8 +355,8 @@ body {
 .frame-slider-track {
     position: absolute;
     top: 50%;
-    left: 8px;
-    right: 8px;
+    left: 4px;
+    right: 4px;
     height: 2px;
     background-color: #3d3d3d;
     border-radius: 1px;
