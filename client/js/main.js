@@ -2296,6 +2296,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         input.value = '';
                         input.focus();
                     }
+                } else if (action === '3-point-curve') {
+                    console.log('3 point curve action triggered');
+                    if (csInterface) {
+                        csInterface.evalScript('makeThreePointCurve()', function(result) {
+                            console.log('makeThreePointCurve result:', result);
+                            if (result && result.indexOf('error') === 0) {
+                                var parts = result.split('|');
+                                if (parts.length > 1) {
+                                    alert(parts[1]);
+                                }
+                            }
+                        });
+                    }
                 }
             });
         });

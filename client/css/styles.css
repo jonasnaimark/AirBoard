@@ -1166,6 +1166,18 @@ input.distance-input[data-tooltip]:hover::after {
     transition: background-color 0.15s ease;
     white-space: nowrap;
     border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.custom-select-option svg {
+    flex-shrink: 0;
+}
+
+/* White icons and text for moreActions dropdown */
+#moreActionsDropdown .custom-select-option {
+    color: #ffffff;
 }
 
 /* Tighter padding for blur/material dropdown (many options) */
@@ -1183,12 +1195,12 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .custom-select-option.selected {
-    background-color: #4a7fb0;
+    background-color: #3d85c6;
     color: #ffffff;
 }
 
 .custom-select-option.selected:hover {
-    background-color: #5a8fc0;
+    background-color: #4d96d6;
 }
 
 .custom-select-option.disabled {
@@ -1532,7 +1544,7 @@ input.distance-input[data-tooltip]:hover::after {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .dialog-btn {
@@ -1541,10 +1553,11 @@ input.distance-input[data-tooltip]:hover::after {
     border-radius: 4px;
     color: #ffffff;
     font-size: 12px;
-    padding: 6px 16px;
+    padding: 5px 16px 7px;
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease;
     font-family: 'Adobe Clean', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1;
 }
 
 .dialog-btn:hover {
@@ -1557,15 +1570,15 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 .dialog-btn.apply-btn {
-    background-color: #4a7fb0;
-    border-color: #4a7fb0;
+    background-color: #3d85c6;
+    border-color: #3d85c6;
 }
 
 .dialog-btn.apply-btn:hover {
-    background-color: #5a8fc0;
-    border-color: #5a8fc0;
+    background-color: #4d96d6;
+    border-color: #4d96d6;
 }
 
 .dialog-btn.apply-btn:active {
-    background-color: #3a6fa0;
+    background-color: #2d7ab6;
 }

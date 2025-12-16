@@ -251,7 +251,19 @@ function extendPrecompFromLayerToTarget(precompLayer, precomp, targetDuration) {
             } else {
                 var newOutPoint = newDuration - layerInPrecomp.startTime;
                 if (newOutPoint > 0) {
+                    // Temporarily unlock if locked
+                    var wasLocked = layerInPrecomp.locked;
+                    if (wasLocked) {
+                        layerInPrecomp.locked = false;
+                    }
+
                     layerInPrecomp.outPoint = newOutPoint;
+
+                    // Re-lock if it was locked
+                    if (wasLocked) {
+                        layerInPrecomp.locked = true;
+                    }
+
                     layersExtended++;
                     DEBUG_JSX.log("      EXTENDED to " + (newOutPoint * 1000).toFixed(1) + "ms");
                 }
@@ -275,7 +287,19 @@ function extendPrecompFromLayerToTarget(precompLayer, precomp, targetDuration) {
                     // Update parent layer's outPoint to match new precomp duration
                     var parentLayerEnd = parentLayer.startTime + parentLayer.outPoint;
                     if (parentLayer.outPoint < precomp.duration) {
+                        // Temporarily unlock if locked
+                        var parentWasLocked = parentLayer.locked;
+                        if (parentWasLocked) {
+                            parentLayer.locked = false;
+                        }
+
                         parentLayer.outPoint = precomp.duration;
+
+                        // Re-lock if it was locked
+                        if (parentWasLocked) {
+                            parentLayer.locked = true;
+                        }
+
                         DEBUG_JSX.log("  COMP EXTEND: Updated parent layer '" + parentLayer.name + "' outPoint in '" + item.name + "'");
 
                         // Check if parent layer is also a precomp layer and recurse
@@ -391,7 +415,20 @@ function extendCompByFrames(numFrames) {
 
                 // Now extend layer to new duration (after source is extended)
                 DEBUG_JSX.log("  Setting layer.outPoint to: " + newLayerOutPoint);
+
+                // Temporarily unlock if locked
+                var wasLocked = layer.locked;
+                if (wasLocked) {
+                    layer.locked = false;
+                }
+
                 layer.outPoint = newLayerOutPoint;
+
+                // Re-lock if it was locked
+                if (wasLocked) {
+                    layer.locked = true;
+                }
+
                 DEBUG_JSX.log("  layer.outPoint after set: " + layer.outPoint + " (" + Math.round(layer.outPoint / frameDuration) + " frames)");
                 layersExtended++;
             }
@@ -467,8 +504,19 @@ function extendPrecompRecursively(precomp, oldDuration, newDuration) {
                 }
             }
 
+            // Temporarily unlock if locked
+            var wasLocked = layer.locked;
+            if (wasLocked) {
+                layer.locked = false;
+            }
+
             // Now extend layer to new duration (after source is extended)
             layer.outPoint = newLayerOutPoint;
+
+            // Re-lock if it was locked
+            if (wasLocked) {
+                layer.locked = true;
+            }
         }
     }
 }
@@ -21253,7 +21301,20 @@ function handleTrimOutPoint(setToMax) {
                     // Set outPoint to comp end WITHOUT restoring inPoint
                     // (restoring inPoint after changing outPoint can cause AE to recalculate outPoint)
                     DEBUG_JSX.log("  BEFORE: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
+
+                    // Temporarily unlock if locked
+                    var wasLocked = layer.locked;
+                    if (wasLocked) {
+                        layer.locked = false;
+                    }
+
                     layer.outPoint = comp.duration;
+
+                    // Re-lock if it was locked
+                    if (wasLocked) {
+                        layer.locked = true;
+                    }
+
                     DEBUG_JSX.log("  AFTER: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
 
                     layersAdjusted++;
@@ -21652,6 +21713,275 @@ function pasteKeyframes() {
     } catch(e) {
         app.endUndoGroup();
         DEBUG_JSX.log("Paste error: " + e.toString());
+        var debugMessages = DEBUG_JSX.getMessages();
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+/**
+ * Make 3-point curve from 2 selected keyframes
+ * - Adds a keyframe at 2/3 of the distance between the two keys
+ * - Extends the second keyframe by 1/3 of the original distance
+ * This creates a smoother ease-out landing
+ */
+function makeThreePointCurve() {
+    try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("makeThreePointCurve called");
+
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            return "error|No active composition";
+        }
+
+        var selectedLayers = comp.selectedLayers;
+        if (selectedLayers.length === 0) {
+            return "error|No layer selected";
+        }
+
+        app.beginUndoGroup("Make 3-Point Curve");
+
+        var propertiesProcessed = 0;
+        var propertiesSkipped = 0;
+
+        for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+            var layer = selectedLayers[layerIdx];
+            var selectedProps = layer.selectedProperties;
+
+            for (var propIdx = 0; propIdx < selectedProps.length; propIdx++) {
+                var prop = selectedProps[propIdx];
+                if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
+                if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+
+                // Find selected keyframes
+                var selectedKeyIndices = [];
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        selectedKeyIndices.push(k);
+                    }
+                }
+
+                // Require exactly 2 selected keyframes
+                if (selectedKeyIndices.length !== 2) {
+                    DEBUG_JSX.log("Skipping " + prop.name + ": need exactly 2 selected keys, found " + selectedKeyIndices.length);
+                    propertiesSkipped++;
+                    continue;
+                }
+
+                var key1Idx = selectedKeyIndices[0];
+                var key2Idx = selectedKeyIndices[1];
+
+                // Check for linear interpolation - skip if either key is linear
+                var key1OutInterp = prop.keyOutInterpolationType(key1Idx);
+                var key2InInterp = prop.keyInInterpolationType(key2Idx);
+                if (key1OutInterp === KeyframeInterpolationType.LINEAR &&
+                    key2InInterp === KeyframeInterpolationType.LINEAR) {
+                    DEBUG_JSX.log("Skipping " + prop.name + ": linear interpolation");
+                    propertiesSkipped++;
+                    continue;
+                }
+
+                var key1Time = prop.keyTime(key1Idx);
+                var key2Time = prop.keyTime(key2Idx);
+                var duration = key2Time - key1Time;
+
+                if (duration <= 0) {
+                    DEBUG_JSX.log("Skipping " + prop.name + ": invalid duration");
+                    propertiesSkipped++;
+                    continue;
+                }
+
+                // Calculate new positions
+                var middleKeyTime = key1Time + (duration * 2 / 3);
+                var newKey2Time = key2Time + (duration / 3);
+
+                DEBUG_JSX.log("Processing " + prop.name + ":");
+                DEBUG_JSX.log("  key1=" + (key1Time * 1000).toFixed(1) + "ms, key2=" + (key2Time * 1000).toFixed(1) + "ms");
+                DEBUG_JSX.log("  duration=" + (duration * 1000).toFixed(1) + "ms");
+                DEBUG_JSX.log("  middleKey=" + (middleKeyTime * 1000).toFixed(1) + "ms, newKey2=" + (newKey2Time * 1000).toFixed(1) + "ms");
+
+                // Step 1: Capture key2's value and OUTGOING ease before any changes
+                // (incoming ease will be recaptured after adding middle key)
+                var key2Value = prop.keyValue(key2Idx);
+                var key2OutInterp = prop.keyOutInterpolationType(key2Idx);
+                var key2OutEase = null;
+                var key2Label = null;
+                try { key2OutEase = prop.keyOutTemporalEase(key2Idx); } catch(e) {}
+                try { key2Label = prop.keyLabel(key2Idx); } catch(e) {}
+
+                // Step 2: Add the middle keyframe at 2/3 point
+                // addKey() will sample the existing curve and create proper interpolated value
+                // AE automatically calculates the correct ease values to maintain curve continuity
+                var middleKeyIdx = prop.addKey(middleKeyTime);
+                DEBUG_JSX.log("  Added middle key at index " + middleKeyIdx);
+
+                // Step 3: Find the new index of key2 (it shifted due to insertion)
+                var newKey2Idx = -1;
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (Math.abs(prop.keyTime(k) - key2Time) < 0.0001) {
+                        newKey2Idx = k;
+                        break;
+                    }
+                }
+
+                if (newKey2Idx === -1) {
+                    DEBUG_JSX.log("Could not find key2 after middle key insertion for " + prop.name);
+                    propertiesSkipped++;
+                    continue;
+                }
+
+                // Step 4: Capture key2's INCOMING ease AFTER middle key was added
+                // This is the ease AE calculated to flow from the middle key to key2
+                // When manually dragging key2, these exact values stay the same
+                var key2InInterp = prop.keyInInterpolationType(newKey2Idx);
+                var key2InEase = null;
+                try { key2InEase = prop.keyInTemporalEase(newKey2Idx); } catch(e) {}
+                DEBUG_JSX.log("  Captured key2 incoming ease after middle key added");
+
+                // Step 5: Remove key2 and recreate it at new position
+                prop.removeKey(newKey2Idx);
+
+                // Add key2 at new position (this creates default ease)
+                var finalKey2Idx = prop.addKey(newKey2Time);
+
+                // Restore key2's value
+                prop.setValueAtKey(finalKey2Idx, key2Value);
+
+                // Step 6: Restore the EXACT incoming ease values captured after middle key was added
+                // When you manually drag a keyframe, the ease speed/influence stay constant
+                // The curve looks more gradual because the same speed over longer distance = gentler slope
+                try {
+                    // Set interpolation types
+                    prop.setInterpolationTypeAtKey(finalKey2Idx, key2InInterp, key2OutInterp);
+
+                    // Restore both incoming and outgoing ease
+                    if (key2InEase !== null && key2OutEase !== null) {
+                        prop.setTemporalEaseAtKey(finalKey2Idx, key2InEase, key2OutEase);
+                        DEBUG_JSX.log("  Restored key2 ease values (no scaling - matches manual drag behavior)");
+                    }
+                } catch(e) {
+                    DEBUG_JSX.log("  Could not set key2 ease: " + e.toString());
+                }
+
+                // Restore label if present
+                if (key2Label !== null) {
+                    try { prop.setLabelAtKey(finalKey2Idx, key2Label); } catch(e) {}
+                }
+
+                DEBUG_JSX.log("  Moved key2 to index " + finalKey2Idx);
+
+                // Step 5: Select the 3 keys
+                // Find all three key indices
+                var finalKey1Idx = -1;
+                var finalMiddleIdx = -1;
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    var kTime = prop.keyTime(k);
+                    if (Math.abs(kTime - key1Time) < 0.0001) finalKey1Idx = k;
+                    else if (Math.abs(kTime - middleKeyTime) < 0.0001) finalMiddleIdx = k;
+                }
+
+                if (finalKey1Idx > 0) prop.setSelectedAtKey(finalKey1Idx, true);
+                if (finalMiddleIdx > 0) prop.setSelectedAtKey(finalMiddleIdx, true);
+                if (finalKey2Idx > 0) prop.setSelectedAtKey(finalKey2Idx, true);
+
+                propertiesProcessed++;
+            }
+
+            // Also check Time Remap
+            if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
+                var prop = layer.timeRemap;
+                var selectedKeyIndices = [];
+                for (var k = 1; k <= prop.numKeys; k++) {
+                    if (prop.keySelected(k)) {
+                        selectedKeyIndices.push(k);
+                    }
+                }
+
+                if (selectedKeyIndices.length === 2) {
+                    var key1Idx = selectedKeyIndices[0];
+                    var key2Idx = selectedKeyIndices[1];
+
+                    var key1OutInterp = prop.keyOutInterpolationType(key1Idx);
+                    var key2InInterp = prop.keyInInterpolationType(key2Idx);
+                    if (!(key1OutInterp === KeyframeInterpolationType.LINEAR &&
+                          key2InInterp === KeyframeInterpolationType.LINEAR)) {
+
+                        var key1Time = prop.keyTime(key1Idx);
+                        var key2Time = prop.keyTime(key2Idx);
+                        var duration = key2Time - key1Time;
+
+                        if (duration > 0) {
+                            var middleKeyTime = key1Time + (duration * 2 / 3);
+                            var newKey2Time = key2Time + (duration / 3);
+
+                            // Capture key2's value and outgoing ease before changes
+                            var key2Value = prop.keyValue(key2Idx);
+                            var key2OutInterp = prop.keyOutInterpolationType(key2Idx);
+                            var key2OutEase = null;
+                            var key2Label = null;
+                            try { key2OutEase = prop.keyOutTemporalEase(key2Idx); } catch(e) {}
+                            try { key2Label = prop.keyLabel(key2Idx); } catch(e) {}
+
+                            // Add middle key
+                            var middleKeyIdx = prop.addKey(middleKeyTime);
+
+                            // Find key2's new index
+                            var newKey2Idx = -1;
+                            for (var k = 1; k <= prop.numKeys; k++) {
+                                if (Math.abs(prop.keyTime(k) - key2Time) < 0.0001) {
+                                    newKey2Idx = k;
+                                    break;
+                                }
+                            }
+
+                            if (newKey2Idx !== -1) {
+                                // Capture key2's incoming ease AFTER middle key was added
+                                var key2InInterp = prop.keyInInterpolationType(newKey2Idx);
+                                var key2InEase = null;
+                                try { key2InEase = prop.keyInTemporalEase(newKey2Idx); } catch(e) {}
+
+                                // Remove and recreate key2 at new position
+                                prop.removeKey(newKey2Idx);
+                                var finalKey2Idx = prop.addKey(newKey2Time);
+
+                                // Restore value
+                                prop.setValueAtKey(finalKey2Idx, key2Value);
+
+                                // Restore exact ease values (no scaling)
+                                try {
+                                    prop.setInterpolationTypeAtKey(finalKey2Idx, key2InInterp, key2OutInterp);
+                                    if (key2InEase !== null && key2OutEase !== null) {
+                                        prop.setTemporalEaseAtKey(finalKey2Idx, key2InEase, key2OutEase);
+                                    }
+                                } catch(e) {}
+
+                                if (key2Label !== null) {
+                                    try { prop.setLabelAtKey(finalKey2Idx, key2Label); } catch(e) {}
+                                }
+
+                                propertiesProcessed++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        app.endUndoGroup();
+
+        var debugMessages = DEBUG_JSX.getMessages();
+
+        if (propertiesProcessed === 0) {
+            if (propertiesSkipped > 0) {
+                return "error|No valid properties. Need exactly 2 selected keyframes with easing.|" + debugMessages.join("|");
+            }
+            return "error|No keyframes processed|" + debugMessages.join("|");
+        }
+
+        return "success|Created 3-point curve for " + propertiesProcessed + " propert" + (propertiesProcessed > 1 ? "ies" : "y") + "|" + debugMessages.join("|");
+    } catch(e) {
+        app.endUndoGroup();
+        DEBUG_JSX.log("makeThreePointCurve error: " + e.toString());
         var debugMessages = DEBUG_JSX.getMessages();
         return "error|" + e.toString() + "|" + debugMessages.join("|");
     }
