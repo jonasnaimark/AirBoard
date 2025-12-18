@@ -14489,7 +14489,10 @@ function getOrCreatePlaceholderComp(baseWidth, baseHeight, multiplier) {
 // Device Templates functionality
 function createDeviceComposition(deviceType, multiplier) {
     var debugInfo = [];
-    app.beginUndoGroup("Create Device Composition");
+
+    // Create descriptive undo group name
+    var undoName = "Create " + deviceType + " @" + multiplier + "x";
+    app.beginUndoGroup(undoName);
 
     try {
         debugInfo.push("=== DEVICE CREATION START ===");
@@ -14502,7 +14505,9 @@ function createDeviceComposition(deviceType, multiplier) {
             "iphone-402": { width: 402, height: 874 },
             desktop: { width: 1440, height: 1028 },
             iphone15: { width: 475, height: 934 },
+            iphone16: { width: 487, height: 957 },
             "iphone-simple": { width: 475, height: 934 },
+            "iphone-simple-402": { width: 487, height: 957 },
             "web-chrome": { width: 1728, height: 1391.5 }
         };
         
@@ -14510,6 +14515,7 @@ function createDeviceComposition(deviceType, multiplier) {
         var baseDimensions = baseSpecs[deviceType];
         if (!baseDimensions) {
             debugInfo.push("❌ Invalid device type: " + deviceType);
+            app.endUndoGroup();
             return "error|Invalid device type|" + debugInfo.join("|");
         }
         
@@ -14531,8 +14537,12 @@ function createDeviceComposition(deviceType, multiplier) {
             compName = "iPhone-402 @" + multiplier + "x";
         } else if (deviceType === "iphone15") {
             compName = "iPhone15 @" + multiplier + "x";
+        } else if (deviceType === "iphone16") {
+            compName = "iPhone16 @" + multiplier + "x";
         } else if (deviceType === "iphone-simple") {
             compName = "iPhone-simple @" + multiplier + "x";
+        } else if (deviceType === "iphone-simple-402") {
+            compName = "iPhone-simple-402 @" + multiplier + "x";
         } else {
             // For other device types (desktop, web-chrome, etc.), use standard capitalization
             compName = deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + " @" + multiplier + "x";
@@ -14552,6 +14562,7 @@ function createDeviceComposition(deviceType, multiplier) {
             debugInfo.push("Composition created successfully");
         } catch(compError) {
             debugInfo.push("❌ Error creating composition: " + compError.toString());
+            app.endUndoGroup();
             return "error|Composition creation failed|" + debugInfo.join("|");
         }
         
@@ -14559,7 +14570,7 @@ function createDeviceComposition(deviceType, multiplier) {
         comp.bgColor = [1, 1, 1];
         
         // If it's an iPhone type or Web Chrome, import and add the template
-        if (deviceType === "iphone" || deviceType === "iphone-402" || deviceType === "iphone15" || deviceType === "iphone-simple" || deviceType === "web-chrome") {
+        if (deviceType === "iphone" || deviceType === "iphone-402" || deviceType === "iphone15" || deviceType === "iphone16" || deviceType === "iphone-simple" || deviceType === "iphone-simple-402" || deviceType === "web-chrome") {
             debugInfo.push("=== TEMPLATE IMPORT START ===");
             debugInfo.push("Extension root: " + extensionRoot);
             
@@ -14587,8 +14598,12 @@ function createDeviceComposition(deviceType, multiplier) {
                     var templateName;
                     if (deviceType === "iphone15") {
                         templateName = "iPhone 15 - 393";
+                    } else if (deviceType === "iphone16") {
+                        templateName = "iPhone 16 - 402";
                     } else if (deviceType === "iphone-simple") {
                         templateName = "iPhone Simple - 393";
+                    } else if (deviceType === "iphone-simple-402") {
+                        templateName = "iPhone Simple - 402";
                     } else if (deviceType === "web-chrome") {
                         templateName = "Web Chrome - 1440";
                     } else if (deviceType === "iphone-402") {
@@ -14611,16 +14626,24 @@ function createDeviceComposition(deviceType, multiplier) {
                             }
                             // For iPhone 15, look for the template comp specifically
                             // Must have layers to be the template (not the newly created comp)
-                            if (deviceType === "iphone15" && 
+                            if (deviceType === "iphone15" &&
                                 item.name === "iPhone 15 - 393" &&
                                 item.layers && item.layers.length > 0) {
                                 templateComp = item;
                                 debugInfo.push("✓ Found iPhone 15 template with " + item.layers.length + " layers");
                                 break;
                             }
+                            // For iPhone 16, look for the template comp specifically
+                            if (deviceType === "iphone16" &&
+                                item.name === "iPhone 16 - 402" &&
+                                item.layers && item.layers.length > 0) {
+                                templateComp = item;
+                                debugInfo.push("✓ Found iPhone 16 template with " + item.layers.length + " layers");
+                                break;
+                            }
                         }
                     }
-                    
+
                     // Only import if not already present
                     if (!templateComp) {
                         debugInfo.push("Template comp not found, importing .aep file...");
@@ -14655,11 +14678,19 @@ function createDeviceComposition(deviceType, multiplier) {
                                 }
                                 // For iPhone 15, look for the exact template comp
                                 // Must have layers to be the template
-                                if (deviceType === "iphone15" && 
+                                if (deviceType === "iphone15" &&
                                     item.name === "iPhone 15 - 393" &&
                                     item.layers && item.layers.length > 0) {
                                     templateComp = item;
                                     debugInfo.push("✓ Found iPhone 15 template after import with " + item.layers.length + " layers");
+                                    break;
+                                }
+                                // For iPhone 16, look for the exact template comp
+                                if (deviceType === "iphone16" &&
+                                    item.name === "iPhone 16 - 402" &&
+                                    item.layers && item.layers.length > 0) {
+                                    templateComp = item;
+                                    debugInfo.push("✓ Found iPhone 16 template after import with " + item.layers.length + " layers");
                                     break;
                                 }
                             }
@@ -14673,10 +14704,12 @@ function createDeviceComposition(deviceType, multiplier) {
                     if (templateComp) {
                         debugInfo.push("Template comp found: " + templateComp.name + " with " + templateComp.layers.length + " layers");
                         
-                        if (deviceType === "iphone15" || deviceType === "iphone-simple" || deviceType === "web-chrome") {
-                            // For iPhone 15, iPhone Simple, and Web Chrome, copy all layers from the template comp
-                            var deviceName = deviceType === "iphone15" ? "iPhone 15" : 
-                                           deviceType === "iphone-simple" ? "iPhone Simple" : 
+                        if (deviceType === "iphone15" || deviceType === "iphone16" || deviceType === "iphone-simple" || deviceType === "iphone-simple-402" || deviceType === "web-chrome") {
+                            // For iPhone 15, iPhone 16, iPhone Simple (393/402), and Web Chrome, copy all layers from the template comp
+                            var deviceName = deviceType === "iphone15" ? "iPhone 15" :
+                                           deviceType === "iphone16" ? "iPhone 16" :
+                                           deviceType === "iphone-simple" ? "iPhone Simple" :
+                                           deviceType === "iphone-simple-402" ? "iPhone Simple 402" :
                                            "Web Chrome";
                             debugInfo.push("=== " + deviceName + " Layer Copying Process ===");
                             debugInfo.push("Total layers to copy: " + templateComp.layers.length);
@@ -14707,6 +14740,10 @@ function createDeviceComposition(deviceType, multiplier) {
                                         // Special scaling for iPhone 15 Pro Frame.png: 50.5% at 2x
                                         scaleFactor = (multiplier / 2) * 50.5;
                                         debugInfo.push("iPhone 15 Pro Frame detected, using special scale: " + scaleFactor + "%");
+                                    } else if (newLayer.name.indexOf("iPhone 16 Pro Frame") !== -1) {
+                                        // Special scaling for iPhone 16 Pro Frame.png: 50% at 2x, 100% at 4x
+                                        scaleFactor = (multiplier / 2) * 50;
+                                        debugInfo.push("iPhone 16 Pro Frame detected, using special scale: " + scaleFactor + "%");
                                     } else {
                                         // Regular scaling for other layers (iPhone UI, Shadow, Screen Matte)
                                         scaleFactor = (multiplier / 2) * 100;
@@ -14791,11 +14828,47 @@ function createDeviceComposition(deviceType, multiplier) {
                                                 debugInfo.push("❌ Error moving layer: " + moveError.toString());
                                             }
                                         }
+                                    } else if (deviceType === "iphone16") {
+                                        // iPhone 16: iPhone 16 Pro Frame goes to top, others to bottom
+                                        if (newLayer.name.indexOf("iPhone 16 Pro Frame") !== -1) {
+                                            // Keep iPhone 16 Pro Frame at the top (index 1)
+                                            debugInfo.push("Keeping iPhone 16 Pro Frame at top");
+                                        } else {
+                                            // Move other layers to bottom to preserve order
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        }
                                     } else if (deviceType === "iphone-simple") {
                                         // iPhone Simple: iPhone UI - 393 goes to top, Shadow goes to bottom
                                         if (newLayer.name.indexOf("iPhone UI - 393") !== -1) {
                                             // Keep iPhone UI at the top (index 1)
                                             debugInfo.push("Keeping iPhone UI - 393 at top");
+                                        } else if (newLayer.name.indexOf("Shadow") !== -1) {
+                                            // Move Shadow layer to bottom
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        } else {
+                                            // Move other layers to bottom by default
+                                            try {
+                                                newLayer.moveToEnd();
+                                                debugInfo.push("Moving " + newLayer.name + " to bottom");
+                                            } catch(moveError) {
+                                                debugInfo.push("❌ Error moving layer: " + moveError.toString());
+                                            }
+                                        }
+                                    } else if (deviceType === "iphone-simple-402") {
+                                        // iPhone Simple 402: iPhone UI - 402 goes to top, Shadow goes to bottom
+                                        if (newLayer.name.indexOf("iPhone UI - 402") !== -1) {
+                                            // Keep iPhone UI at the top (index 1)
+                                            debugInfo.push("Keeping iPhone UI - 402 at top");
                                         } else if (newLayer.name.indexOf("Shadow") !== -1) {
                                             // Move Shadow layer to bottom
                                             try {
@@ -14846,12 +14919,14 @@ function createDeviceComposition(deviceType, multiplier) {
                             }
                             debugInfo.push("=== " + deviceName + " Layer Copying Complete ===");
                             
-                            // Step 2: Add Placeholder comp as base layer for iPhone 15 and iPhone Simple
-                            if (deviceType === "iphone15" || deviceType === "iphone-simple") {
+                            // Step 2: Add Placeholder comp as base layer for iPhone 15, iPhone 16, and iPhone Simple variants
+                            if (deviceType === "iphone15" || deviceType === "iphone16" || deviceType === "iphone-simple" || deviceType === "iphone-simple-402") {
                                 debugInfo.push("=== Adding Placeholder Base Layer ===");
 
-                                // Get or create placeholder comp (393px base width for iPhone, 852px base height)
-                                var placeholderComp = getOrCreatePlaceholderComp(393, 852, multiplier);
+                                // Get or create placeholder comp with appropriate dimensions
+                                var placeholderWidth = (deviceType === "iphone16" || deviceType === "iphone-simple-402") ? 402 : 393;
+                                var placeholderHeight = (deviceType === "iphone16" || deviceType === "iphone-simple-402") ? 874 : 852;
+                                var placeholderComp = getOrCreatePlaceholderComp(placeholderWidth, placeholderHeight, multiplier);
 
                                 if (placeholderComp) {
                                     // Add placeholder as precomp layer
@@ -14872,12 +14947,12 @@ function createDeviceComposition(deviceType, multiplier) {
                                     placeholderLayer.collapseTransformation = true;
 
                                     // Position placeholder layer based on device type
-                                    if (deviceType === "iphone-simple") {
-                                        // For iPhone Simple: Placeholder goes to top (above Shadow)
+                                    if (deviceType === "iphone-simple" || deviceType === "iphone-simple-402") {
+                                        // For iPhone Simple variants: Placeholder goes to top (above Shadow)
                                         placeholderLayer.moveToBeginning();
                                         debugInfo.push("Placeholder moved to top (above Shadow)");
                                     } else {
-                                        // For iPhone 15: Placeholder goes to bottom (behind Frame)
+                                        // For iPhone 15/16: Placeholder goes to bottom (behind Frame)
                                         placeholderLayer.moveToEnd();
                                         debugInfo.push("Placeholder moved to bottom (behind Frame)");
                                     }
