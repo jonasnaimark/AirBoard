@@ -21897,14 +21897,14 @@ function makeThreePointCurve() {
 
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
-            var debugMessages = DEBUG_JSX.getMessages();
-            return "error|No active composition|" + debugMessages.join("|");
+            alert("3-Point Curve\n\nPlease open a composition first.");
+            return "error|No active composition";
         }
 
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
-            var debugMessages = DEBUG_JSX.getMessages();
-            return "error|No layer selected|" + debugMessages.join("|");
+            alert("3-Point Curve\n\nPlease select a layer with keyframes.");
+            return "error|No layer selected";
         }
 
         // PHASE 1: Collect all keyframe data BEFORE making any changes
@@ -21964,8 +21964,10 @@ function makeThreePointCurve() {
 
         if (propsToProcess.length === 0) {
             if (propertiesSkipped > 0) {
-                return "error|No valid properties. Need exactly 2 selected keyframes with easing.";
+                alert("3-Point Curve\n\nSelect exactly 2 keyframes per property.");
+                return "error|No valid properties";
             }
+            alert("3-Point Curve\n\nNo keyframes selected.");
             return "error|No keyframes to process";
         }
 
@@ -22249,8 +22251,10 @@ function makeThreePointCurve() {
 
         if (propertiesProcessed === 0) {
             if (propertiesSkipped > 0) {
-                return "error|No valid properties. Need exactly 2 selected keyframes with easing.|" + debugMessages.join("|");
+                alert("3-Point Curve\n\nSelect exactly 2 keyframes per property.");
+                return "error|No valid properties|" + debugMessages.join("|");
             }
+            alert("3-Point Curve\n\nNo keyframes were processed.");
             return "error|No keyframes processed|" + debugMessages.join("|");
         }
 
@@ -22258,6 +22262,7 @@ function makeThreePointCurve() {
     } catch(e) {
         app.endUndoGroup();
         DEBUG_JSX.log("makeThreePointCurve error: " + e.toString());
+        alert("3-Point Curve\n\nAn error occurred. Select exactly 2 keyframes per property.");
         var debugMessages = DEBUG_JSX.getMessages();
         return "error|" + e.toString() + "|" + debugMessages.join("|");
     }

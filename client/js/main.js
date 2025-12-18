@@ -2293,11 +2293,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             console.log('makeThreePointCurve result:', result);
                             var parts = result ? result.split('|') : [];
 
-                            if (result && result.indexOf('error') === 0) {
-                                if (parts.length > 1) {
-                                    alert(parts[1]);
-                                }
-                            }
+                            // Errors are now shown via native AE alert in JSX
 
                             // Display debug messages
                             var debugMessages = [];
