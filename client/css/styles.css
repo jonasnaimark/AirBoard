@@ -297,7 +297,7 @@ body {
 }
 
 #frameMultiplierDisplay .stagger-controls {
-    width: calc(31% - 4px);
+    width: calc(33% - 4px);
     justify-content: flex-end;
     right: 0;
     top: 0;
@@ -598,7 +598,7 @@ body {
     right: 6px;
     top: 50%;
     transform: translateY(-50%);
-    width: calc(31% - 4px);
+    width: calc(33% - 4px);
     display: flex;
     justify-content: flex-end;
     gap: 6px;
@@ -628,7 +628,7 @@ body {
 #xDistanceDisplay .distance-controls,
 #yDistanceDisplay .distance-controls {
     /* Same container width as delay/duration, buttons will match */
-    width: calc(31% - 4px);
+    width: calc(33% - 4px);
     gap: 6px;
 }
 
