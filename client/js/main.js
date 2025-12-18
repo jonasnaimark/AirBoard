@@ -582,6 +582,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (savedResolution >= 1 && savedResolution <= 6) {
                     resolutionInput.value = savedResolution;
                     console.log('Loaded resolution preference:', savedResolution);
+
+                    // Also update the custom dropdown menu selection
+                    var menu = document.querySelector('.custom-select-menu[data-select-id="resolutionMultiplier"]');
+                    if (menu) {
+                        menu.querySelectorAll('.custom-select-option').forEach(function(option) {
+                            if (option.dataset.value === savedResolution.toString()) {
+                                option.classList.add('selected');
+                            } else {
+                                option.classList.remove('selected');
+                            }
+                        });
+                    }
                 }
             });
         }
