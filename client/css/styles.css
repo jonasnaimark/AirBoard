@@ -493,6 +493,149 @@ body {
     width: auto !important; /* Override calc width */
 }
 
+/* Dual column layout for Gestures & Components */
+.dual-section-container {
+    position: relative;
+}
+
+.dual-section-container > .section {
+    margin: 0;
+    padding: 0;
+}
+
+.dual-section-header {
+    display: flex;
+    align-items: flex-start;
+    position: relative;
+}
+
+.dual-section-header .dual-column-row {
+    display: flex;
+    width: 100%;
+}
+
+.dual-section-header .dual-column {
+    width: 50%;
+    box-sizing: border-box;
+}
+
+.dual-section-header .dual-column-left {
+    padding-right: 10px;
+}
+
+.dual-section-header .dual-column-right {
+    padding-left: 10px;
+}
+
+.dual-section-header .section-controls {
+    position: absolute;
+    right: 0;
+    top: 0;
+}
+
+.dual-section-container .section-content {
+    margin-top: 10px;
+}
+
+.dual-controls-row {
+    display: flex;
+}
+
+.dual-controls-row .dual-column {
+    width: 50%;
+    box-sizing: border-box;
+}
+
+.dual-controls-row .dual-column-left {
+    padding-right: 10px;
+}
+
+.dual-controls-row .dual-column-right {
+    padding-left: 10px;
+}
+
+.dual-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Full-height vertical divider at 50% */
+.dual-section-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.075);
+    pointer-events: none;
+}
+
+.dual-column-label {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: opacity 0.2s ease;
+}
+
+/* Fade Components title when hovering section controls */
+.dual-section-header.controls-hovered .dual-column-right .dual-column-label {
+    opacity: 0;
+}
+
+.dual-column-controls {
+    display: flex;
+    align-items: center;
+}
+
+.dual-column-controls .dropdown {
+    flex: 1;
+    min-width: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+}
+
+.dual-column-add-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background-color: #333333;
+    color: #cccccc;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    font-size: 18px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Unified hover for dropdown + button */
+.dual-column-controls:hover .dropdown {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dual-column-controls:hover .dual-column-add-btn {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dual-column-add-btn:hover {
+    background-color: #404040;
+}
+
+.dual-column-add-btn:active {
+    background-color: #4a4a4a;
+}
+
+
 /* Main button styles */
 .main-button {
     height: 35px;

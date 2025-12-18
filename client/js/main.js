@@ -305,7 +305,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if menu goes off bottom of viewport
             requestAnimationFrame(function() {
                 var menuRect = menu.getBoundingClientRect();
-                if (menuRect.bottom > window.innerHeight - 10) {
+                var spaceBelow = window.innerHeight - rect.bottom;
+                var spaceAbove = rect.top;
+                // Only open above if menu is actually cut off AND there's more space above
+                if (menuRect.bottom > window.innerHeight && spaceAbove > spaceBelow) {
                     // Position above select instead
                     menu.style.top = (rect.top - menuRect.height - 4) + 'px';
                 }
@@ -614,8 +617,13 @@ document.addEventListener('DOMContentLoaded', function() {
             var container = document.querySelector('.container');
             var sections = Array.from(container.querySelectorAll('.section-container'));
             var sectionOrder = sections.map(function(section) {
-                var header = section.querySelector('.section-header h2');
-                return header ? header.textContent : '';
+                // Check for data-section-name attribute first, then fall back to h2
+                var sectionName = section.getAttribute('data-section-name');
+                if (!sectionName) {
+                    var header = section.querySelector('.section-header h2');
+                    sectionName = header ? header.textContent : '';
+                }
+                return sectionName;
             }).join('|');
             
             var script = 'saveSectionOrder(' + JSON.stringify(sectionOrder) + ')';
@@ -635,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Loaded section order:', result);
                 } else {
                     // Apply default section order if no saved order exists
-                    var defaultOrder = 'Device Templates|Gestures|Presets|Keyframe Reader|Components|Project Setup';
+                    var defaultOrder = 'Device Templates|Keyframe Nudger|Gestures & Components|Presets|Project Setup';
                     applySectionOrder(defaultOrder);
                     console.log('Applied default section order:', defaultOrder);
                 }
@@ -648,16 +656,21 @@ document.addEventListener('DOMContentLoaded', function() {
         var container = document.querySelector('.container');
         var sections = Array.from(container.querySelectorAll('.section-container'));
         var orderArray = orderString.split('|');
-        
+
         // Create a map of section titles to section elements
         var sectionMap = {};
         sections.forEach(function(section) {
-            var header = section.querySelector('.section-header h2');
-            if (header) {
-                sectionMap[header.textContent] = section;
+            // Check for data-section-name attribute first, then fall back to h2
+            var sectionName = section.getAttribute('data-section-name');
+            if (!sectionName) {
+                var header = section.querySelector('.section-header h2');
+                sectionName = header ? header.textContent : '';
+            }
+            if (sectionName) {
+                sectionMap[sectionName] = section;
             }
         });
-        
+
         // Reorder sections according to saved order
         orderArray.forEach(function(title, index) {
             var section = sectionMap[title];
@@ -2334,6 +2347,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 moreActionsDropdown.classList.remove('open');
             }
         });
+    }
+
+    // Dual section header: fade Components title when hovering section controls
+    var dualSectionHeader = document.querySelector('.dual-section-header');
+    if (dualSectionHeader) {
+        var dualSectionControls = dualSectionHeader.querySelector('.section-controls');
+        if (dualSectionControls) {
+            dualSectionControls.addEventListener('mouseenter', function() {
+                dualSectionHeader.classList.add('controls-hovered');
+            });
+            dualSectionControls.addEventListener('mouseleave', function() {
+                dualSectionHeader.classList.remove('controls-hovered');
+            });
+        }
     }
 
     // X Distance +/- buttons

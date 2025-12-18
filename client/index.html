@@ -66,37 +66,6 @@
             </section>
         </div>
         
-        <!-- Gesture Presets Section -->
-        <div class="section-container">
-            <section class="section">
-                <div class="section-header">
-                    <h2>Gestures</h2>
-                    <div class="section-controls">
-                        <button class="section-btn move-up" title="Move Up">
-                            <div class="control-arrow up"></div>
-                        </button>
-                        <button class="section-btn move-down" title="Move Down">
-                            <div class="control-arrow down"></div>
-                        </button>
-                        <button class="accordion-toggle" data-section="gesture-presets">
-                            <div class="accordion-arrow"></div>
-                        </button>
-                    </div>
-                </div>
-                <div class="section-content" data-section="gesture-presets">
-                <div class="control-row">
-                    <select id="gestureType" class="dropdown">
-                        <option value="tap">Tap</option>
-                        <option value="longpress">Long Press</option>
-                        <option value="doubletap">Double Tap</option>
-                        <option value="mouseclick">Mouse Click</option>
-                    </select>
-                    <button id="addGesture" class="main-button">Add Gesture</button>
-                </div>
-                </div>
-            </section>
-        </div>
-        
         <!-- Keyframe Reader Section -->
         <div class="section-container">
             <section class="section">
@@ -281,8 +250,61 @@
                 </div>
             </section>
         </div>
-        
-        <!-- Presets Section -->      
+
+        <!-- Gestures & Components Section -->
+        <div class="section-container dual-section-container" data-section-name="Gestures & Components">
+            <section class="section">
+                <div class="dual-section-header">
+                    <div class="dual-column-row">
+                        <div class="dual-column dual-column-left">
+                            <label class="dual-column-label">Gestures</label>
+                        </div>
+                        <div class="dual-column dual-column-right">
+                            <label class="dual-column-label">Components</label>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <button class="section-btn move-up" title="Move Up">
+                            <div class="control-arrow up"></div>
+                        </button>
+                        <button class="section-btn move-down" title="Move Down">
+                            <div class="control-arrow down"></div>
+                        </button>
+                        <button class="accordion-toggle" data-section="gestures-components">
+                            <div class="accordion-arrow"></div>
+                        </button>
+                    </div>
+                </div>
+                <div class="section-content" data-section="gestures-components">
+                    <div class="dual-column-row dual-controls-row">
+                        <div class="dual-column dual-column-left">
+                            <div class="dual-column-controls">
+                                <select id="gestureType" class="dropdown">
+                                    <option value="tap">Tap</option>
+                                    <option value="longpress">Long Press</option>
+                                    <option value="doubletap">Double Tap</option>
+                                    <option value="mouseclick">Mouse Click</option>
+                                </select>
+                                <button id="addGesture" class="dual-column-add-btn">+</button>
+                            </div>
+                        </div>
+                        <div class="dual-column dual-column-right">
+                            <div class="dual-column-controls">
+                                <select id="componentType" class="dropdown">
+                                    <option value="dot-loader">Dots</option>
+                                    <option value="iphone-ui">iPhone UI</option>
+                                    <option value="timer">Ms Counter</option>
+                                    <option value="belo-spin">Belo Spin</option>
+                                </select>
+                                <button id="addComponent" class="dual-column-add-btn">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Presets Section -->
         <div class="section-container">
             <section class="section">
                 <div class="section-header">
@@ -353,37 +375,6 @@
                         <option value="overlay">Overlay Layer</option>
                     </select>
                     <button id="addShimmer" class="main-button">Add Shimmer</button>
-                </div>
-                </div>
-            </section>
-        </div>
-        
-        <!-- Components Section -->
-        <div class="section-container">
-            <section class="section">
-                <div class="section-header">
-                    <h2>Components</h2>
-                    <div class="section-controls">
-                        <button class="section-btn move-up" title="Move Up">
-                            <div class="control-arrow up"></div>
-                        </button>
-                        <button class="section-btn move-down" title="Move Down">
-                            <div class="control-arrow down"></div>
-                        </button>
-                        <button class="accordion-toggle" data-section="components">
-                            <div class="accordion-arrow"></div>
-                        </button>
-                    </div>
-                </div>
-                <div class="section-content" data-section="components">
-                <div class="control-row">
-                    <select id="componentType" class="dropdown">
-                        <option value="dot-loader">Dot Loader</option>
-                        <option value="iphone-ui">iPhone UI</option>
-                        <option value="timer">Ms Counter</option>
-                        <option value="belo-spin">Belo Spin</option>
-                    </select>
-                    <button id="addComponent" class="main-button">Add Component</button>
                 </div>
                 </div>
             </section>
