@@ -21643,30 +21643,32 @@ function copySelectedKeyframes() {
  * Pastes to matching properties, reports any missing properties
  */
 function pasteKeyframes() {
+    DEBUG_JSX.clear();
+    DEBUG_JSX.log("pasteKeyframes called");
+
+    // Validate before starting undo group
+    if (!KEYFRAME_CLIPBOARD || !KEYFRAME_CLIPBOARD.properties || KEYFRAME_CLIPBOARD.properties.length === 0) {
+        return "error|Nothing to paste. Copy keyframes first.";
+    }
+
+    var comp = app.project.activeItem;
+    if (!comp || !(comp instanceof CompItem)) {
+        return "error|No active composition";
+    }
+
+    var selectedLayers = [];
+    for (var i = 0; i < comp.selectedLayers.length; i++) {
+        selectedLayers.push(comp.selectedLayers[i]);
+    }
+
+    if (selectedLayers.length === 0) {
+        return "error|No layers selected to paste onto";
+    }
+
+    // Start undo group AFTER validation - everything from here will be one undo step
+    app.beginUndoGroup("Paste Springs");
+
     try {
-        DEBUG_JSX.clear();
-        DEBUG_JSX.log("pasteKeyframes called");
-
-        if (!KEYFRAME_CLIPBOARD || !KEYFRAME_CLIPBOARD.properties || KEYFRAME_CLIPBOARD.properties.length === 0) {
-            return "error|Nothing to paste. Copy keyframes first.";
-        }
-
-        var comp = app.project.activeItem;
-        if (!comp || !(comp instanceof CompItem)) {
-            return "error|No active composition";
-        }
-
-        var selectedLayers = [];
-        for (var i = 0; i < comp.selectedLayers.length; i++) {
-            selectedLayers.push(comp.selectedLayers[i]);
-        }
-
-        if (selectedLayers.length === 0) {
-            return "error|No layers selected to paste onto";
-        }
-
-        app.beginUndoGroup("Paste Keyframes");
-
         var playheadTime = comp.time;
         var keyframesPasted = 0;
         var markersPasted = 0;
@@ -21722,15 +21724,55 @@ function pasteKeyframes() {
                 propertiesPasted++;
             }
 
-            // Paste markers to this layer
+            // Paste markers to this layer (with smart merging)
+            var separator = "=======================================";
+            var epsilon = 0.01; // Time tolerance for finding existing markers
+
             for (var m = 0; m < KEYFRAME_CLIPBOARD.markers.length; m++) {
                 var markerData = KEYFRAME_CLIPBOARD.markers[m];
                 var newMarkerTime = playheadTime + markerData.relativeTime;
+                var pastedComment = markerData.markerValue.comment || "";
 
                 try {
-                    var newMarkerIdx = layer.marker.addKey(newMarkerTime);
-                    layer.marker.setValueAtKey(newMarkerIdx, markerData.markerValue);
-                    markersPasted++;
+                    // Check if marker already exists at this time
+                    var existingMarker = findMarkerAtTime(layer.marker, newMarkerTime, epsilon);
+
+                    if (existingMarker) {
+                        // MERGE: Combine spring blocks from pasted marker with existing marker
+                        var existingValue = layer.marker.keyValue(existingMarker.index);
+                        var existingComment = existingValue.comment || "";
+
+                        // Extract spring blocks from pasted marker
+                        var pastedBlocks = pastedComment.split(separator);
+
+                        for (var b = 0; b < pastedBlocks.length; b++) {
+                            var block = pastedBlocks[b].trim();
+                            if (block === "") continue;
+
+                            // Extract property ID from block to check for duplicates
+                            var propIdMatch = block.match(/Property:\s*([^\n]+)/);
+                            if (propIdMatch) {
+                                var propId = propIdMatch[1].trim();
+                                // Remove existing block for this property if present
+                                var cleaned = removeSpringBlockFromMarker(existingComment, propId);
+                                existingComment = cleaned !== null ? cleaned : existingComment;
+                            }
+
+                            // Add the new block
+                            existingComment += block + "\n\n" + separator + "\n";
+                        }
+
+                        existingValue.comment = existingComment;
+                        layer.marker.setValueAtKey(existingMarker.index, existingValue);
+                        DEBUG_JSX.log("PASTE MARKER: Merged with existing marker at " + newMarkerTime.toFixed(3) + "s");
+                        markersPasted++;
+                    } else {
+                        // CREATE: No existing marker, create new one
+                        var newMarkerIdx = layer.marker.addKey(newMarkerTime);
+                        layer.marker.setValueAtKey(newMarkerIdx, markerData.markerValue);
+                        DEBUG_JSX.log("PASTE MARKER: Created new marker at " + newMarkerTime.toFixed(3) + "s");
+                        markersPasted++;
+                    }
                 } catch(e) {
                     DEBUG_JSX.log("Failed to paste marker: " + e.toString());
                 }
