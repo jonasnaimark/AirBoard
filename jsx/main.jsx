@@ -38,46 +38,54 @@ function trackLayerInOutPoints(layers) {
         var layer = layers[i];
         var selectedProps = layer.selectedProperties;
 
-        // Find earliest and latest selected keyframe times on this layer
-        var earliestTime = null;
-        var latestTime = null;
+        // Count keyframes at in/out points: total vs selected
+        var keysAtInPoint = 0;
+        var selectedKeysAtInPoint = 0;
+        var keysAtOutPoint = 0;
+        var selectedKeysAtOutPoint = 0;
+        var inPointTime = layer.inPoint;
+        var outPointTime = layer.outPoint;
 
-        for (var j = 0; j < selectedProps.length; j++) {
-            var prop = selectedProps[j];
-            if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
-            if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+        // Helper to check all properties recursively
+        function countKeysAtBoundaries(prop) {
+            if (!prop) return;
+            if (prop.propertyType === PropertyType.INDEXED_GROUP || prop.propertyType === PropertyType.NAMED_GROUP) {
+                for (var p = 1; p <= prop.numProperties; p++) {
+                    try { countKeysAtBoundaries(prop.property(p)); } catch(e) {}
+                }
+                return;
+            }
+            if (!prop.canVaryOverTime || prop.numKeys === 0) return;
+            // Skip markers
+            if (prop.matchName === "ADBE Marker" || prop.name === "Marker" || prop.name === "Markers") return;
+            // Skip Position when dimensions are separated (X/Y Position are counted separately)
+            if (prop.matchName === "ADBE Position" && prop.dimensionsSeparated) return;
 
             for (var k = 1; k <= prop.numKeys; k++) {
-                if (prop.keySelected(k)) {
-                    var keyTime = prop.keyTime(k);
-                    if (earliestTime === null || keyTime < earliestTime) {
-                        earliestTime = keyTime;
-                    }
-                    if (latestTime === null || keyTime > latestTime) {
-                        latestTime = keyTime;
-                    }
+                var keyTime = prop.keyTime(k);
+                if (Math.abs(keyTime - inPointTime) < 0.001) {
+                    keysAtInPoint++;
+                    if (prop.keySelected(k)) selectedKeysAtInPoint++;
+                }
+                if (Math.abs(keyTime - outPointTime) < 0.001) {
+                    keysAtOutPoint++;
+                    if (prop.keySelected(k)) selectedKeysAtOutPoint++;
                 }
             }
         }
 
-        // Also check Time Remap
-        if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-            for (var k = 1; k <= layer.timeRemap.numKeys; k++) {
-                if (layer.timeRemap.keySelected(k)) {
-                    var keyTime = layer.timeRemap.keyTime(k);
-                    if (earliestTime === null || keyTime < earliestTime) {
-                        earliestTime = keyTime;
-                    }
-                    if (latestTime === null || keyTime > latestTime) {
-                        latestTime = keyTime;
-                    }
-                }
-            }
+        // Check all property groups on layer
+        for (var p = 1; p <= layer.numProperties; p++) {
+            try { countKeysAtBoundaries(layer.property(p)); } catch(e) {}
         }
 
-        // Check if earliest/latest align with layer in/out points (0.001s tolerance)
-        var trackInPoint = (earliestTime !== null && Math.abs(earliestTime - layer.inPoint) < 0.001);
-        var trackOutPoint = (latestTime !== null && Math.abs(latestTime - layer.outPoint) < 0.001);
+        // Track in/out point only if ALL keyframes at that boundary are selected
+        var trackInPoint = (keysAtInPoint > 0 && selectedKeysAtInPoint === keysAtInPoint);
+        var trackOutPoint = (keysAtOutPoint > 0 && selectedKeysAtOutPoint === keysAtOutPoint);
+
+        DEBUG_JSX.log("IN/OUT TRACK: Layer '" + layer.name + "' - inPoint=" + (inPointTime * 1000).toFixed(1) + "ms, outPoint=" + (outPointTime * 1000).toFixed(1) + "ms");
+        DEBUG_JSX.log("IN/OUT TRACK: keysAtInPoint=" + keysAtInPoint + ", selectedKeysAtInPoint=" + selectedKeysAtInPoint + " → trackIn: " + trackInPoint);
+        DEBUG_JSX.log("IN/OUT TRACK: keysAtOutPoint=" + keysAtOutPoint + ", selectedKeysAtOutPoint=" + selectedKeysAtOutPoint + " → trackOut: " + trackOutPoint);
 
         // Find if ANY keyframe (not just selected) exists at the layer's out point
         var lastKeyframeTime = null;
@@ -3541,29 +3549,29 @@ function stretchKeyframesGrokApproach(frameAdjustment) {
 }
 
 // Frame-based version of stretchKeyframesGrokApproach that maintains selection preservation
-function stretchKeyframesGrokApproachWithFrames(direction, frames) {
+function stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTracking) {
     try {
         DEBUG_JSX.clear();
-        DEBUG_JSX.log("🎬 stretchKeyframesGrokApproachWithFrames called with direction: " + direction + ", frames: " + frames);
-        
+        DEBUG_JSX.log("🎬 stretchKeyframesGrokApproachWithFrames called with direction: " + direction + ", frames: " + frames + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
+
         app.beginUndoGroup("Stretch Keyframes with Frames");
-        
+
         var comp = app.project.activeItem;
         if (!(comp && comp instanceof CompItem)) {
             app.endUndoGroup();
             return "error|Please select a composition";
         }
-        
+
         var frameRate = comp.frameRate || 30;
         var frameDuration = 1 / frameRate;
         var framesToMs = (frames / frameRate) * 1000; // Convert frames to milliseconds
-        
+
         DEBUG_JSX.log("Converting " + frames + " frames to " + framesToMs + "ms at " + frameRate + "fps");
-        
+
         var selectedLayers = comp.selectedLayers;
 
-        // Track layer in/out points BEFORE stretching
-        var layerInOutData = trackLayerInOutPoints(selectedLayers);
+        // Track layer in/out points BEFORE stretching (unless ignoreInOutTracking is true)
+        var layerInOutData = ignoreInOutTracking ? [] : trackLayerInOutPoints(selectedLayers);
         var allKeyframeDataForInOut = []; // Collect keyframe times and layers for in/out point updates
 
         var totalDuration = 0;
@@ -4327,8 +4335,10 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames) {
         
         DEBUG_JSX.log("🎬 Frame-based duration stretch completed: " + finalDurationMs + "ms / " + finalDurationFrames + "f");
 
-        // Update layer in/out points to match moved keyframes
-        updateLayerInOutPoints(layerInOutData, allKeyframeDataForInOut);
+        // Update layer in/out points to match moved keyframes (unless ignoreInOutTracking is true)
+        if (!ignoreInOutTracking) {
+            updateLayerInOutPoints(layerInOutData, allKeyframeDataForInOut);
+        }
 
         // End undo group AFTER all operations complete (including final restoration pass)
         app.endUndoGroup();
@@ -4377,10 +4387,10 @@ function stretchKeyframesBackward() {
 }
 
 // NEW: Frame-based duration stretching that uses the original working approach
-function stretchKeyframesWithFrames(direction, frames) {
+function stretchKeyframesWithFrames(direction, frames, ignoreInOutTracking) {
     try {
         DEBUG_JSX.clear();
-        DEBUG_JSX.log("STRETCH: " + direction + " direction, " + frames + " frames");
+        DEBUG_JSX.log("STRETCH: " + direction + " direction, " + frames + " frames" + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
         
         // CRITICAL FIX: This function should ONLY be used for duration stretching, never for delay nudging
         // If this is being called from delay nudging, redirect to proper delay handling
@@ -4446,7 +4456,7 @@ function stretchKeyframesWithFrames(direction, frames) {
             DEBUG_JSX.log("🎬 Using MULTI-PROPERTY mode - calling stretchKeyframesForCrossProperty");
             var result;
             try {
-                result = stretchKeyframesForCrossProperty(direction, frames);
+                result = stretchKeyframesForCrossProperty(direction, frames, ignoreInOutTracking);
                 DEBUG_JSX.log("🎬 stretchKeyframesForCrossProperty returned: " + result);
                 // Add our debug messages to the result
                 var debugMessages = DEBUG_JSX.getMessages();
@@ -4462,7 +4472,7 @@ function stretchKeyframesWithFrames(direction, frames) {
             // we need to use our custom frame-based logic but with the SAME selection approach
             DEBUG_JSX.log("🎬 Using SINGLE-PROPERTY mode - calling stretchKeyframesGrokApproachWithFrames");
             try {
-                var result = stretchKeyframesGrokApproachWithFrames(direction, frames);
+                var result = stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTracking);
                 DEBUG_JSX.log("🎬 stretchKeyframesGrokApproachWithFrames returned: " + result);
                 return result;
             } catch(e) {
@@ -4479,9 +4489,9 @@ function stretchKeyframesWithFrames(direction, frames) {
 }
 
 // Cross-property duration stretching function - WITH COMPLETE SELECTION PRESERVATION
-function stretchKeyframesForCrossProperty(direction, frames) {
+function stretchKeyframesForCrossProperty(direction, frames, ignoreInOutTracking) {
     try {
-        DEBUG_JSX.log("🎬 stretchKeyframesForCrossProperty called with direction: " + direction + ", frames: " + frames);
+        DEBUG_JSX.log("🎬 stretchKeyframesForCrossProperty called with direction: " + direction + ", frames: " + frames + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
         
         app.beginUndoGroup("Stretch Cross-Property Duration");
         
@@ -4502,8 +4512,8 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             return "error|No layers selected";
         }
 
-        // Track layer in/out points before manipulation
-        var layerInOutData = trackLayerInOutPoints(selectedLayers);
+        // Track layer in/out points before manipulation (unless ignoreInOutTracking is true)
+        var layerInOutData = ignoreInOutTracking ? [] : trackLayerInOutPoints(selectedLayers);
         var allKeyframeDataForInOut = []; // For layer in/out point tracking
 
         // STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
@@ -4645,11 +4655,13 @@ function stretchKeyframesForCrossProperty(direction, frames) {
             });
         }
 
-        // Update layer in/out points to match moved keyframes
-        updateLayerInOutPoints(layerInOutData, allKeyframeDataForInOut);
+        // Update layer in/out points to match moved keyframes (unless ignoreInOutTracking is true)
+        if (!ignoreInOutTracking) {
+            updateLayerInOutPoints(layerInOutData, allKeyframeDataForInOut);
+        }
 
         app.endUndoGroup();
-        
+
         // Small delay to let After Effects process the undo group before restoring selections
         try {
             app.refresh();
@@ -7543,11 +7555,18 @@ function nudgeFromPlayhead(direction, frames, skipPrecomps) {
             try {
                 var layer = comp.layer(i);
                 DEBUG_JSX.log("L" + i + ": " + layer.name.substring(0, 15) + "@" + layer.startTime.toFixed(2) + "s");
+
+                // Skip guide layers entirely (and their precomp contents)
+                if (layer.guideLayer) {
+                    DEBUG_JSX.log("  →SKIP (guide layer)");
+                    continue;
+                }
+
                 // Add detailed debug for X of X layers to understand their timing
                 if (layer.name.indexOf("X of X") !== -1) {
                     DEBUG_JSX.log("  DEBUG " + layer.name + ": start=" + layer.startTime.toFixed(3) + " in=" + layer.inPoint.toFixed(3) + " out=" + layer.outPoint.toFixed(3));
                 }
-            
+
             // Handle locked layers
             var wasLocked = layer.locked;
             if (wasLocked) {
@@ -8728,7 +8747,12 @@ function processPrecompContents(precomp, precompLayer, mainPlayheadTime, timeOff
         
         for (var i = 1; i <= precomp.numLayers; i++) {
             var layer = precomp.layer(i);
-            
+
+            // Skip guide layers entirely
+            if (layer.guideLayer) {
+                continue;
+            }
+
             // Handle locked layers
             var wasLocked = layer.locked;
             if (wasLocked) {
@@ -9005,14 +9029,14 @@ function getSelectionHashWithoutTimes() {
     }
 }
 
-function nudgeDelayTimelineMode(direction, frames, skipPrecomps) {
+function nudgeDelayTimelineMode(direction, frames, skipPrecomps, ignoreInOutTracking) {
     try {
         // Default skipPrecomps to false if not provided
         if (skipPrecomps === undefined) {
             skipPrecomps = false;
         }
 
-        DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames" + (skipPrecomps ? " (skip precomps)" : ""));
+        DEBUG_JSX.log("Timeline mode: Moving ALL keyframes together by " + frames + " frames" + (skipPrecomps ? " (skip precomps)" : "") + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
 
         app.beginUndoGroup("Timeline Mode Nudge");
 
@@ -9103,8 +9127,8 @@ function nudgeDelayTimelineMode(direction, frames, skipPrecomps) {
             return nudgeFromPlayhead(direction, frames, skipPrecomps);
         }
 
-        // Track layer in/out points BEFORE nudging
-        var layerInOutData = trackLayerInOutPoints(selectedLayers);
+        // Track layer in/out points BEFORE nudging (unless ignoreInOutTracking is true)
+        var layerInOutData = ignoreInOutTracking ? [] : trackLayerInOutPoints(selectedLayers);
         var allKeyframeDataTimeline = []; // For layer in/out point tracking
 
         // STEP 1: CACHE ALL SELECTIONS BEFORE ANY MANIPULATION
@@ -9928,8 +9952,10 @@ function nudgeDelayTimelineMode(direction, frames, skipPrecomps) {
             return "error|No keyframes were moved";
         }
 
-        // Update layer in/out points to match nudged keyframes
-        updateLayerInOutPoints(layerInOutData, allKeyframeDataTimeline);
+        // Update layer in/out points to match nudged keyframes (unless ignoreInOutTracking is true)
+        if (!ignoreInOutTracking) {
+            updateLayerInOutPoints(layerInOutData, allKeyframeDataTimeline);
+        }
 
         // Close undo group
         app.endUndoGroup();
@@ -12131,17 +12157,17 @@ function snapSameLayerStaggersToInputValue(propertyEntries, orderIndices, stagge
 }
 
 // Main stagger function called from panel +/- buttons
-function applyStagger(direction, staggerFrames, isTopToBottom) {
+function applyStagger(direction, staggerFrames, isTopToBottom, ignoreInOutTracking) {
     try {
         // Clear debug messages from previous operations
         DEBUG_JSX.clear();
-        
+
         // Default to bottom-to-top (false) if not specified
         if (isTopToBottom === undefined) {
             isTopToBottom = false;
         }
-        
-        DEBUG_JSX.log("🚀 MAIN applyStagger called - direction: " + direction + ", frames: " + staggerFrames + ", topToBottom: " + isTopToBottom);
+
+        DEBUG_JSX.log("🚀 MAIN applyStagger called - direction: " + direction + ", frames: " + staggerFrames + ", topToBottom: " + isTopToBottom + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
         
         // Force show this debug immediately
         $.writeln("🚀 AIRBOARD DEBUG: applyStagger function called with direction=" + direction + ", frames=" + staggerFrames);
@@ -12166,7 +12192,7 @@ function applyStagger(direction, staggerFrames, isTopToBottom) {
         DEBUG_JSX.log("Stagger: " + staggerFrames + " frames = " + staggerMs + "ms at " + frameRate + "fps");
         
         // Check for selected keyframes first (keyframes take precedence)
-        var keyframeResult = applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
+        var keyframeResult = applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom, ignoreInOutTracking);
         if (keyframeResult.indexOf("error|No selected keyframes") !== 0) {
             app.endUndoGroup();
             var debugMessages = DEBUG_JSX.getMessages();
@@ -12174,8 +12200,8 @@ function applyStagger(direction, staggerFrames, isTopToBottom) {
         }
         
         // If no keyframes selected, try layers
-        var layerResult = applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, isTopToBottom);
-        
+        var layerResult = applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, isTopToBottom, ignoreInOutTracking);
+
         app.endUndoGroup();
         var debugMessages = DEBUG_JSX.getMessages();
         return layerResult + "|" + debugMessages.join("|");
@@ -12352,10 +12378,10 @@ function getPropertyIndexInGroup(propertyName, allKeyframes) {
 
 
 // Apply stagger to selected keyframes (grouped by layer)
-function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
+function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames, isTopToBottom, ignoreInOutTracking) {
     try {
-        DEBUG_JSX.log("🎬 applyStaggerToKeyframes called with direction: " + direction + ", stagger: " + staggerFrames + " frames");
-        
+        DEBUG_JSX.log("🎬 applyStaggerToKeyframes called with direction: " + direction + ", stagger: " + staggerFrames + " frames" + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
+
         var comp = app.project.activeItem;
         var selectedLayers = comp.selectedLayers;
 
@@ -12365,8 +12391,8 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             return "error|No layers selected";
         }
 
-        // Track layer in/out points BEFORE staggering
-        var layerInOutData = trackLayerInOutPoints(selectedLayers);
+        // Track layer in/out points BEFORE staggering (unless ignoreInOutTracking is true)
+        var layerInOutData = ignoreInOutTracking ? [] : trackLayerInOutPoints(selectedLayers);
         var staggerKeyframeData = []; // For layer in/out point tracking
 
         // Collect all selected keyframes grouped by layer
@@ -12604,12 +12630,14 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
             DEBUG_JSX.log("Snapped keyframes to clean " + staggerFrames + " frame increments");
             
             // Markers are now handled in STEP 1 (before keyframe operations) to avoid extra selection steps
-            
+
             // Smart snapping already created the correct uniform pattern - no additional stagger needed
             DEBUG_JSX.log("🎯 FINAL RESULT DEBUG: snapResult.staggerMs = " + snapResult.staggerMs);
 
-            // Update layer in/out points to match staggered keyframes
-            updateLayerInOutPoints(layerInOutData, staggerKeyframeData);
+            // Update layer in/out points to match staggered keyframes (unless ignoreInOutTracking is true)
+            if (!ignoreInOutTracking) {
+                updateLayerInOutPoints(layerInOutData, staggerKeyframeData);
+            }
 
             var successMessage = "Applied stagger to " + layerGroups.length + " layers|" + snapResult.staggerMs + "ms per layer";
             return "success|" + successMessage;
@@ -12909,8 +12937,10 @@ function applyStaggerToKeyframes(direction, staggerMs, frameRate, staggerFrames,
         // If no layers had actual movement, show 0ms stagger since nothing actually moved
         var effectiveStagger = layersWithActualMovement > 0 ? (direction * staggerMs) : 0;
 
-        // Update layer in/out points to match staggered keyframes
-        updateLayerInOutPoints(layerInOutData, staggerKeyframeData);
+        // Update layer in/out points to match staggered keyframes (unless ignoreInOutTracking is true)
+        if (!ignoreInOutTracking) {
+            updateLayerInOutPoints(layerInOutData, staggerKeyframeData);
+        }
 
         return "success|Applied stagger to " + processedLayers + " layers|" + effectiveStagger + "ms per layer";
         
@@ -13315,7 +13345,7 @@ function applySameLayerStagger(layerGroup, direction, staggerMs, frameRate, stag
 }
 
 // Apply stagger to selected layers (layer start times)
-function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, isTopToBottom) {
+function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, isTopToBottom, ignoreInOutTracking) {
     try {
         var comp = app.project.activeItem;
         var selectedLayers = comp.selectedLayers;
@@ -13442,10 +13472,10 @@ function applyStaggerToLayers(direction, staggerMs, frameRate, staggerFrames, is
 
 // Snap selected keyframes to playhead - per-property snapping with marker movement
 // preserveDelays: if true (shift+click), maintains relative delays between properties
-function snapToPlayheadFromPanel(preserveDelays) {
+function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
     try {
         DEBUG_JSX.clear();
-        DEBUG_JSX.log("snapToPlayheadFromPanel called, preserveDelays=" + preserveDelays);
+        DEBUG_JSX.log("snapToPlayheadFromPanel called, preserveDelays=" + preserveDelays + (ignoreInOutTracking ? " [IGNORE IN/OUT]" : ""));
         app.beginUndoGroup("Snap to Playhead");
 
         var comp = app.project.activeItem;
@@ -13510,8 +13540,8 @@ function snapToPlayheadFromPanel(preserveDelays) {
             if (hasSelectedKeyframes) break;
         }
 
-        // Track layer in/out points BEFORE snapping
-        var layerInOutData = trackLayerInOutPoints(selectedLayers);
+        // Track layer in/out points BEFORE snapping (unless ignoreInOutTracking is true)
+        var layerInOutData = ignoreInOutTracking ? [] : trackLayerInOutPoints(selectedLayers);
         var allKeyframeDataSnap = []; // For layer in/out point tracking
 
         // If no keyframes selected, snap layers instead
@@ -14172,8 +14202,10 @@ function snapToPlayheadFromPanel(preserveDelays) {
             $.writeln("Selection backup restoration failed: " + selectionBackupError.toString());
         }
 
-        // Update layer in/out points to match snapped keyframes (BEFORE ending undo group)
-        updateLayerInOutPoints(layerInOutData, allKeyframeDataSnap);
+        // Update layer in/out points to match snapped keyframes (BEFORE ending undo group, unless ignoreInOutTracking is true)
+        if (!ignoreInOutTracking) {
+            updateLayerInOutPoints(layerInOutData, allKeyframeDataSnap);
+        }
 
         app.endUndoGroup();
 
@@ -20503,6 +20535,8 @@ function findLastKeyframeOnLayer(layer) {
         if (prop.matchName === "ADBE Marker" || prop.name === "Marker" || prop.name === "Markers") return;
         // Skip Time Remap - it has an automatic end keyframe that we don't want to find
         if (prop.matchName === "ADBE Time Remapping" || prop.name === "Time Remap") return;
+        // Skip Position if dimensions are separated (it keeps old keyframes but is inactive)
+        if (prop.matchName === "ADBE Position" && prop.dimensionsSeparated === true) return;
 
         if (prop.propertyType === PropertyType.INDEXED_GROUP || prop.propertyType === PropertyType.NAMED_GROUP) {
             for (var i = 1; i <= prop.numProperties; i++) {
@@ -20522,6 +20556,7 @@ function findLastKeyframeOnLayer(layer) {
     for (var i = 1; i <= layer.numProperties; i++) {
         checkProperty(layer.property(i));
     }
+
     return lastTime;
 }
 
@@ -21069,6 +21104,13 @@ function handleTrimInPoint(setToMin) {
                         continue;
                     }
 
+                    // SKIP layers already at inPoint=0 (comp start) - nothing to do
+                    if (Math.abs(layer.inPoint) < 0.001) {
+                        DEBUG_JSX.log("SKIP ALREADY AT MIN: layer='" + layer.name + "' inPoint already at 0");
+                        layersSkipped++;
+                        continue;
+                    }
+
                     DEBUG_JSX.log("SHIFT TRIM IN: layer='" + layer.name + "' shiftAmount=" + (shiftAmount * 1000).toFixed(1) + "ms");
 
                     // This block is no longer needed since we skip precomps
@@ -21277,6 +21319,13 @@ function handleTrimOutPoint(setToMax) {
                     // Check if layer has Time Remap
                     var hasTimeRemap = layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0;
                     DEBUG_JSX.log("  hasTimeRemap=" + (hasTimeRemap ? "TRUE" : "FALSE"));
+
+                    // SKIP layers already at outPoint=comp.duration (comp end) - nothing to do
+                    if (Math.abs(originalOutPoint - comp.duration) < 0.001) {
+                        DEBUG_JSX.log("SKIP ALREADY AT MAX: layer='" + layer.name + "' outPoint already at comp duration");
+                        layersSkipped++;
+                        continue;
+                    }
 
                     // When user explicitly maxes outpoint (Shift), we extend all layers including Time Remap
                     // The Shift modifier indicates explicit user intent to override normal behavior
@@ -21731,17 +21780,19 @@ function makeThreePointCurve() {
 
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
-            return "error|No active composition";
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No active composition|" + debugMessages.join("|");
         }
 
         var selectedLayers = comp.selectedLayers;
         if (selectedLayers.length === 0) {
-            return "error|No layer selected";
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No layer selected|" + debugMessages.join("|");
         }
 
-        app.beginUndoGroup("Make 3-Point Curve");
-
-        var propertiesProcessed = 0;
+        // PHASE 1: Collect all keyframe data BEFORE making any changes
+        // This prevents selection changes from affecting subsequent properties
+        var propsToProcess = [];
         var propertiesSkipped = 0;
 
         for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
@@ -21763,208 +21814,316 @@ function makeThreePointCurve() {
 
                 // Require exactly 2 selected keyframes
                 if (selectedKeyIndices.length !== 2) {
-                    DEBUG_JSX.log("Skipping " + prop.name + ": need exactly 2 selected keys, found " + selectedKeyIndices.length);
                     propertiesSkipped++;
                     continue;
                 }
 
-                var key1Idx = selectedKeyIndices[0];
-                var key2Idx = selectedKeyIndices[1];
-
-                // Check for linear interpolation - skip if either key is linear
-                var key1OutInterp = prop.keyOutInterpolationType(key1Idx);
-                var key2InInterp = prop.keyInInterpolationType(key2Idx);
-                if (key1OutInterp === KeyframeInterpolationType.LINEAR &&
-                    key2InInterp === KeyframeInterpolationType.LINEAR) {
-                    DEBUG_JSX.log("Skipping " + prop.name + ": linear interpolation");
-                    propertiesSkipped++;
-                    continue;
-                }
-
-                var key1Time = prop.keyTime(key1Idx);
-                var key2Time = prop.keyTime(key2Idx);
-                var duration = key2Time - key1Time;
-
-                if (duration <= 0) {
-                    DEBUG_JSX.log("Skipping " + prop.name + ": invalid duration");
-                    propertiesSkipped++;
-                    continue;
-                }
-
-                // Calculate new positions
-                var middleKeyTime = key1Time + (duration * 2 / 3);
-                var newKey2Time = key2Time + (duration / 3);
-
-                DEBUG_JSX.log("Processing " + prop.name + ":");
-                DEBUG_JSX.log("  key1=" + (key1Time * 1000).toFixed(1) + "ms, key2=" + (key2Time * 1000).toFixed(1) + "ms");
-                DEBUG_JSX.log("  duration=" + (duration * 1000).toFixed(1) + "ms");
-                DEBUG_JSX.log("  middleKey=" + (middleKeyTime * 1000).toFixed(1) + "ms, newKey2=" + (newKey2Time * 1000).toFixed(1) + "ms");
-
-                // Step 1: Capture key2's value and OUTGOING ease before any changes
-                // (incoming ease will be recaptured after adding middle key)
-                var key2Value = prop.keyValue(key2Idx);
-                var key2OutInterp = prop.keyOutInterpolationType(key2Idx);
-                var key2OutEase = null;
-                var key2Label = null;
-                try { key2OutEase = prop.keyOutTemporalEase(key2Idx); } catch(e) {}
-                try { key2Label = prop.keyLabel(key2Idx); } catch(e) {}
-
-                // Step 2: Add the middle keyframe at 2/3 point
-                // addKey() will sample the existing curve and create proper interpolated value
-                // AE automatically calculates the correct ease values to maintain curve continuity
-                var middleKeyIdx = prop.addKey(middleKeyTime);
-                DEBUG_JSX.log("  Added middle key at index " + middleKeyIdx);
-
-                // Step 3: Find the new index of key2 (it shifted due to insertion)
-                var newKey2Idx = -1;
-                for (var k = 1; k <= prop.numKeys; k++) {
-                    if (Math.abs(prop.keyTime(k) - key2Time) < 0.0001) {
-                        newKey2Idx = k;
-                        break;
-                    }
-                }
-
-                if (newKey2Idx === -1) {
-                    DEBUG_JSX.log("Could not find key2 after middle key insertion for " + prop.name);
-                    propertiesSkipped++;
-                    continue;
-                }
-
-                // Step 4: Capture key2's INCOMING ease AFTER middle key was added
-                // This is the ease AE calculated to flow from the middle key to key2
-                // When manually dragging key2, these exact values stay the same
-                var key2InInterp = prop.keyInInterpolationType(newKey2Idx);
-                var key2InEase = null;
-                try { key2InEase = prop.keyInTemporalEase(newKey2Idx); } catch(e) {}
-                DEBUG_JSX.log("  Captured key2 incoming ease after middle key added");
-
-                // Step 5: Remove key2 and recreate it at new position
-                prop.removeKey(newKey2Idx);
-
-                // Add key2 at new position (this creates default ease)
-                var finalKey2Idx = prop.addKey(newKey2Time);
-
-                // Restore key2's value
-                prop.setValueAtKey(finalKey2Idx, key2Value);
-
-                // Step 6: Restore the EXACT incoming ease values captured after middle key was added
-                // When you manually drag a keyframe, the ease speed/influence stay constant
-                // The curve looks more gradual because the same speed over longer distance = gentler slope
-                try {
-                    // Set interpolation types
-                    prop.setInterpolationTypeAtKey(finalKey2Idx, key2InInterp, key2OutInterp);
-
-                    // Restore both incoming and outgoing ease
-                    if (key2InEase !== null && key2OutEase !== null) {
-                        prop.setTemporalEaseAtKey(finalKey2Idx, key2InEase, key2OutEase);
-                        DEBUG_JSX.log("  Restored key2 ease values (no scaling - matches manual drag behavior)");
-                    }
-                } catch(e) {
-                    DEBUG_JSX.log("  Could not set key2 ease: " + e.toString());
-                }
-
-                // Restore label if present
-                if (key2Label !== null) {
-                    try { prop.setLabelAtKey(finalKey2Idx, key2Label); } catch(e) {}
-                }
-
-                DEBUG_JSX.log("  Moved key2 to index " + finalKey2Idx);
-
-                // Step 5: Select the 3 keys
-                // Find all three key indices
-                var finalKey1Idx = -1;
-                var finalMiddleIdx = -1;
-                for (var k = 1; k <= prop.numKeys; k++) {
-                    var kTime = prop.keyTime(k);
-                    if (Math.abs(kTime - key1Time) < 0.0001) finalKey1Idx = k;
-                    else if (Math.abs(kTime - middleKeyTime) < 0.0001) finalMiddleIdx = k;
-                }
-
-                if (finalKey1Idx > 0) prop.setSelectedAtKey(finalKey1Idx, true);
-                if (finalMiddleIdx > 0) prop.setSelectedAtKey(finalMiddleIdx, true);
-                if (finalKey2Idx > 0) prop.setSelectedAtKey(finalKey2Idx, true);
-
-                propertiesProcessed++;
+                // Store property and key indices for later processing
+                propsToProcess.push({
+                    prop: prop,
+                    key1Idx: selectedKeyIndices[0],
+                    key2Idx: selectedKeyIndices[1]
+                });
             }
 
             // Also check Time Remap
             if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {
-                var prop = layer.timeRemap;
-                var selectedKeyIndices = [];
-                for (var k = 1; k <= prop.numKeys; k++) {
-                    if (prop.keySelected(k)) {
-                        selectedKeyIndices.push(k);
+                var trProp = layer.timeRemap;
+                var trSelectedKeyIndices = [];
+                for (var k = 1; k <= trProp.numKeys; k++) {
+                    if (trProp.keySelected(k)) {
+                        trSelectedKeyIndices.push(k);
                     }
                 }
-
-                if (selectedKeyIndices.length === 2) {
-                    var key1Idx = selectedKeyIndices[0];
-                    var key2Idx = selectedKeyIndices[1];
-
-                    var key1OutInterp = prop.keyOutInterpolationType(key1Idx);
-                    var key2InInterp = prop.keyInInterpolationType(key2Idx);
-                    if (!(key1OutInterp === KeyframeInterpolationType.LINEAR &&
-                          key2InInterp === KeyframeInterpolationType.LINEAR)) {
-
-                        var key1Time = prop.keyTime(key1Idx);
-                        var key2Time = prop.keyTime(key2Idx);
-                        var duration = key2Time - key1Time;
-
-                        if (duration > 0) {
-                            var middleKeyTime = key1Time + (duration * 2 / 3);
-                            var newKey2Time = key2Time + (duration / 3);
-
-                            // Capture key2's value and outgoing ease before changes
-                            var key2Value = prop.keyValue(key2Idx);
-                            var key2OutInterp = prop.keyOutInterpolationType(key2Idx);
-                            var key2OutEase = null;
-                            var key2Label = null;
-                            try { key2OutEase = prop.keyOutTemporalEase(key2Idx); } catch(e) {}
-                            try { key2Label = prop.keyLabel(key2Idx); } catch(e) {}
-
-                            // Add middle key
-                            var middleKeyIdx = prop.addKey(middleKeyTime);
-
-                            // Find key2's new index
-                            var newKey2Idx = -1;
-                            for (var k = 1; k <= prop.numKeys; k++) {
-                                if (Math.abs(prop.keyTime(k) - key2Time) < 0.0001) {
-                                    newKey2Idx = k;
-                                    break;
-                                }
-                            }
-
-                            if (newKey2Idx !== -1) {
-                                // Capture key2's incoming ease AFTER middle key was added
-                                var key2InInterp = prop.keyInInterpolationType(newKey2Idx);
-                                var key2InEase = null;
-                                try { key2InEase = prop.keyInTemporalEase(newKey2Idx); } catch(e) {}
-
-                                // Remove and recreate key2 at new position
-                                prop.removeKey(newKey2Idx);
-                                var finalKey2Idx = prop.addKey(newKey2Time);
-
-                                // Restore value
-                                prop.setValueAtKey(finalKey2Idx, key2Value);
-
-                                // Restore exact ease values (no scaling)
-                                try {
-                                    prop.setInterpolationTypeAtKey(finalKey2Idx, key2InInterp, key2OutInterp);
-                                    if (key2InEase !== null && key2OutEase !== null) {
-                                        prop.setTemporalEaseAtKey(finalKey2Idx, key2InEase, key2OutEase);
-                                    }
-                                } catch(e) {}
-
-                                if (key2Label !== null) {
-                                    try { prop.setLabelAtKey(finalKey2Idx, key2Label); } catch(e) {}
-                                }
-
-                                propertiesProcessed++;
-                            }
-                        }
-                    }
+                if (trSelectedKeyIndices.length === 2) {
+                    propsToProcess.push({
+                        prop: trProp,
+                        key1Idx: trSelectedKeyIndices[0],
+                        key2Idx: trSelectedKeyIndices[1]
+                    });
                 }
             }
+        }
+
+        if (propsToProcess.length === 0) {
+            if (propertiesSkipped > 0) {
+                return "error|No valid properties. Need exactly 2 selected keyframes with easing.";
+            }
+            return "error|No keyframes to process";
+        }
+
+        app.beginUndoGroup("Make 3-Point Curve");
+
+        var propertiesProcessed = 0;
+
+        // PHASE 2: Process all collected properties
+        for (var i = 0; i < propsToProcess.length; i++) {
+            var propData = propsToProcess[i];
+            var prop = propData.prop;
+            var key1Idx = propData.key1Idx;
+            var key2Idx = propData.key2Idx;
+
+            // Check for linear interpolation - if both keys are linear, apply ease curve first
+            var key1OutInterp = prop.keyOutInterpolationType(key1Idx);
+            var key2InInterp = prop.keyInInterpolationType(key2Idx);
+            if (key1OutInterp === KeyframeInterpolationType.LINEAR &&
+                key2InInterp === KeyframeInterpolationType.LINEAR) {
+                DEBUG_JSX.log("Linear keys detected - applying ease curve (0.40, 0.00, 0.20, 1.00)");
+
+                // Convert linear to bezier and apply custom ease curve
+                // CSS cubic-bezier(0.40, 0.00, 0.20, 1.00) maps to:
+                // Key1 out: influence=40%, speed=0 (starts easing out)
+                // Key2 in: influence=80% (1-0.20), speed=0 (lands smoothly)
+                try {
+                    // Set interpolation to bezier
+                    prop.setInterpolationTypeAtKey(key1Idx, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+                    prop.setInterpolationTypeAtKey(key2Idx, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+
+                    // Get current ease to determine number of dimensions
+                    var currentEase1 = prop.keyOutTemporalEase(key1Idx);
+                    var currentEase2 = prop.keyInTemporalEase(key2Idx);
+
+                    // Create ease arrays with same dimensions
+                    var key1OutEaseArray = [];
+                    var key2InEaseArray = [];
+                    for (var d = 0; d < currentEase1.length; d++) {
+                        key1OutEaseArray.push(new KeyframeEase(0, 40));  // speed=0, influence=40%
+                        key2InEaseArray.push(new KeyframeEase(0, 80));   // speed=0, influence=80%
+                    }
+
+                    // Apply the ease values
+                    prop.setTemporalEaseAtKey(key1Idx, prop.keyInTemporalEase(key1Idx), key1OutEaseArray);
+                    prop.setTemporalEaseAtKey(key2Idx, key2InEaseArray, prop.keyOutTemporalEase(key2Idx));
+
+                    DEBUG_JSX.log("  Applied ease curve to linear keys");
+                } catch(e) {
+                    DEBUG_JSX.log("  Could not apply ease to linear keys: " + e.toString());
+                    continue;
+                }
+            }
+
+            var key1Time = prop.keyTime(key1Idx);
+            var key2Time = prop.keyTime(key2Idx);
+            var duration = key2Time - key1Time;
+
+            if (duration <= 0) {
+                DEBUG_JSX.log("Skipping " + prop.name + ": invalid duration");
+                continue;
+            }
+
+            // Calculate new positions
+            var middleKeyTime = key1Time + (duration * 2 / 3);
+            var newKey2Time = key2Time + (duration / 3);
+
+            DEBUG_JSX.log("Processing " + prop.name + ":");
+            DEBUG_JSX.log("  key1=" + (key1Time * 1000).toFixed(1) + "ms, key2=" + (key2Time * 1000).toFixed(1) + "ms");
+            DEBUG_JSX.log("  duration=" + (duration * 1000).toFixed(1) + "ms");
+            DEBUG_JSX.log("  middleKey=" + (middleKeyTime * 1000).toFixed(1) + "ms, newKey2=" + (newKey2Time * 1000).toFixed(1) + "ms");
+
+            // Step 1: Capture key2's value and OUTGOING ease before any changes
+            // (incoming ease will be recaptured after adding middle key)
+            var key2Value = prop.keyValue(key2Idx);
+            var key2OutInterp = prop.keyOutInterpolationType(key2Idx);
+            var key2OutEase = null;
+            var key2Label = null;
+            try { key2OutEase = prop.keyOutTemporalEase(key2Idx); } catch(e) {}
+            try { key2Label = prop.keyLabel(key2Idx); } catch(e) {}
+
+            // Step 2: Add the middle keyframe at 2/3 point
+            // addKey() will sample the existing curve and create proper interpolated value
+            var middleKeyIdx = prop.addKey(middleKeyTime);
+
+            // Step 3: Find the new index of key2 (it shifted due to insertion)
+            var newKey2Idx = -1;
+            for (var k = 1; k <= prop.numKeys; k++) {
+                if (Math.abs(prop.keyTime(k) - key2Time) < 0.0001) {
+                    newKey2Idx = k;
+                    break;
+                }
+            }
+
+            if (newKey2Idx === -1) {
+                DEBUG_JSX.log("Could not find key2 after middle key insertion for " + prop.name);
+                continue;
+            }
+
+            // Step 4: Capture key2's INCOMING ease AFTER middle key was added
+            // This is the ease AE calculated to flow from the middle key to key2
+            // When manually dragging key2, these exact values stay the same
+            var key2InInterp = prop.keyInInterpolationType(newKey2Idx);
+            var key2InEase = null;
+            try { key2InEase = prop.keyInTemporalEase(newKey2Idx); } catch(e) {}
+            DEBUG_JSX.log("  Captured key2 incoming ease after middle key added");
+
+            // Step 5: Remove key2 and recreate it at new position
+            prop.removeKey(newKey2Idx);
+
+            // Add key2 at new position (this creates default ease)
+            var finalKey2Idx = prop.addKey(newKey2Time);
+
+            // Restore key2's value
+            prop.setValueAtKey(finalKey2Idx, key2Value);
+
+            // Step 6: Restore the EXACT incoming ease values captured after middle key was added
+            // When you manually drag a keyframe, the ease speed/influence stay constant
+            // The curve looks more gradual because the same speed over longer distance = gentler slope
+            try {
+                // Set interpolation types
+                prop.setInterpolationTypeAtKey(finalKey2Idx, key2InInterp, key2OutInterp);
+
+                // Restore both incoming and outgoing ease
+                if (key2InEase !== null && key2OutEase !== null) {
+                    prop.setTemporalEaseAtKey(finalKey2Idx, key2InEase, key2OutEase);
+                    DEBUG_JSX.log("  Restored key2 ease values (no scaling - matches manual drag behavior)");
+                }
+            } catch(e) {
+                DEBUG_JSX.log("  Could not set key2 ease: " + e.toString());
+            }
+
+            // Restore label if present
+            if (key2Label !== null) {
+                try { prop.setLabelAtKey(finalKey2Idx, key2Label); } catch(e) {}
+            }
+
+            DEBUG_JSX.log("  Moved key2 to index " + finalKey2Idx);
+
+            // Select the 3 keys
+            // Find all three key indices
+            var finalKey1Idx = -1;
+            var finalMiddleIdx = -1;
+            for (var k = 1; k <= prop.numKeys; k++) {
+                var kTime = prop.keyTime(k);
+                if (Math.abs(kTime - key1Time) < 0.0001) finalKey1Idx = k;
+                else if (Math.abs(kTime - middleKeyTime) < 0.0001) finalMiddleIdx = k;
+            }
+
+            // For Position (combined 2D), AE calculates ease based on 2D motion path,
+            // not independent 1D curves. This creates wrong ease values.
+            // Fix: Adjust the middle key's outgoing ease using path distance.
+            // See docs/3-POINT-CURVE-OVERSHOOT-FIX.md for detailed explanation.
+            try {
+                var numDims = 1;
+                try {
+                    var testEase = prop.keyOutTemporalEase(finalKey1Idx);
+                    numDims = testEase.length;
+                } catch(e) {}
+
+                // Fix middle key's outgoing ease for Position (combined 2D)
+                // AE returns numDims=1 for Position because it uses combined path velocity
+                var isPosition = (prop.matchName === "ADBE Position");
+
+                if (isPosition && numDims === 1) {
+                    var midVal = prop.keyValue(finalMiddleIdx);
+                    var key3Val = prop.keyValue(finalKey2Idx);
+                    var dur2 = newKey2Time - middleKeyTime;
+
+                    // Calculate Euclidean path distance
+                    var deltaX = key3Val[0] - midVal[0];
+                    var deltaY = key3Val[1] - midVal[1];
+                    var pathDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                    // Target: bezier (0.30, 1.00) - handle reaches target value
+                    var targetInfluence = 30;
+                    var targetSpeed = pathDistance / (0.30 * dur2);
+
+                    var midInEase = prop.keyInTemporalEase(finalMiddleIdx);
+                    var newMidOutEase = [new KeyframeEase(targetSpeed, targetInfluence)];
+
+                    prop.setTemporalEaseAtKey(finalMiddleIdx, midInEase, newMidOutEase);
+                }
+                // For other multi-dimensional properties (Scale, etc.)
+                else if (numDims > 1) {
+                    var midVal = prop.keyValue(finalMiddleIdx);
+                    var key3Val = prop.keyValue(finalKey2Idx);
+                    var dur2 = newKey2Time - middleKeyTime;
+
+                    var midInEase = prop.keyInTemporalEase(finalMiddleIdx);
+                    var newMidOutEase = [];
+
+                    for (var d = 0; d < numDims; d++) {
+                        var valueChange = key3Val[d] - midVal[d];
+                        var influence = 30;
+                        var speed1D = 0;
+                        if (dur2 > 0) {
+                            speed1D = valueChange / (0.30 * dur2);
+                        }
+                        newMidOutEase.push(new KeyframeEase(speed1D, influence));
+                    }
+
+                    prop.setTemporalEaseAtKey(finalMiddleIdx, midInEase, newMidOutEase);
+                }
+            } catch(e) {
+                DEBUG_JSX.log("EASE FIX ERROR: " + e.toString());
+            }
+
+            // === OVERSHOOT PREVENTION ===
+            // Check if middle key's outgoing handle overshoots Key3's value in value-space
+            // If so, shift the middle key's VALUE so the handle tip lands exactly at Key3's value
+            // This preserves the natural curve shape instead of shortening the handle
+            if (finalMiddleIdx > 0 && finalKey2Idx > 0) {
+                try {
+                    var middleValue = prop.keyValue(finalMiddleIdx);
+                    var middleOutEase = prop.keyOutTemporalEase(finalMiddleIdx);
+                    var segDuration = newKey2Time - middleKeyTime;
+
+                    var needsShift = false;
+                    var newMiddleValue;
+                    var isMultiDim = (typeof middleValue !== "number");
+
+                    if (isMultiDim) {
+                        newMiddleValue = [];
+                        for (var d = 0; d < middleValue.length; d++) {
+                            newMiddleValue[d] = middleValue[d];
+                        }
+                    } else {
+                        newMiddleValue = middleValue;
+                    }
+
+                    for (var d = 0; d < middleOutEase.length; d++) {
+                        var speed = middleOutEase[d].speed;
+                        var influence = middleOutEase[d].influence;
+
+                        var midVal = isMultiDim ? middleValue[d] : middleValue;
+                        var endVal = (typeof key2Value === "number") ? key2Value : key2Value[d];
+
+                        // Skip if no value change or zero speed
+                        if (Math.abs(endVal - midVal) < 0.0001 || Math.abs(speed) < 0.0001) {
+                            continue;
+                        }
+
+                        var handleTimeExtent = (influence / 100) * segDuration;
+                        var handleValueExtent = speed * handleTimeExtent;
+                        var handleTipValue = midVal + handleValueExtent;
+
+                        var isIncreasing = endVal > midVal;
+                        var overshoots = isIncreasing
+                            ? (handleTipValue > endVal)
+                            : (handleTipValue < endVal);
+
+                        if (overshoots) {
+                            var newMidVal = endVal - handleValueExtent;
+                            if (isMultiDim) {
+                                newMiddleValue[d] = newMidVal;
+                            } else {
+                                newMiddleValue = newMidVal;
+                            }
+                            needsShift = true;
+                        }
+                    }
+
+                    if (needsShift) {
+                        prop.setValueAtKey(finalMiddleIdx, newMiddleValue);
+                    }
+                } catch(overshootErr) {
+                    // Silently continue if overshoot prevention fails
+                }
+            }
+
+            if (finalKey1Idx > 0) prop.setSelectedAtKey(finalKey1Idx, true);
+            if (finalMiddleIdx > 0) prop.setSelectedAtKey(finalMiddleIdx, true);
+            if (finalKey2Idx > 0) prop.setSelectedAtKey(finalKey2Idx, true);
+
+            propertiesProcessed++;
         }
 
         app.endUndoGroup();

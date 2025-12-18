@@ -297,7 +297,7 @@ body {
 }
 
 #frameMultiplierDisplay .stagger-controls {
-    width: calc(33.33% - 4px);
+    width: calc(31% - 4px);
     justify-content: flex-end;
     right: 0;
     top: 0;
@@ -598,7 +598,7 @@ body {
     right: 6px;
     top: 50%;
     transform: translateY(-50%);
-    width: calc(33.33% - 4px);
+    width: calc(31% - 4px);
     display: flex;
     justify-content: flex-end;
     gap: 6px;
@@ -624,10 +624,11 @@ body {
     padding: 0;
 }
 
-/* Make position row (X/Y) containers wider to match stagger button widths */
+/* Make position row (X/Y) arrow buttons match - + buttons exactly */
 #xDistanceDisplay .distance-controls,
 #yDistanceDisplay .distance-controls {
-    width: calc(54% - 8px);
+    /* Same container width as delay/duration, buttons will match */
+    width: calc(31% - 4px);
     gap: 6px;
 }
 
@@ -640,7 +641,9 @@ body {
 
 #xDistanceDisplay .distance-controls .nudge-btn,
 #yDistanceDisplay .distance-controls .nudge-btn {
-    width: calc(25% - 4.5px);
+    /* Use same formula as delay/duration stagger-btn */
+    width: calc(50% - 15px);
+    flex-shrink: 0;
 }
 
 .keyframe-display .distance-controls .distance-input {
@@ -731,7 +734,7 @@ input.distance-input[data-tooltip]:hover::after {
     margin: 0;
     background-color: #2f2f2f;
     color: #cccccc;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     cursor: pointer;
     transition: all 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     font-size: 11px; /* Slightly smaller font for 4 buttons */
@@ -739,6 +742,7 @@ input.distance-input[data-tooltip]:hover::after {
     height: 26px;
     border-radius: 4px;
     outline: none; /* Remove focus outline */
+    box-sizing: border-box; /* Match stagger-btn for consistent sizing */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -946,18 +950,6 @@ input.distance-input[data-tooltip]:hover::after {
     padding: 0;
 }
 
-/* Delay/Duration: match original 3-button layout width */
-#delayDisplay .stagger-controls,
-#durationDisplay .stagger-controls {
-    width: calc(33.33% - 4px); /* same container width as originally had */
-    justify-content: flex-end;
-}
-
-#delayDisplay .stagger-controls .stagger-btn,
-#durationDisplay .stagger-controls .stagger-btn {
-    width: calc(50% - 15px);
-}
-
 /* Reduced gaps between the 6 control rows */
 .compact-row {
     margin-bottom: 4px !important;
@@ -1050,7 +1042,7 @@ input.distance-input[data-tooltip]:hover::after {
 
 .keyframe-display .distance-controls .in-out-btn:not(.selected) {
     background-color: #2f2f2f; /* Same as nudge buttons */
-    border-color: rgba(255, 255, 255, 0.08); /* Same border opacity as all other buttons */
+    border-color: rgba(255, 255, 255, 0.12); /* Same border opacity as stagger buttons */
     opacity: 1; /* Same as nudge buttons */
 }
 

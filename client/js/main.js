@@ -747,6 +747,14 @@ document.addEventListener('DOMContentLoaded', function() {
         var dragSensitivity = 2; // How many pixels per 1 unit change
         var dragThreshold = 3; // Pixels before drag starts
 
+        // Auto-select all text when clicking/focusing the input
+        globalFrameInputField.addEventListener('focus', function() {
+            // Small delay to ensure selection works after click
+            setTimeout(function() {
+                globalFrameInputField.select();
+            }, 0);
+        });
+
         globalFrameInputField.addEventListener('mousedown', function(e) {
             isDragging = true;
             hasDragged = false;
@@ -953,7 +961,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         durationIncrementBtn.addEventListener('click', function(event) {
             var isAltHeld = event.altKey;
-            console.log('Duration increment (stretch forward) clicked');
+            console.log('Duration increment (stretch forward) clicked' + (isAltHeld ? ' [ALT - Ignore in/out points]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -962,16 +970,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get duration frames from input field
             var durationFrames = parseFloat(globalFrameInputField.value) || 3;
-            // Apply 10x multiplier if Alt is held
-            if (isAltHeld) {
-                durationFrames *= 10;
-            }
             console.log('Applying +' + durationFrames + ' frame duration stretch');
 
             durationIncrementBtn.disabled = true;
-            
+
             // Call the frame-based function that maintains selection and uses dynamic input
-            var script = 'stretchKeyframesWithFrames(1, ' + durationFrames + ')';
+            // Pass isAltHeld to ignore in/out point tracking
+            var script = 'stretchKeyframesWithFrames(1, ' + durationFrames + ', ' + isAltHeld + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Duration stretch forward result:', result);
                 
@@ -1037,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         durationDecrementBtn.addEventListener('click', function(event) {
             var isAltHeld = event.altKey;
-            console.log('Duration decrement (stretch backward) clicked');
+            console.log('Duration decrement (stretch backward) clicked' + (isAltHeld ? ' [ALT - Ignore in/out points]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1046,16 +1051,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get duration frames from input field
             var durationFrames = parseFloat(globalFrameInputField.value) || 3;
-            // Apply 10x multiplier if Alt is held
-            if (isAltHeld) {
-                durationFrames *= 10;
-            }
             console.log('Applying -' + durationFrames + ' frame duration stretch');
 
             durationDecrementBtn.disabled = true;
-            
+
             // Call the frame-based function that maintains selection and uses dynamic input
-            var script = 'stretchKeyframesWithFrames(-1, ' + durationFrames + ')';
+            // Pass isAltHeld to ignore in/out point tracking
+            var script = 'stretchKeyframesWithFrames(-1, ' + durationFrames + ', ' + isAltHeld + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Duration stretch backward result:', result);
                 
@@ -1127,7 +1129,7 @@ document.addEventListener('DOMContentLoaded', function() {
         delayIncrementBtn.addEventListener('click', function(event) {
             var isAltHeld = event.altKey;
             var isShiftHeld = event.shiftKey;
-            console.log('Delay increment (nudge forward) clicked' + (isAltHeld ? ' [ALT - 10x]' : '') + (isShiftHeld ? ' [SHIFT - Skip precomps]' : ''));
+            console.log('Delay increment (nudge forward) clicked' + (isAltHeld ? ' [ALT - Ignore in/out points]' : '') + (isShiftHeld ? ' [SHIFT - Skip precomps]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1136,16 +1138,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get delay frames from input field
             var delayFrames = parseFloat(globalFrameInputField.value) || 3;
-            // Apply 10x multiplier if Alt is held
-            if (isAltHeld) {
-                delayFrames *= 10;
-            }
             console.log('Applying +' + delayFrames + ' frame delay nudge (timeline mode - all keyframes move together)');
 
             delayIncrementBtn.disabled = true;
 
             // Timeline mode with optional skipPrecomps for global delay
-            var script = 'nudgeDelayTimelineMode(1, ' + delayFrames + ', ' + isShiftHeld + ')';
+            // Pass isAltHeld to ignore in/out point tracking
+            var script = 'nudgeDelayTimelineMode(1, ' + delayFrames + ', ' + isShiftHeld + ', ' + isAltHeld + ')';
 
             csInterface.evalScript(script, function(result) {
                 console.log('Delay nudge forward result:', result);
@@ -1212,7 +1211,7 @@ document.addEventListener('DOMContentLoaded', function() {
         delayDecrementBtn.addEventListener('click', function(event) {
             var isAltHeld = event.altKey;
             var isShiftHeld = event.shiftKey;
-            console.log('Delay decrement (nudge backward) clicked' + (isAltHeld ? ' [ALT - 10x]' : '') + (isShiftHeld ? ' [SHIFT - Skip precomps]' : ''));
+            console.log('Delay decrement (nudge backward) clicked' + (isAltHeld ? ' [ALT - Ignore in/out points]' : '') + (isShiftHeld ? ' [SHIFT - Skip precomps]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1221,16 +1220,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Get delay frames from input field
             var delayFrames = parseFloat(globalFrameInputField.value) || 3;
-            // Apply 10x multiplier if Alt is held
-            if (isAltHeld) {
-                delayFrames *= 10;
-            }
             console.log('Applying -' + delayFrames + ' frame delay nudge (timeline mode - all keyframes move together)');
 
             delayDecrementBtn.disabled = true;
 
             // Timeline mode with optional skipPrecomps for global delay
-            var script = 'nudgeDelayTimelineMode(-1, ' + delayFrames + ', ' + isShiftHeld + ')';
+            // Pass isAltHeld to ignore in/out point tracking
+            var script = 'nudgeDelayTimelineMode(-1, ' + delayFrames + ', ' + isShiftHeld + ', ' + isAltHeld + ')';
 
             csInterface.evalScript(script, function(result) {
                 console.log('Delay nudge backward result:', result);
@@ -1907,19 +1903,21 @@ document.addEventListener('DOMContentLoaded', function() {
     if (snapToPlayheadBtn) {
         snapToPlayheadBtn.addEventListener('click', function(event) {
             var isShiftHeld = event.shiftKey;
+            var isAltHeld = event.altKey;
             // Default: preserve delays, Shift: remove delays (per-property snapping)
             var preserveDelays = !isShiftHeld;
-            console.log('Snap to Playhead clicked' + (isShiftHeld ? ' [SHIFT - Remove Delays]' : ' [Normal - Preserve Delays]'));
+            console.log('Snap to Playhead clicked' + (isShiftHeld ? ' [SHIFT - Remove Delays]' : ' [Normal - Preserve Delays]') + (isAltHeld ? ' [ALT - Ignore in/out points]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
                 return;
             }
 
-            // Call ExtendScript function with shift state
+            // Call ExtendScript function with shift state and alt state
             // Normal: global offset (preserve all relative delays)
             // Shift: per-property snapping (each property's earliest → playhead)
-            var script = 'snapToPlayheadFromPanel(' + preserveDelays + ')';
+            // Alt: ignore in/out point tracking
+            var script = 'snapToPlayheadFromPanel(' + preserveDelays + ', ' + isAltHeld + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Snap to playhead result' + (preserveDelays ? ' [PRESERVE DELAYS]' : ' [REMOVE DELAYS]') + ':', result);
 
@@ -1976,7 +1974,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (staggerIncrementBtn) {
         staggerIncrementBtn.addEventListener('click', function(event) {
             var isAltHeld = event.altKey;
-            console.log('Stagger increment (+) clicked');
+            console.log('Stagger increment (+) clicked' + (isAltHeld ? ' [ALT - Ignore in/out points]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -1990,20 +1988,16 @@ document.addEventListener('DOMContentLoaded', function() {
             function proceedWithStaggerIncrement() {
                 // Get stagger frames from input field
                 var staggerFrames = parseFloat(staggerInputField.value) || 3;
-                // Apply 10x multiplier if Alt is held
-                if (isAltHeld) {
-                    staggerFrames *= 10;
-                }
-                
+
                 // Check if stagger direction is flipped (top to bottom)
                 var staggerActionBtn = document.getElementById('staggerActionBtn');
                 var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
                 console.log('Applying +' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
-                
+
                 staggerIncrementBtn.disabled = true;
-            
-            // Call the ExtendScript function with +1 direction, frame count, and layer order flag
-            var script = 'applyStagger(1, ' + staggerFrames + ', ' + isTopToBottom + ')';
+
+            // Call the ExtendScript function with +1 direction, frame count, layer order flag, and alt key
+            var script = 'applyStagger(1, ' + staggerFrames + ', ' + isTopToBottom + ', ' + isAltHeld + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Stagger increment result:', result);
                 
@@ -2090,7 +2084,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (staggerDecrementBtn) {
         staggerDecrementBtn.addEventListener('click', function(event) {
             var isAltHeld = event.altKey;
-            console.log('Stagger decrement (-) clicked');
+            console.log('Stagger decrement (-) clicked' + (isAltHeld ? ' [ALT - Ignore in/out points]' : ''));
 
             if (!csInterface) {
                 console.log('CSInterface not available');
@@ -2104,20 +2098,16 @@ document.addEventListener('DOMContentLoaded', function() {
             function proceedWithStaggerDecrement() {
                 // Get stagger frames from input field
                 var staggerFrames = parseFloat(staggerInputField.value) || 3;
-                // Apply 10x multiplier if Alt is held
-                if (isAltHeld) {
-                    staggerFrames *= 10;
-                }
-                
+
                 // Check if stagger direction is flipped (top to bottom)
                 var staggerActionBtn = document.getElementById('staggerActionBtn');
                 var isTopToBottom = staggerActionBtn && staggerActionBtn.classList.contains('flipped');
                 console.log('Applying -' + staggerFrames + ' frame stagger' + (isTopToBottom ? ' (top to bottom)' : ' (bottom to top)'));
-                
+
                 staggerDecrementBtn.disabled = true;
-            
-            // Call the ExtendScript function with -1 direction, frame count, and layer order flag
-            var script = 'applyStagger(-1, ' + staggerFrames + ', ' + isTopToBottom + ')';
+
+            // Call the ExtendScript function with -1 direction, frame count, layer order flag, and alt key
+            var script = 'applyStagger(-1, ' + staggerFrames + ', ' + isTopToBottom + ', ' + isAltHeld + ')';
             csInterface.evalScript(script, function(result) {
                 console.log('Stagger decrement result:', result);
                 
@@ -2301,10 +2291,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (csInterface) {
                         csInterface.evalScript('makeThreePointCurve()', function(result) {
                             console.log('makeThreePointCurve result:', result);
+                            var parts = result ? result.split('|') : [];
+
                             if (result && result.indexOf('error') === 0) {
-                                var parts = result.split('|');
                                 if (parts.length > 1) {
                                     alert(parts[1]);
+                                }
+                            }
+
+                            // Display debug messages
+                            var debugMessages = [];
+                            for (var i = 2; i < parts.length; i++) {
+                                if (parts[i]) debugMessages.push(parts[i]);
+                            }
+                            if (debugMessages.length > 0) {
+                                var debugLog = document.getElementById('debug-log');
+                                if (debugLog) {
+                                    debugLog.innerHTML += '<div style="margin: 4px 0; color: #ff9e4a; font-weight: bold;">📐 3-Point Curve Debug:</div>';
+                                    for (var j = 0; j < debugMessages.length; j++) {
+                                        debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                                    }
+                                    debugLog.scrollTop = debugLog.scrollHeight;
                                 }
                             }
                         });
