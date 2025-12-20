@@ -763,14 +763,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Global frame input replacing per-row inputs
     var globalFrameInputField = document.getElementById('globalFrameInput');
 
-    // Add drag-to-scrub functionality to frame input
+    // Add drag-to-scrub functionality to scrub zones (not the input itself)
     if (globalFrameInputField) {
         var isDragging = false;
-        var hasDragged = false;
         var startY = 0;
         var startValue = 0;
         var dragSensitivity = 2; // How many pixels per 1 unit change
-        var dragThreshold = 3; // Pixels before drag starts
 
         // Auto-select all text when clicking/focusing the input
         globalFrameInputField.addEventListener('focus', function() {
@@ -780,26 +778,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 0);
         });
 
-        globalFrameInputField.addEventListener('mousedown', function(e) {
-            isDragging = true;
-            hasDragged = false;
-            startY = e.clientY;
-            startValue = parseInt(globalFrameInputField.value) || 0;
+        // Add scrub handlers to the scrub zones
+        var scrubZones = document.querySelectorAll('.scrub-input-wrapper .scrub-zone');
+        scrubZones.forEach(function(zone) {
+            zone.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // Prevent text selection
+                isDragging = true;
+                startY = e.clientY;
+                startValue = parseInt(globalFrameInputField.value) || 0;
+                globalFrameInputField.blur(); // Remove focus when scrubbing
+            });
         });
 
         document.addEventListener('mousemove', function(e) {
             if (!isDragging) return;
 
             var deltaY = startY - e.clientY; // Inverted: drag up = increase
-
-            // Only start scrubbing after threshold
-            if (!hasDragged && Math.abs(deltaY) > dragThreshold) {
-                hasDragged = true;
-                globalFrameInputField.blur(); // Remove focus once dragging starts
-            }
-
-            if (!hasDragged) return;
-
             var changeAmount = Math.round(deltaY / dragSensitivity);
             var newValue = startValue + changeAmount;
 
@@ -816,7 +810,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('mouseup', function() {
             if (isDragging) {
                 isDragging = false;
-                hasDragged = false;
             }
         });
     }
@@ -2802,53 +2795,62 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add Blur button handler
     addBlurButton.addEventListener('click', function() {
         console.log('Add Blur clicked');
-        
+
         // Get selected material type
         var materialType = document.getElementById('materialType').value;
-        
+
         console.log('Material Type:', materialType);
-        
+
         // Disable button while working
         addBlurButton.disabled = true;
         addBlurButton.textContent = 'Adding...';
-        
+
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
         csInterface.evalScript(setPathScript);
-        
-        // Call the After Effects script to add material blur
-        var script = 'addBlurFromPanel("' + materialType + '")';
-        console.log('Executing script:', script);
-        
+
+        // Get resolution multiplier for scale-aware blur radius
+        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+
+        // Check if Glass effect selected - uses different function
+        var script;
+        if (materialType === 'Glass') {
+            script = 'addGlassEffectFromPanel(' + resolutionMultiplier + ')';
+            console.log('Executing Glass effect script with resolution: ' + resolutionMultiplier);
+        } else {
+            script = 'addBlurFromPanel("' + materialType + '", ' + resolutionMultiplier + ')';
+            console.log('Executing script:', script);
+        }
+
         csInterface.evalScript(script, function(result) {
-            console.log('Material blur result:', result);
-            
+            console.log('Effect result:', result);
+
             // Parse debug info from result and show in debug panel
             if (result && result.indexOf('|') > -1) {
                 var parts = result.split('|');
                 var status = parts[0];
                 var debugInfo = parts.slice(1);
-                
+
                 // Show debug info in the debug panel
                 var debugPanel = document.getElementById('debugPanel');
                 if (debugPanel) {
                     debugPanel.style.display = 'block';
                     var debugContent = document.getElementById('debugContent');
                     if (debugContent) {
-                        debugContent.innerHTML = '<h3>=== MATERIAL EFFECT DEBUG INFO ===</h3>';
+                        debugContent.innerHTML = '<h3>=== EFFECT DEBUG INFO ===</h3>';
                         for (var i = 0; i < debugInfo.length; i++) {
                             debugContent.innerHTML += '<div>' + debugInfo[i] + '</div>';
                         }
                     }
                 }
-                
+
                 // Also log to console for backup
-                console.log('=== MATERIAL EFFECT DEBUG INFO ===');
+                console.log('=== EFFECT DEBUG INFO ===');
                 for (var i = 0; i < debugInfo.length; i++) {
                     console.log(debugInfo[i]);
                 }
             }
-            
+
             // Re-enable button
             addBlurButton.disabled = false;
             addBlurButton.textContent = 'Add Blur';

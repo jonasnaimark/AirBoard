@@ -72,6 +72,9 @@ body {
 
 /* Subsection titles within sections */
 .subsection-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: #f5f5f5;
     font-size: 10px;
     font-weight: 400;
@@ -305,8 +308,14 @@ body {
     height: 100%;
 }
 
-#frameMultiplierDisplay .stagger-controls .stagger-input {
+#frameMultiplierDisplay .stagger-controls .scrub-input-wrapper {
     width: calc(100% - 16px);
+    height: 100%;
+    position: relative;
+}
+
+#frameMultiplierDisplay .stagger-controls .stagger-input {
+    width: 100%;
     height: 100%;
     font-size: 11px;
     padding: 0;
@@ -315,7 +324,7 @@ body {
     background-color: #1a1a1a;
     border: 1px solid rgba(255, 255, 255, 0.12);
     text-align: center;
-    cursor: ns-resize;
+    cursor: text;
 }
 
 #frameMultiplierDisplay .stagger-controls .stagger-input:hover {
@@ -326,6 +335,23 @@ body {
 #frameMultiplierDisplay .stagger-controls .stagger-input:focus {
     background-color: #222222;
     border-color: #4a90e2;
+}
+
+#frameMultiplierDisplay .scrub-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 25px;
+    cursor: ns-resize;
+    z-index: 2;
+}
+
+#frameMultiplierDisplay .scrub-zone-left {
+    left: 0;
+}
+
+#frameMultiplierDisplay .scrub-zone-right {
+    right: 0;
 }
 
 /* Frame slider styling */

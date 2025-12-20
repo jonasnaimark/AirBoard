@@ -5,6 +5,24 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.3] - 2025-12-19 🪟 **Glass Effect Improvements**
+### 🪟 Glass Effect Enhancements
+- **Auto Rectangle Conversion**: Glass effect now automatically converts rectangle paths to Squircle - no need to manually apply Squircle first
+- **Path Linking**: Child layers (sweep, mask, shadow) now link directly to main layer's computed path instead of duplicating Squircle effect
+  - Cleaner layer structure with fewer effects
+  - All Squircle properties inherited automatically, including non-keyframable ones like Alignment
+- **Alignment-Aware Sweeps**: CC Light Sweep centers now follow the shape when Alignment is changed (Center, Center Left, Top Right, etc.)
+- **Refined Sweep Values**: Bottom sweep edge thickness fixed at 2, edge intensity increased to 200, width set to 40% of shape
+- **Layer Opacity**: Light sweep layer opacity set to 90%
+
+### 🔧 Technical Improvements
+- Path expressions reference parent layer's computed path directly
+- Alignment offset calculation mirrors Squircle effect's internal mapping
+- Removed redundant Squircle effect parameter linking code
+
+### 🔗 Associated Build
+- AirBoard-v4.17.3.zxp
+
 ## [4.17.0] - 2025-12-15 🎨 **Dropdown System Unification**
 ### 🎨 UI/UX Improvements
 - **Unified Dropdown System**: Merged Keyframe Nudger and gesture/device dropdowns into single consistent system

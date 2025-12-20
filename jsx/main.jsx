@@ -18279,174 +18279,124 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
             alert("Please select a composition first.");
             return "error";
         }
-        
+
         var selectedLayers = comp.selectedLayers;
         if (!selectedLayers || selectedLayers.length === 0) {
             alert("Please select a layer to apply shadow to.");
             return "error";
         }
-        
-        var targetLayer = selectedLayers[0]; // Apply to first selected layer
+
+        // Default to 2x if not provided
+        resolutionMultiplier = resolutionMultiplier || 2;
+        // Scale factor relative to 2x (base shadow values are calibrated for 2x)
+        var scaleFactor = resolutionMultiplier / 2;
+
+        var targetLayer = selectedLayers[0];
         var debugInfo = [];
-        
-        // Debug layer information  
+
         debugInfo.push("=== SHADOW SYSTEM (ELEVATIONS 1-4) ===");
+        debugInfo.push("Resolution: " + resolutionMultiplier + "x, Scale factor: " + scaleFactor);
         debugInfo.push("Layer name: " + targetLayer.name);
-        debugInfo.push("Layer type: " + targetLayer.toString());
-        debugInfo.push("Layer instanceof AVLayer: " + (targetLayer instanceof AVLayer));
-        
-        if (targetLayer instanceof AVLayer) {
-            debugInfo.push("Has source: " + (targetLayer.source !== null));
-            if (targetLayer.source) {
-                debugInfo.push("Source type: " + targetLayer.source.toString());
-                debugInfo.push("Source instanceof FootageItem: " + (targetLayer.source instanceof FootageItem));
-                
-                if (targetLayer.source instanceof FootageItem) {
-                    debugInfo.push("Has footageSource: " + (targetLayer.source.footageSource !== null));
-                    if (targetLayer.source.footageSource) {
-                        debugInfo.push("FootageSource type: " + targetLayer.source.footageSource.toString());
-                        debugInfo.push("FootageSource instanceof SolidSource: " + (targetLayer.source.footageSource instanceof SolidSource));
-                        
-                        // Additional checks for solid detection
-                        if (typeof targetLayer.source.footageSource.color !== 'undefined') {
-                            debugInfo.push("Has color property (indicates solid): true");
-                        }
-                    }
-                }
-                
-                // Additional solid layer detection methods
-                if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
-                    debugInfo.push("Name starts with 'Solid': true");
-                }
-            }
-        }
-        
+
         // Enhanced solid layer detection
         var isSolidLayer = false;
-        
-        // Method 1: Standard instanceof check
-        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem && 
+
+        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem &&
             targetLayer.source.footageSource instanceof SolidSource) {
             isSolidLayer = true;
-            debugInfo.push("✓ Detected as solid via SolidSource instanceof");
         }
-        
-        // Method 2: Check for color property (solids have this)
-        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem && 
-            targetLayer.source.footageSource && 
+
+        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem &&
+            targetLayer.source.footageSource &&
             typeof targetLayer.source.footageSource.color !== 'undefined') {
             isSolidLayer = true;
-            debugInfo.push("✓ Detected as solid via color property");
         }
-        
-        // Method 3: Check layer name pattern
+
         if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
             isSolidLayer = true;
-            debugInfo.push("✓ Detected as solid via name pattern");
         }
-        
+
         if (isSolidLayer) {
-            debugInfo.push("❌ BLOCKED: This is a solid layer");
-            alert("Cannot apply shadow presets to solid layers. Please select a shape layer, text layer, or other content layer.");
+            alert("Cannot apply shadow to solid layers. Please select a shape layer, text layer, or other content layer.");
             return "error|" + debugInfo.join("|");
-        } else {
-            debugInfo.push("✅ ALLOWED: This is not a solid layer");
         }
-        
-        // Apply the shadow preset (Elevations 1-4 only)
-        var resolutionFolder = resolutionMultiplier + "x";
-        var presetFileName = resolutionMultiplier + "x - Elevation " + elevationType + ".ffx";
-        var presetPath = extensionRoot + "/assets/presets/Shadows/" + resolutionFolder + "/" + presetFileName;
-        var presetFile = new File(presetPath);
-        
-        // Check alternate path separator for Windows compatibility
-        if (!presetFile.exists) {
-            presetPath = extensionRoot + "\\assets\\presets\\Shadows\\" + resolutionFolder + "\\" + presetFileName;
-            presetFile = new File(presetPath);
-        }
-        
-        if (!presetFile.exists) {
-            alert("Cannot find shadow preset file:\n" + presetFileName + "\n\nExpected location:\n" + presetPath);
+
+        // Shadow definitions - base values at 2x resolution
+        // Distance and Softness scale with resolution, Opacity stays constant
+        // Opacity values are percentages (will be converted to 0-255 scale when applied)
+        var shadowDefinitions = {
+            "1": [
+                { opacity: 16, distance: 4, softness: 16 }
+            ],
+            "2": [
+                { opacity: 10, distance: 8, softness: 32 },
+                { opacity: 4, distance: 4, softness: 24 }
+            ],
+            "3": [
+                { opacity: 10, distance: 16, softness: 96 }
+            ],
+            "4": [
+                { opacity: 18, distance: 24, softness: 120 },
+                { opacity: 8, distance: 8, softness: 32 }
+            ]
+        };
+
+        var shadows = shadowDefinitions[elevationType.toString()];
+        if (!shadows) {
+            alert("Invalid elevation type: " + elevationType);
             return "error";
         }
-        
-        // Apply the preset to the selected layer
+
+        app.beginUndoGroup("Add Elevation " + elevationType + " Shadow");
+
         try {
-            // Check layer count before applying preset
-            var layerCountBefore = comp.numLayers;
-            debugInfo.push("📊 Layer count before: " + layerCountBefore);
-            debugInfo.push("📁 Applying preset: " + presetFileName);
-            
-            // Check effect count before applying preset (specifically for Elevation 1 debugging)
-            var effectCountBefore = targetLayer.Effects.numProperties;
-            debugInfo.push("🎭 Effect count before: " + effectCountBefore);
-            
-            targetLayer.applyPreset(presetFile);
-            
-            // Check layer count after applying preset
-            var layerCountAfter = comp.numLayers;
-            debugInfo.push("📊 Layer count after: " + layerCountAfter);
-            
-            // Check effect count after applying preset (specifically for Elevation 1 debugging)
-            var effectCountAfter = targetLayer.Effects.numProperties;
-            debugInfo.push("🎭 Effect count after: " + effectCountAfter);
-            debugInfo.push("🎭 Effects added: " + (effectCountAfter - effectCountBefore));
-            
-            // Rename ALL Drop Shadow effects to match elevation type (handles both new and replaced effects)
+            // Remove existing elevation shadows before adding new ones
             var effects = targetLayer.Effects;
-            var dropShadowCount = 0;
-            
-            // Find and rename ALL Drop Shadow effects on the layer
-            for (var e = 1; e <= effects.numProperties; e++) {
-                var effect = effects.property(e);
-                if (effect && (effect.name === "Drop Shadow" || effect.name.indexOf("Drop Shadow") === 0)) {
-                    dropShadowCount++;
-                    var newName = "Elevation " + elevationType;
-                    
-                    // If there are multiple drop shadows, keep them numbered for clarity
-                    if (dropShadowCount > 1) {
-                        newName = "Elevation " + elevationType + " (" + dropShadowCount + ")";
-                    }
-                    
-                    effect.name = newName;
-                    debugInfo.push("🏷️ Renamed effect " + e + " to: " + newName);
+            for (var e = effects.numProperties; e >= 1; e--) {
+                var eff = effects.property(e);
+                if (eff.name.indexOf("Elevation") === 0) {
+                    eff.remove();
+                    debugInfo.push("Removed existing: " + eff.name);
                 }
             }
-            
-            // List all effects after preset application and renaming for debugging
-            debugInfo.push("📋 Current effects on layer:");
-            for (var e = 1; e <= effects.numProperties; e++) {
-                var effect = effects.property(e);
-                debugInfo.push("  " + e + ". " + effect.name);
-            }
-            
-            if (layerCountAfter > layerCountBefore) {
-                var newLayersCount = layerCountAfter - layerCountBefore;
-                debugInfo.push("⚠️ WARNING: Preset created " + newLayersCount + " new layers");
-                
-                // Delete the newly created layers (they're always at the top)
-                var deletedLayers = [];
-                for (var i = 1; i <= newLayersCount; i++) {
-                    var layerToDelete = comp.layer(1); // Always delete layer 1 (top layer)
-                    deletedLayers.push(layerToDelete.name + " (" + layerToDelete.toString() + ")");
-                    layerToDelete.remove();
+
+            // Add drop shadow effects
+            for (var s = 0; s < shadows.length; s++) {
+                var shadowDef = shadows[s];
+                var dropShadow = targetLayer.Effects.addProperty("ADBE Drop Shadow");
+
+                // Name the effect
+                if (shadows.length === 1) {
+                    dropShadow.name = "Elevation " + elevationType;
+                } else {
+                    dropShadow.name = "Elevation " + elevationType + " (" + (s + 1) + ")";
                 }
-                
-                debugInfo.push("🗑️ Deleted " + newLayersCount + " unwanted layers:");
-                for (var j = 0; j < deletedLayers.length; j++) {
-                    debugInfo.push("  - Deleted: " + deletedLayers[j]);
-                }
+
+                // Set shadow parameters (distance and softness scale, opacity doesn't)
+                // Drop Shadow displays 0-100% but expects 0-255 value, so multiply by 2.55
+                dropShadow.property("Opacity").setValue(shadowDef.opacity * 2.55);
+                dropShadow.property("Direction").setValue(180); // Straight down
+                dropShadow.property("Distance").setValue(shadowDef.distance * scaleFactor);
+                dropShadow.property("Softness").setValue(shadowDef.softness * scaleFactor);
+                dropShadow.property("Shadow Color").setValue([0, 0, 0]); // Black
+
+                debugInfo.push("Added " + dropShadow.name + ": opacity=" + shadowDef.opacity +
+                    ", distance=" + (shadowDef.distance * scaleFactor) +
+                    ", softness=" + (shadowDef.softness * scaleFactor));
             }
-            
-            debugInfo.push("✅ Preset applied successfully");
-            
+
+            debugInfo.push("✅ Elevation " + elevationType + " shadow applied successfully");
+
             return "success|" + debugInfo.join("|");
+
         } catch(applyError) {
-            debugInfo.push("❌ Error applying preset: " + applyError.toString());
-            alert("Error applying shadow preset: " + applyError.toString());
+            debugInfo.push("❌ Error: " + applyError.toString());
+            alert("Error applying shadow: " + applyError.toString());
             return "error|" + debugInfo.join("|");
+        } finally {
+            app.endUndoGroup();
         }
-        
+
     } catch(e) {
         alert("Error adding shadow: " + e.toString());
         return "error";
@@ -18872,7 +18822,7 @@ function applyShimmerToLayer(layer, shimmerNum, controlsLayer) {
 }
 
 // Add Blur functionality - Apply material blur presets and convert to adjustment layer
-function addBlurFromPanel(materialType) {
+function addBlurFromPanel(materialType, resolutionMultiplier) {
     try {
         // Check if we have a selected layer
         var comp = app.project.activeItem;
@@ -18880,15 +18830,21 @@ function addBlurFromPanel(materialType) {
             alert("Please select a composition first.");
             return "error";
         }
-        
+
         var selectedLayers = comp.selectedLayers;
         if (!selectedLayers || selectedLayers.length === 0) {
             alert("Please select a layer to apply blur to.");
             return "error";
         }
-        
+
+        // Default to 2x if not provided
+        resolutionMultiplier = resolutionMultiplier || 2;
+        // Scale factor relative to 2x (base blur values are calibrated for 2x)
+        var blurScaleFactor = resolutionMultiplier / 2;
+
         var targetLayer = selectedLayers[0]; // Apply to first selected layer
         var materialDebugInfo = [];
+        materialDebugInfo.push("Resolution: " + resolutionMultiplier + "x, Blur scale factor: " + blurScaleFactor);
         
         // Debug layer information
         materialDebugInfo.push("=== MATERIAL LAYER DEBUG ===");
@@ -19056,14 +19012,45 @@ function addBlurFromPanel(materialType) {
             if (renamedCount > 0) {
                 materialDebugInfo.push("✅ Renamed " + renamedCount + " material effects with prefix: " + materialType + " -");
             }
-            
+
+            // Adjust blur radius based on material type and scale factor
+            // Base values at 2x resolution
+            var baseBlurValues = {
+                "Light Extra Thin": 48,
+                "Light Thin": 192,
+                "Light Regular": 144,
+                "Light Thick": 64,
+                "Light Extra Thick": 64,
+                "Dark Extra Thin": 48,
+                "Dark Thin": 192,
+                "Dark Regular": 160,
+                "Dark Thick": 64,
+                "Dark Extra Thick": 64
+            };
+
+            if (baseBlurValues[materialType] !== undefined) {
+                var targetBlurRadius = baseBlurValues[materialType] * blurScaleFactor;
+                try {
+                    for (var b = 1; b <= effects.numProperties; b++) {
+                        var blurEffect = effects.property(b);
+                        if (blurEffect.matchName === "ADBE Box Blur2" || blurEffect.name.indexOf("Box Blur") !== -1 || blurEffect.name.indexOf("Fast Box Blur") !== -1) {
+                            blurEffect.property("Blur Radius").setValue(targetBlurRadius);
+                            materialDebugInfo.push("🔧 Adjusted blur radius to " + targetBlurRadius + " (base " + baseBlurValues[materialType] + " × " + blurScaleFactor + ")");
+                            break;
+                        }
+                    }
+                } catch(blurAdjustErr) {
+                    materialDebugInfo.push("⚠️ Could not adjust blur radius: " + blurAdjustErr.toString());
+                }
+            }
+
             // List all effects after renaming for debugging
             materialDebugInfo.push("📋 Final effects on layer:");
             for (var e = 1; e <= effects.numProperties; e++) {
                 var effect = effects.property(e);
                 materialDebugInfo.push("  " + e + ". " + effect.name);
             }
-            
+
             // Return success with debug info
             return "success|" + materialDebugInfo.join("|");
             
@@ -19074,6 +19061,579 @@ function addBlurFromPanel(materialType) {
         
     } catch(e) {
         alert("Error adding material blur: " + e.toString());
+        return "error";
+    } finally {
+        app.endUndoGroup();
+    }
+}
+
+// =============================================================================
+// GLASS EFFECT
+// Creates a frosted glass effect with light sweep highlight and punched-out shadow
+// Layer structure (top to bottom):
+//   1. Light Sweep - black fill, CC Light Sweep effect, Screen blend mode
+//   2. Main Layer - adjustment layer with blur (the selected squircle)
+//   3. Mask Layer - invisible, used as track matte reference
+//   4. Shadow Layer - drop shadow effect, inverted alpha matte from mask
+// =============================================================================
+function addGlassEffectFromPanel(resolutionMultiplier) {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            return "error";
+        }
+
+        var selectedLayers = comp.selectedLayers;
+        if (!selectedLayers || selectedLayers.length === 0) {
+            alert("Please select a shape layer with a Squircle effect to apply Glass effect.");
+            return "error";
+        }
+
+        // Default to 2x if not provided
+        resolutionMultiplier = resolutionMultiplier || 2;
+        // Scale factor relative to 4x (base values are calibrated for 4x)
+        var scaleFactor = resolutionMultiplier / 4;
+
+        var mainLayer = selectedLayers[0];
+        var debugInfo = [];
+        debugInfo.push("=== GLASS EFFECT ===");
+        debugInfo.push("Resolution: " + resolutionMultiplier + "x, Scale factor: " + scaleFactor);
+        debugInfo.push("Selected layer: " + mainLayer.name);
+
+        // Verify it's a shape layer
+        if (!(mainLayer instanceof ShapeLayer)) {
+            alert("Glass effect requires a shape layer. Please select a shape layer with a Squircle effect.");
+            return "error";
+        }
+
+        // Find Squircle effect on main layer
+        var squircleEffect = null;
+        var squircleEffectName = null;
+        for (var i = 1; i <= mainLayer.Effects.numProperties; i++) {
+            var eff = mainLayer.Effects.property(i);
+            if (eff.name.indexOf("Squircle") !== -1) {
+                squircleEffect = eff;
+                squircleEffectName = eff.name;
+                debugInfo.push("Found Squircle effect: " + squircleEffectName);
+                break;
+            }
+        }
+
+        if (!squircleEffect) {
+            // No Squircle effect found - check if there's a rectangle we can convert
+            var rectangleData = findRectangleData(mainLayer);
+
+            if (!rectangleData) {
+                alert("Glass effect requires a Squircle effect or a Rectangle path on the selected layer.\n\nPlease either:\n- Select a layer with a Squircle effect, or\n- Select a shape layer with a Rectangle path (it will be converted to a Squircle)");
+                return "error";
+            }
+
+            debugInfo.push("No Squircle found, but found Rectangle - converting to Squircle");
+
+            // Begin undo group before making any changes
+            app.beginUndoGroup("Add Glass Effect");
+
+            try {
+                // Store original layer info
+                var originalLayer = mainLayer;
+                var originalName = mainLayer.name;
+
+                // Create new squircle layer
+                var newLayer = comp.layers.addShape();
+                newLayer.name = originalName;
+                newLayer.moveBefore(originalLayer);
+
+                // Apply the squircle preset
+                var ffxPath = extensionRoot + "/assets/presets/SquircleComplete.ffx";
+                var ffxFile = new File(ffxPath);
+
+                if (!ffxFile.exists) {
+                    ffxPath = extensionRoot + "\\assets\\presets\\SquircleComplete.ffx";
+                    ffxFile = new File(ffxPath);
+                }
+
+                if (!ffxFile.exists) {
+                    var scriptFile = new File($.fileName);
+                    var scriptFolder = scriptFile.parent;
+                    var extRoot = scriptFolder.parent;
+                    ffxPath = extRoot.fsName + "/assets/presets/SquircleComplete.ffx";
+                    ffxFile = new File(ffxPath);
+                }
+
+                if (!ffxFile.exists) {
+                    alert("Cannot find SquircleComplete.ffx preset file needed for rectangle conversion.");
+                    newLayer.remove();
+                    app.endUndoGroup();
+                    return "error";
+                }
+
+                newLayer.applyPreset(ffxFile);
+
+                // Apply rectangle properties to squircle effect
+                squircleEffect = newLayer.property("Effects").property("Squircle");
+                if (squircleEffect) {
+                    squircleEffectName = "Squircle";
+                    try { squircleEffect.property("Width").setValue(rectangleData.width); } catch(e){}
+                    try { squircleEffect.property("Height").setValue(rectangleData.height); } catch(e){}
+                    try { squircleEffect.property("Unified Corners").setValue(1); } catch(e){}
+                    try { squircleEffect.property("Unified Radius").setValue(rectangleData.roundness); } catch(e){}
+                    try { squircleEffect.property("Top Left").setValue(rectangleData.roundness); } catch(e){}
+                    try { squircleEffect.property("Top Right").setValue(rectangleData.roundness); } catch(e){}
+                    try { squircleEffect.property("Bottom Left").setValue(rectangleData.roundness); } catch(e){}
+                    try { squircleEffect.property("Bottom Right").setValue(rectangleData.roundness); } catch(e){}
+                    debugInfo.push("Converted rectangle to Squircle: " + rectangleData.width + "x" + rectangleData.height);
+                }
+
+                // Copy fill color to squircle
+                if (rectangleData.fillColor) {
+                    try {
+                        var newContents = newLayer.property("Contents");
+                        if (newContents && newContents.numProperties > 0) {
+                            for (var g = 1; g <= newContents.numProperties; g++) {
+                                var group = newContents.property(g);
+                                if (group.matchName === "ADBE Vector Group" && group.property("Contents")) {
+                                    var groupContents = group.property("Contents");
+                                    for (var f = 1; f <= groupContents.numProperties; f++) {
+                                        var item = groupContents.property(f);
+                                        if (item.matchName === "ADBE Vector Graphic - Fill") {
+                                            item.property("Color").setValue(rectangleData.fillColor);
+                                            if (rectangleData.fillOpacity !== null) {
+                                                item.property("Opacity").setValue(rectangleData.fillOpacity);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                }
+
+                // Copy layer transforms
+                var props = ["anchorPoint", "position", "scale", "rotation", "opacity"];
+                for (var pi = 0; pi < props.length; pi++) {
+                    var propName = props[pi];
+                    try {
+                        var sourceProp = originalLayer.transform.property(propName);
+                        var targetProp = newLayer.transform.property(propName);
+                        if (sourceProp.numKeys > 0) {
+                            for (var k = 1; k <= sourceProp.numKeys; k++) {
+                                targetProp.setValueAtTime(sourceProp.keyTime(k), sourceProp.keyValue(k));
+                            }
+                        } else {
+                            targetProp.setValue(sourceProp.value);
+                        }
+                        if (sourceProp.expression && sourceProp.expression !== "") {
+                            targetProp.expression = sourceProp.expression;
+                        }
+                    } catch(e) {}
+                }
+
+                // Copy effects (except Squircle)
+                try {
+                    var sourceEffects = originalLayer.property("Effects");
+                    var targetEffects = newLayer.property("Effects");
+                    if (sourceEffects && sourceEffects.numProperties > 0) {
+                        for (var fx = 1; fx <= sourceEffects.numProperties; fx++) {
+                            var sourceEffect = sourceEffects.property(fx);
+                            if (sourceEffect.name === "Squircle" || sourceEffect.matchName === "Pseudo/Squircle") continue;
+                            try {
+                                var newEffect = targetEffects.addProperty(sourceEffect.matchName);
+                                for (var p = 1; p <= sourceEffect.numProperties; p++) {
+                                    var sp = sourceEffect.property(p);
+                                    var tp = newEffect.property(p);
+                                    if (!tp) continue;
+                                    try {
+                                        if (sp.numKeys > 0) {
+                                            for (var kk = 1; kk <= sp.numKeys; kk++) {
+                                                tp.setValueAtTime(sp.keyTime(kk), sp.keyValue(kk));
+                                            }
+                                        } else if (sp.value !== undefined) {
+                                            tp.setValue(sp.value);
+                                        }
+                                    } catch(e) {}
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                } catch(e) {}
+
+                // Hide original layer and use new layer as main
+                originalLayer.enabled = false;
+                originalLayer.selected = false;
+                newLayer.selected = true;
+                mainLayer = newLayer;
+                debugInfo.push("Rectangle converted - using new Squircle layer as main");
+
+            } catch(convError) {
+                alert("Error converting rectangle to squircle: " + convError.toString());
+                app.endUndoGroup();
+                return "error";
+            }
+        } else {
+            // Squircle was found - begin undo group here
+            app.beginUndoGroup("Add Glass Effect");
+        }
+
+        try {
+            var mainLayerName = mainLayer.name;
+            var mainLayerIndex = mainLayer.index;
+            debugInfo.push("Main layer index: " + mainLayerIndex);
+
+            // === CREATE DUPLICATE LAYERS ===
+            // duplicate() creates new layer ABOVE the source layer
+            // So first duplicate ends up highest in stack after all duplicates
+
+            var shadowLayer = mainLayer.duplicate();
+            shadowLayer.name = mainLayerName + " - Glass Shadow";
+
+            var maskLayer = mainLayer.duplicate();
+            maskLayer.name = mainLayerName + " - Glass Mask";
+
+            var lightSweepLayer = mainLayer.duplicate();
+            lightSweepLayer.name = mainLayerName + " - Glass Sweep";
+
+            // After duplicates, order is (top to bottom): shadow, mask, sweep, main
+            // We need: sweep, main, mask, shadow
+            // Rearrange layers to correct order
+            shadowLayer.moveAfter(mainLayer);      // Move shadow to bottom
+            lightSweepLayer.moveBefore(maskLayer); // Move sweep to top
+            mainLayer.moveBefore(maskLayer);       // Move main between sweep and mask
+
+            debugInfo.push("Layer order: Sweep > Main > Mask > Shadow");
+
+            // === MAIN LAYER SETUP ===
+            mainLayer.adjustmentLayer = true;
+            debugInfo.push("Main layer: adjustment layer enabled");
+
+            // Apply blur preset
+            var blurPresetPath = extensionRoot + "/assets/presets/Materials/Light Regular.ffx";
+            var blurPresetFile = new File(blurPresetPath);
+            if (!blurPresetFile.exists) {
+                blurPresetPath = extensionRoot + "\\assets\\presets\\Materials\\Light Regular.ffx";
+                blurPresetFile = new File(blurPresetPath);
+            }
+
+            if (blurPresetFile.exists) {
+                mainLayer.applyPreset(blurPresetFile);
+                debugInfo.push("Main layer: blur preset applied");
+
+                // Set Fast Box Blur radius (40 at 4x, scales with resolution)
+                try {
+                    var blurRadius = 40 * scaleFactor;
+                    var effects = mainLayer.Effects;
+                    for (var b = 1; b <= effects.numProperties; b++) {
+                        var eff = effects.property(b);
+                        if (eff.matchName === "ADBE Box Blur2" || eff.name.indexOf("Box Blur") !== -1) {
+                            eff.property("Blur Radius").setValue(blurRadius);
+                            debugInfo.push("Main layer: Fast Box Blur radius set to " + blurRadius);
+                            break;
+                        }
+                    }
+                } catch(blurRadiusErr) {
+                    debugInfo.push("Could not set blur radius: " + blurRadiusErr.toString());
+                }
+            } else {
+                debugInfo.push("Warning: blur preset not found at " + blurPresetPath);
+            }
+
+            // === LIGHT SWEEP LAYER SETUP ===
+            lightSweepLayer.adjustmentLayer = false;
+            lightSweepLayer.blendingMode = BlendingMode.SCREEN;
+            lightSweepLayer.property("Transform").property("Opacity").setValue(90);
+            debugInfo.push("Light sweep: Screen blend mode, 90% opacity");
+
+            // Set fill color to black
+            try {
+                var sweepContents = lightSweepLayer.property("Contents");
+                if (sweepContents && sweepContents.numProperties > 0) {
+                    for (var g = 1; g <= sweepContents.numProperties; g++) {
+                        var group = sweepContents.property(g);
+                        if (group.matchName === "ADBE Vector Group" && group.property("Contents")) {
+                            var groupContents = group.property("Contents");
+                            for (var f = 1; f <= groupContents.numProperties; f++) {
+                                var item = groupContents.property(f);
+                                if (item.matchName === "ADBE Vector Graphic - Fill") {
+                                    item.property("Color").setValue([0, 0, 0]); // Black RGB
+                                    debugInfo.push("Light sweep: fill color set to black");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch(fillErr) {
+                debugInfo.push("Could not set fill color: " + fillErr.toString());
+            }
+
+            // Add CC Light Sweep effect (top edge)
+            try {
+                var ccLightSweep = lightSweepLayer.Effects.addProperty("CC Light Sweep");
+                ccLightSweep.name = "Glass Light Sweep Top";
+                debugInfo.push("Light sweep: Top CC Light Sweep effect added");
+
+                // Set light sweep parameters
+                try {
+                    ccLightSweep.property("Direction").setValue(0);
+                    ccLightSweep.property("Sweep Intensity").setValue(0);
+                    ccLightSweep.property("Edge Intensity").setValue(300);
+                    ccLightSweep.property("Edge Thickness").setValue(2.5 * scaleFactor);
+
+                    // Set Center expression - pin to top center of squircle in comp space
+                    // Account for Alignment offset so sweep follows shape when alignment changes
+                    var centerExpr = 'var parent = thisLayer.parent;\n' +
+                                     'var squircle = parent.effect("' + squircleEffectName + '");\n' +
+                                     'var width = squircle("Width");\n' +
+                                     'var height = squircle("Height");\n' +
+                                     'var w = width / 2;\n' +
+                                     'var h = height / 2;\n' +
+                                     'var uiIndex = Math.round(squircle("Alignment"));\n' +
+                                     'var ox = 0, oy = 0;\n' +
+                                     'if (uiIndex == 2) { ox = w; }\n' +
+                                     'else if (uiIndex == 3) { ox = -w; }\n' +
+                                     'else if (uiIndex == 5) { oy = h; }\n' +
+                                     'else if (uiIndex == 6) { ox = w; oy = h; }\n' +
+                                     'else if (uiIndex == 7) { ox = -w; oy = h; }\n' +
+                                     'else if (uiIndex == 9) { oy = -h; }\n' +
+                                     'else if (uiIndex == 10) { ox = w; oy = -h; }\n' +
+                                     'else if (uiIndex == 11) { ox = -w; oy = -h; }\n' +
+                                     '[parent.position[0] + ox, parent.position[1] + oy - h]';
+                    ccLightSweep.property("Center").expression = centerExpr;
+
+                    // Set Width expression - half of squircle width
+                    var widthExpr = 'thisLayer.parent.effect("' + squircleEffectName + '")("Width") / 2';
+                    ccLightSweep.property("Width").expression = widthExpr;
+
+                } catch(sweepParamErr) {
+                    debugInfo.push("Note: some top light sweep params may need manual adjustment: " + sweepParamErr.toString());
+                }
+            } catch(sweepErr) {
+                debugInfo.push("Could not add top CC Light Sweep: " + sweepErr.toString());
+            }
+
+            // Add second CC Light Sweep effect (bottom edge)
+            try {
+                var ccLightSweep2 = lightSweepLayer.Effects.addProperty("CC Light Sweep");
+                ccLightSweep2.name = "Glass Light Sweep Bottom";
+                debugInfo.push("Light sweep: Bottom CC Light Sweep effect added");
+
+                try {
+                    ccLightSweep2.property("Direction").setValue(180);
+                    ccLightSweep2.property("Sweep Intensity").setValue(0);
+                    ccLightSweep2.property("Edge Intensity").setValue(200);
+                    ccLightSweep2.property("Edge Thickness").setValue(2);
+
+                    // Set Center expression - pin to bottom center of squircle in comp space
+                    // Account for Alignment offset so sweep follows shape when alignment changes
+                    var centerExpr2 = 'var parent = thisLayer.parent;\n' +
+                                      'var squircle = parent.effect("' + squircleEffectName + '");\n' +
+                                      'var width = squircle("Width");\n' +
+                                      'var height = squircle("Height");\n' +
+                                      'var w = width / 2;\n' +
+                                      'var h = height / 2;\n' +
+                                      'var uiIndex = Math.round(squircle("Alignment"));\n' +
+                                      'var ox = 0, oy = 0;\n' +
+                                      'if (uiIndex == 2) { ox = w; }\n' +
+                                      'else if (uiIndex == 3) { ox = -w; }\n' +
+                                      'else if (uiIndex == 5) { oy = h; }\n' +
+                                      'else if (uiIndex == 6) { ox = w; oy = h; }\n' +
+                                      'else if (uiIndex == 7) { ox = -w; oy = h; }\n' +
+                                      'else if (uiIndex == 9) { oy = -h; }\n' +
+                                      'else if (uiIndex == 10) { ox = w; oy = -h; }\n' +
+                                      'else if (uiIndex == 11) { ox = -w; oy = -h; }\n' +
+                                      '[parent.position[0] + ox, parent.position[1] + oy + h]';
+                    ccLightSweep2.property("Center").expression = centerExpr2;
+
+                    // Set Width expression - 40% of squircle width
+                    var widthExpr2 = 'thisLayer.parent.effect("' + squircleEffectName + '")("Width") * 0.4';
+                    ccLightSweep2.property("Width").expression = widthExpr2;
+
+                } catch(sweepParamErr2) {
+                    debugInfo.push("Note: some bottom light sweep params may need manual adjustment: " + sweepParamErr2.toString());
+                }
+            } catch(sweepErr2) {
+                debugInfo.push("Could not add bottom CC Light Sweep: " + sweepErr2.toString());
+            }
+
+            // Remove all effects from light sweep layer except the CC Light Sweep effects we just added
+            for (var e = lightSweepLayer.Effects.numProperties; e >= 1; e--) {
+                var eff = lightSweepLayer.Effects.property(e);
+                if (eff.name.indexOf("Glass Light Sweep") === -1) {
+                    eff.remove();
+                }
+            }
+
+            // === MASK LAYER SETUP ===
+            maskLayer.adjustmentLayer = false;
+            maskLayer.shy = true;
+            debugInfo.push("Mask layer: shy enabled");
+
+            // Remove all effects from mask layer
+            for (var e = maskLayer.Effects.numProperties; e >= 1; e--) {
+                maskLayer.Effects.property(e).remove();
+            }
+
+            // === SHADOW LAYER SETUP ===
+            shadowLayer.adjustmentLayer = false;
+
+            // Remove all effects from shadow layer (will add drop shadows after)
+            for (var e = shadowLayer.Effects.numProperties; e >= 1; e--) {
+                shadowLayer.Effects.property(e).remove();
+            }
+
+            // Add Elevation 4 style drop shadows programmatically (base values at 4x)
+            // Glass uses custom shadow values: softness 160, distance 32 at 4x
+            // Drop Shadow displays 0-100% but expects 0-255 value, so multiply by 2.55
+            try {
+                // Add first drop shadow (main shadow)
+                var dropShadow1 = shadowLayer.Effects.addProperty("ADBE Drop Shadow");
+                dropShadow1.name = "Glass Shadow";
+                dropShadow1.property("Opacity").setValue(18 * 2.55);
+                dropShadow1.property("Direction").setValue(180);
+                dropShadow1.property("Distance").setValue(32 * scaleFactor);
+                dropShadow1.property("Softness").setValue(160 * scaleFactor);
+                dropShadow1.property("Shadow Color").setValue([0, 0, 0]);
+                debugInfo.push("Shadow layer: Glass Shadow added (distance=" + (32 * scaleFactor) + ", softness=" + (160 * scaleFactor) + ")");
+
+                // Add second drop shadow (subtle close shadow)
+                var dropShadow2 = shadowLayer.Effects.addProperty("ADBE Drop Shadow");
+                dropShadow2.name = "Glass Shadow 2";
+                dropShadow2.property("Opacity").setValue(8 * 2.55);
+                dropShadow2.property("Direction").setValue(180);
+                dropShadow2.property("Distance").setValue(8 * scaleFactor);
+                dropShadow2.property("Softness").setValue(32 * scaleFactor);
+                dropShadow2.property("Shadow Color").setValue([0, 0, 0]);
+                debugInfo.push("Shadow layer: Glass Shadow 2 added");
+
+            } catch(shadowErr) {
+                debugInfo.push("Could not add shadow effects: " + shadowErr.toString());
+            }
+
+            // Set track matte - shadow uses mask as inverted alpha
+            try {
+                shadowLayer.setTrackMatte(maskLayer, TrackMatteType.ALPHA_INVERTED);
+                debugInfo.push("Shadow layer: inverted alpha track matte set");
+            } catch(matteErr) {
+                // Fallback for different AE versions
+                try {
+                    shadowLayer.trackMatteType = TrackMatteType.ALPHA_INVERTED;
+                    debugInfo.push("Shadow layer: track matte set via trackMatteType");
+                } catch(matteErr2) {
+                    debugInfo.push("Could not set track matte: " + matteErr2.toString());
+                }
+            }
+
+            // === CLEAR TRANSFORM ANIMATIONS BEFORE PARENTING ===
+            var clearTransformAnimations = function(layer) {
+                try {
+                    var transform = layer.property("Transform");
+                    var props = ["Position", "Scale", "Rotation", "Opacity", "Anchor Point"];
+
+                    // Clear expressions first
+                    for (var p = 0; p < props.length; p++) {
+                        var prop = transform.property(props[p]);
+                        if (prop && prop.expression !== "") {
+                            prop.expression = "";
+                        }
+                    }
+
+                    // Remove keyframes
+                    for (var p = 0; p < props.length; p++) {
+                        var prop = transform.property(props[p]);
+                        if (prop && prop.numKeys > 0) {
+                            for (var k = prop.numKeys; k >= 1; k--) {
+                                prop.removeKey(k);
+                            }
+                        }
+                    }
+                } catch(transformErr) {}
+            };
+
+            clearTransformAnimations(lightSweepLayer);
+            clearTransformAnimations(maskLayer);
+            clearTransformAnimations(shadowLayer);
+            debugInfo.push("Transform animations cleared from child layers");
+
+            // === PARENTING ===
+            lightSweepLayer.parent = mainLayer;
+            maskLayer.parent = mainLayer;
+            shadowLayer.parent = mainLayer;
+            debugInfo.push("All child layers parented to main layer");
+
+            // Reset transform values after parenting
+            var resetTransform = function(layer) {
+                try {
+                    layer.property("Transform").property("Position").setValue([0, 0]);
+                    layer.property("Transform").property("Scale").setValue([100, 100]);
+                    layer.property("Transform").property("Rotation").setValue(0);
+                } catch(resetErr) {}
+            };
+
+            resetTransform(lightSweepLayer);
+            resetTransform(maskLayer);
+            resetTransform(shadowLayer);
+            debugInfo.push("Transform values reset to parent-relative");
+
+            // === PATH LINKING ===
+            // Link child layer paths directly to main layer's path (instead of duplicating Squircle effect)
+            // This ensures all Squircle properties (including non-keyframable ones like Alignment) are inherited
+
+            var linkPathToParent = function(layer, mainLayerName) {
+                try {
+                    var contents = layer.property("Contents");
+                    if (!contents) return false;
+
+                    // Find the group and path on this layer
+                    for (var g = 1; g <= contents.numProperties; g++) {
+                        var group = contents.property(g);
+                        if (group.matchName === "ADBE Vector Group") {
+                            var groupName = group.name;
+                            var groupContents = group.property("Contents");
+                            if (groupContents) {
+                                for (var p = 1; p <= groupContents.numProperties; p++) {
+                                    var item = groupContents.property(p);
+                                    if (item.matchName === "ADBE Vector Shape - Group") {
+                                        var pathName = item.name;
+                                        var pathProp = item.property("Path");
+                                        if (pathProp && pathProp.canSetExpression) {
+                                            // Build expression to reference parent's path
+                                            var expr = 'thisLayer.parent.content("' + groupName + '").content("' + pathName + '").path';
+                                            pathProp.expression = expr;
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch(e) {}
+                return false;
+            };
+
+            // Link paths to main layer
+            linkPathToParent(lightSweepLayer, mainLayerName);
+            linkPathToParent(maskLayer, mainLayerName);
+            linkPathToParent(shadowLayer, mainLayerName);
+            debugInfo.push("Child layer paths linked to main layer via expressions");
+
+            // Add expressions to link opacity and anchor point
+            try {
+                lightSweepLayer.property("Transform").property("Anchor Point").expression = "thisLayer.parent.anchorPoint";
+                maskLayer.property("Transform").property("Anchor Point").expression = "thisLayer.parent.anchorPoint";
+                shadowLayer.property("Transform").property("Anchor Point").expression = "thisLayer.parent.anchorPoint";
+            } catch(anchorErr) {}
+
+            debugInfo.push("=== GLASS EFFECT COMPLETE ===");
+
+            return "success|" + debugInfo.join("|");
+
+        } catch(innerError) {
+            alert("Error during Glass effect creation: " + innerError.toString());
+            return "error|" + innerError.toString();
+        }
+
+    } catch(e) {
+        alert("Error adding Glass effect: " + e.toString());
         return "error";
     } finally {
         app.endUndoGroup();
