@@ -297,7 +297,7 @@ document.addEventListener('DOMContentLoaded', function() {
         function positionMenu(menu, select) {
             var rect = select.getBoundingClientRect();
 
-            // Position below select
+            // Position below select, initially left-aligned
             menu.style.left = rect.left + 'px';
             menu.style.top = (rect.bottom + 4) + 'px';
             menu.style.minWidth = rect.width + 'px';
@@ -313,10 +313,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     menu.style.top = (rect.top - menuRect.height - 4) + 'px';
                 }
 
-                // Check if menu goes off right edge
-                if (menuRect.right > window.innerWidth - 10) {
-                    menu.style.left = (window.innerWidth - menuRect.width - 10) + 'px';
+                // Center dropdown horizontally over button (especially for small buttons like resolution)
+                var buttonCenter = rect.left + (rect.width / 2);
+                var menuCenter = menuRect.width / 2;
+                var centeredLeft = buttonCenter - menuCenter;
+
+                // Clamp to viewport edges
+                if (centeredLeft < 10) {
+                    centeredLeft = 10;
+                } else if (centeredLeft + menuRect.width > window.innerWidth - 10) {
+                    centeredLeft = window.innerWidth - menuRect.width - 10;
                 }
+
+                menu.style.left = centeredLeft + 'px';
             });
         }
 

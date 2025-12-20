@@ -5,6 +5,17 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.4] - 2025-12-19 🪟 **Glass Polish & UI Fixes**
+### 🪟 Glass Effect
+- **Renamed Layer**: "Glass Sweep" → "Glass Highlight" for clarity
+- **Top Edge Thickness**: Increased from 2.5 to 3 at 4x (scales with resolution)
+
+### 🎨 UI Improvements
+- **Centered Dropdowns**: All dropdown menus now center horizontally over their buttons
+
+### 🔗 Associated Build
+- AirBoard-v4.17.4.zxp
+
 ## [4.17.3] - 2025-12-19 🪟 **Glass Effect Improvements**
 ### 🪟 Glass Effect Enhancements
 - **Auto Rectangle Conversion**: Glass effect now automatically converts rectangle paths to Squircle - no need to manually apply Squircle first

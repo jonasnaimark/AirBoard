@@ -19291,7 +19291,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
             maskLayer.name = mainLayerName + " - Glass Mask";
 
             var lightSweepLayer = mainLayer.duplicate();
-            lightSweepLayer.name = mainLayerName + " - Glass Sweep";
+            lightSweepLayer.name = mainLayerName + " - Glass Highlight";
 
             // After duplicates, order is (top to bottom): shadow, mask, sweep, main
             // We need: sweep, main, mask, shadow
@@ -19377,7 +19377,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                     ccLightSweep.property("Direction").setValue(0);
                     ccLightSweep.property("Sweep Intensity").setValue(0);
                     ccLightSweep.property("Edge Intensity").setValue(300);
-                    ccLightSweep.property("Edge Thickness").setValue(2.5 * scaleFactor);
+                    ccLightSweep.property("Edge Thickness").setValue(3 * scaleFactor);
 
                     // Set Center expression - pin to top center of squircle in comp space
                     // Account for Alignment offset so sweep follows shape when alignment changes
