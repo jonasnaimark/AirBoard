@@ -21387,8 +21387,9 @@ function findInflectionPoints(points) {
 /**
  * simplifySpringKeyframes - Simplify spring keyframes using CleanBakedKeys algorithm
  * UPDATED: Sproing v1.2.6 - Added inflection point preservation
+ * UPDATED: Only use extra sampling for Position when velocity creates curved path
  */
-function simplifySpringKeyframes(fullCurveData, precisionSetting, frameRate) {
+function simplifySpringKeyframes(fullCurveData, precisionSetting, frameRate, initialVelocity) {
     if (!PRECISION_SETTINGS[precisionSetting] || precisionSetting === 'max') {
         return fullCurveData; // Return all points for max precision
     }
@@ -21402,9 +21403,21 @@ function simplifySpringKeyframes(fullCurveData, precisionSetting, frameRate) {
     var dim = fullCurveData[0].y.length;
     var frameDuration = 1.0 / frameRate;
 
-    // Scale precision and max gap based on dimensionality
-    var scaledPrecision = dim >= 2 ? precision * 2 : precision;
-    var scaledMaxGapFrames = dim >= 2 ? Math.max(1, Math.round(maxGapFrames / 2)) : maxGapFrames;
+    // Check if velocity creates curved motion path
+    var hasVelocity = false;
+    if (initialVelocity instanceof Array) {
+        for (var d = 0; d < initialVelocity.length; d++) {
+            if (Math.abs(initialVelocity[d]) > 0.1) { hasVelocity = true; break; }
+        }
+    } else if (typeof initialVelocity === 'number') {
+        hasVelocity = Math.abs(initialVelocity) > 0.1;
+    }
+
+    // Only use extra sampling for multi-dim properties WITH velocity (curved motion path)
+    // Position without velocity moves in a straight line, same as X/Y split dimensions
+    var needsCurvedPathSampling = dim >= 2 && hasVelocity;
+    var scaledPrecision = needsCurvedPathSampling ? precision * 2 : precision;
+    var scaledMaxGapFrames = needsCurvedPathSampling ? Math.max(1, Math.round(maxGapFrames / 2)) : maxGapFrames;
 
     var epsilon = 20 * Math.pow(0.25, (scaledPrecision - 1) / 9);
     var maxGapTime = scaledMaxGapFrames * frameDuration;
@@ -22148,7 +22161,8 @@ function mirrorKeysFromPanel(preserveDelays) {
                             maxFrames
                         );
 
-                        var simplifiedKeyframes = simplifySpringKeyframes(fullCurveData, detectedPrecision, frameRate);
+                        // Pass null for initialVelocity - mirrored springs have no velocity
+                        var simplifiedKeyframes = simplifySpringKeyframes(fullCurveData, detectedPrecision, frameRate, null);
 
                         DEBUG_JSX.log("    Baking " + simplifiedKeyframes.length + " spring keyframes with " + detectedPrecision + " precision");
 
