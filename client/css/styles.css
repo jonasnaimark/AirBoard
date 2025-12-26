@@ -1743,3 +1743,124 @@ input.distance-input[data-tooltip]:hover::after {
 .dialog-btn.apply-btn:active {
     background-color: #2d7ab6;
 }
+
+/* Radio button styles for Crop Comp dialog */
+.dialog-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+}
+
+.dialog-radio-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    padding: 4px 0;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+}
+
+.dialog-radio-option:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dialog-radio-option input[type="radio"] {
+    display: none;
+}
+
+.radio-label {
+    color: #ffffff;
+    font-size: 12px;
+    order: -1;
+}
+
+.radio-custom {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    position: relative;
+    transition: border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.dialog-radio-option:hover .radio-custom {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.dialog-radio-option input[type="radio"]:checked + .radio-custom {
+    border-color: #3d85c6;
+}
+
+.dialog-radio-option input[type="radio"]:checked + .radio-custom::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    background-color: #3d85c6;
+    border-radius: 50%;
+}
+
+/* Styled Alert Dialog (macOS-style) */
+.styled-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.styled-alert-dialog {
+    background-color: #e8e8e8;
+    border-radius: 12px;
+    padding: 20px 24px;
+    min-width: 260px;
+    max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.styled-alert-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #000;
+    margin-bottom: 8px;
+}
+
+.styled-alert-message {
+    font-size: 11px;
+    color: #333;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    white-space: pre-wrap;
+}
+
+.styled-alert-button {
+    width: 100%;
+    padding: 8px 16px;
+    background-color: #007AFF;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.styled-alert-button:hover {
+    background-color: #0066DD;
+}
+
+.styled-alert-button:active {
+    background-color: #0055CC;
+}

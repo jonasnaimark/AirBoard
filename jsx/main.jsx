@@ -614,6 +614,802 @@ function extendPrecompsUpChain(layer) {
     }
 }
 
+// ============================================================================
+// CROP COMP FUNCTIONS
+// ============================================================================
+
+/**
+ * Convert a point from layer space (relative to anchor point) to comp space
+ * Handles position, scale, rotation, and parent chain
+ * @param {Layer} layer - The layer
+ * @param {Array} point - [x, y] in layer space (relative to anchor point)
+ * @param {number} time - Time to evaluate transforms at
+ * @returns {Array} - [x, y] in comp space
+ */
+function layerPointToComp(layer, point, time) {
+    var x = point[0];
+    var y = point[1];
+
+    // Get transform values at time
+    var transform = layer.property("Transform");
+    var scale = transform.property("Scale").valueAtTime(time, false);
+    var position = transform.property("Position").valueAtTime(time, false);
+    var rotation = 0;
+
+    // Handle rotation (could be separate X/Y/Z for 3D layers or single Rotation for 2D)
+    var rotationProp = transform.property("Rotation");
+    if (rotationProp) {
+        rotation = rotationProp.valueAtTime(time, false);
+    } else {
+        // 3D layer - just use Z rotation for 2D bounds calculation
+        var zRotProp = transform.property("Z Rotation");
+        if (zRotProp) {
+            rotation = zRotProp.valueAtTime(time, false);
+        }
+    }
+
+    // Convert rotation to radians
+    var rotRad = rotation * Math.PI / 180;
+    var cosR = Math.cos(rotRad);
+    var sinR = Math.sin(rotRad);
+
+    // Apply scale
+    var scaledX = x * scale[0] / 100;
+    var scaledY = y * scale[1] / 100;
+
+    // Apply rotation
+    var rotatedX = scaledX * cosR - scaledY * sinR;
+    var rotatedY = scaledX * sinR + scaledY * cosR;
+
+    // Apply position (anchor point offset is already factored into sourceRectAtTime)
+    var compX = position[0] + rotatedX;
+    var compY = position[1] + rotatedY;
+
+    // If layer has a parent, recursively transform through parent chain
+    if (layer.parent) {
+        // compX, compY is now relative to parent's anchor point
+        // Pass it directly to recurse through parent's transform
+        return layerPointToComp(layer.parent, [compX, compY], time);
+    }
+
+    return [compX, compY];
+}
+
+/**
+ * Get the bounding box of a single layer at a specific time in comp space
+ * Handles transforms (position, scale, rotation, parenting)
+ * @param {Layer} layer - The layer to get bounds for
+ * @param {number} time - The time to evaluate bounds at
+ * @param {CompItem} comp - The containing composition
+ * @returns {Object|null} - {left, top, right, bottom, width, height} in comp space, or null if no visible bounds
+ */
+function getLayerBoundsAtTime(layer, time, comp) {
+    try {
+        DEBUG_JSX.log("  Checking layer: '" + layer.name + "' at time " + time.toFixed(3));
+
+        // Skip layers that don't have visible bounds
+        if (layer instanceof CameraLayer || layer instanceof LightLayer) {
+            DEBUG_JSX.log("    Skipped: Camera or Light layer");
+            return null;
+        }
+
+        // Skip audio-only layers
+        if (layer.hasAudio && !layer.hasVideo) {
+            DEBUG_JSX.log("    Skipped: Audio-only layer");
+            return null;
+        }
+
+        // Skip null layers (they have no visible content)
+        if (layer.nullLayer) {
+            DEBUG_JSX.log("    Skipped: Null layer");
+            return null;
+        }
+
+        // Check if layer is visible at this time
+        if (!layer.enabled) {
+            DEBUG_JSX.log("    Skipped: Layer disabled");
+            return null;
+        }
+
+        // Check if time is within layer's visible range in comp time
+        // Layer is visible from startTime to startTime + (outPoint - inPoint)
+        var layerVisibleStart = layer.startTime;
+        var layerVisibleEnd = layer.startTime + (layer.outPoint - layer.inPoint);
+        DEBUG_JSX.log("    Layer visible range: " + layerVisibleStart.toFixed(3) + " - " + layerVisibleEnd.toFixed(3));
+        if (time < layerVisibleStart - 0.001 || time > layerVisibleEnd + 0.001) {
+            DEBUG_JSX.log("    Skipped: Time outside visible range");
+            return null;
+        }
+
+        // Get source bounds - account for layer trim
+        var sourceTime = time - layer.startTime + layer.inPoint;
+        DEBUG_JSX.log("    sourceTime for sourceRectAtTime: " + sourceTime.toFixed(3));
+
+        var rect = layer.sourceRectAtTime(sourceTime, true); // true = include effect extents
+        DEBUG_JSX.log("    sourceRectAtTime result: " + (rect ? "left=" + rect.left.toFixed(1) + ", top=" + rect.top.toFixed(1) + ", width=" + rect.width.toFixed(1) + ", height=" + rect.height.toFixed(1) : "null"));
+
+        // Log anchor point for debugging footage layers
+        var anchor = layer.property("Transform").property("Anchor Point").valueAtTime(time, false);
+        var pos = layer.property("Transform").property("Position").valueAtTime(time, false);
+        DEBUG_JSX.log("    Anchor point: [" + anchor[0].toFixed(1) + ", " + anchor[1].toFixed(1) + "], Position: [" + pos[0].toFixed(1) + ", " + pos[1].toFixed(1) + "]");
+
+        // Log source info for debugging
+        if (layer.source && layer.source.width) {
+            DEBUG_JSX.log("    Source dimensions: " + layer.source.width + "x" + layer.source.height);
+        }
+
+        // Skip if no valid bounds
+        if (!rect || rect.width === 0 || rect.height === 0) {
+            DEBUG_JSX.log("    Skipped: No valid bounds from sourceRectAtTime");
+            return null;
+        }
+
+        // Check for track matte - if this layer has a track matte, use matte bounds instead
+        if (layer.trackMatteType !== TrackMatteType.NO_TRACK_MATTE && layer.index > 1) {
+            var matteLayer = comp.layer(layer.index - 1);
+            if (matteLayer) {
+                var matteSourceTime = time - matteLayer.startTime;
+                if (matteSourceTime >= matteLayer.inPoint && matteSourceTime <= matteLayer.outPoint) {
+                    var matteRect = matteLayer.sourceRectAtTime(matteSourceTime, true);
+                    if (matteRect && matteRect.width > 0 && matteRect.height > 0) {
+                        // Use the matte's bounds as a constraint
+                        rect = matteRect;
+                    }
+                }
+            }
+        }
+
+        // Convert sourceRect to anchor-relative coordinates for proper rotation handling
+        // sourceRectAtTime returns bounds in layer space, we need anchor-relative for rotation math
+        var anchorRelativeRect = {
+            left: rect.left - anchor[0],
+            top: rect.top - anchor[1],
+            width: rect.width,
+            height: rect.height
+        };
+        DEBUG_JSX.log("    Anchor-relative rect: left=" + anchorRelativeRect.left.toFixed(1) + ", top=" + anchorRelativeRect.top.toFixed(1));
+
+        // Get the 4 corners relative to anchor point
+        var corners = [
+            [anchorRelativeRect.left, anchorRelativeRect.top],
+            [anchorRelativeRect.left + anchorRelativeRect.width, anchorRelativeRect.top],
+            [anchorRelativeRect.left, anchorRelativeRect.top + anchorRelativeRect.height],
+            [anchorRelativeRect.left + anchorRelativeRect.width, anchorRelativeRect.top + anchorRelativeRect.height]
+        ];
+
+        // Transform each corner to comp space
+        var minX = Infinity, minY = Infinity;
+        var maxX = -Infinity, maxY = -Infinity;
+
+        for (var i = 0; i < corners.length; i++) {
+            var compPoint = layerPointToComp(layer, corners[i], time);
+            if (compPoint[0] < minX) minX = compPoint[0];
+            if (compPoint[0] > maxX) maxX = compPoint[0];
+            if (compPoint[1] < minY) minY = compPoint[1];
+            if (compPoint[1] > maxY) maxY = compPoint[1];
+        }
+
+        DEBUG_JSX.log("    Comp space bounds: left=" + minX.toFixed(1) + ", top=" + minY.toFixed(1) +
+                      ", right=" + maxX.toFixed(1) + ", bottom=" + maxY.toFixed(1));
+
+        return {
+            left: minX,
+            top: minY,
+            right: maxX,
+            bottom: maxY,
+            width: maxX - minX,
+            height: maxY - minY
+        };
+    } catch (e) {
+        DEBUG_JSX.log("getLayerBoundsAtTime error for layer '" + layer.name + "': " + e.toString());
+        return null;
+    }
+}
+
+/**
+ * Get the combined bounding box of all visible layers at a specific time
+ * @param {CompItem} comp - The composition
+ * @param {number} time - The time to evaluate
+ * @param {boolean} selectedOnly - If true, only consider selected layers
+ * @returns {Object|null} - Combined bounds {left, top, right, bottom, width, height} or null
+ */
+function getCompBoundsAtTime(comp, time, selectedOnly) {
+    var minX = Infinity, minY = Infinity;
+    var maxX = -Infinity, maxY = -Infinity;
+    var foundAny = false;
+
+    for (var i = 1; i <= comp.numLayers; i++) {
+        var layer = comp.layer(i);
+
+        // Skip if selectedOnly and layer not selected
+        if (selectedOnly && !layer.selected) {
+            continue;
+        }
+
+        // Skip matte layers (they're used by the layer below, not visible themselves)
+        // In AE, if layer at index i+1 has a track matte, then layer at index i is the matte
+        if (i < comp.numLayers) {
+            var layerBelow = comp.layer(i + 1);
+            if (layerBelow && layerBelow.trackMatteType !== TrackMatteType.NO_TRACK_MATTE) {
+                // This layer is being used as a matte for the layer below, skip it
+                continue;
+            }
+        }
+
+        var bounds = getLayerBoundsAtTime(layer, time, comp);
+        if (bounds) {
+            foundAny = true;
+            if (bounds.left < minX) minX = bounds.left;
+            if (bounds.top < minY) minY = bounds.top;
+            if (bounds.right > maxX) maxX = bounds.right;
+            if (bounds.bottom > maxY) maxY = bounds.bottom;
+        }
+    }
+
+    if (!foundAny) {
+        return null;
+    }
+
+    return {
+        left: minX,
+        top: minY,
+        right: maxX,
+        bottom: maxY,
+        width: maxX - minX,
+        height: maxY - minY
+    };
+}
+
+/**
+ * Get the combined bounding box across the entire comp duration
+ * @param {CompItem} comp - The composition
+ * @param {boolean} selectedOnly - If true, only consider selected layers
+ * @param {function} progressCallback - Optional callback for progress updates (receives 0-1)
+ * @returns {Object|null} - Combined bounds or null
+ */
+function getCompBoundsForDuration(comp, selectedOnly, progressCallback) {
+    var minX = Infinity, minY = Infinity;
+    var maxX = -Infinity, maxY = -Infinity;
+    var foundAny = false;
+
+    var frameDuration = comp.frameDuration;
+    var totalFrames = Math.ceil(comp.duration / frameDuration);
+
+    for (var f = 0; f <= totalFrames; f++) {
+        var time = f * frameDuration;
+        if (time > comp.duration) time = comp.duration;
+
+        var bounds = getCompBoundsAtTime(comp, time, selectedOnly);
+        if (bounds) {
+            foundAny = true;
+            if (bounds.left < minX) minX = bounds.left;
+            if (bounds.top < minY) minY = bounds.top;
+            if (bounds.right > maxX) maxX = bounds.right;
+            if (bounds.bottom > maxY) maxY = bounds.bottom;
+        }
+
+        // Progress callback
+        if (progressCallback && f % 10 === 0) {
+            progressCallback(f / totalFrames);
+        }
+    }
+
+    if (!foundAny) {
+        return null;
+    }
+
+    return {
+        left: minX,
+        top: minY,
+        right: maxX,
+        bottom: maxY,
+        width: maxX - minX,
+        height: maxY - minY
+    };
+}
+
+/**
+ * Adjust a position property by an offset (handles static, animated, and separated dimensions)
+ * @param {Layer} layer - The layer to adjust
+ * @param {Array} offset - [x, y] offset to add
+ * @returns {Object} - {adjusted: boolean, hasExpression: boolean}
+ */
+function adjustLayerPositionByOffset(layer, offset) {
+    try {
+        var positionProp = layer.property("Transform").property("Position");
+
+        // Check if position has an expression
+        if (positionProp.expressionEnabled && positionProp.expression !== "") {
+            return { adjusted: false, hasExpression: true };
+        }
+
+        // Check for separated dimensions
+        if (positionProp.dimensionsSeparated) {
+            var xProp = layer.property("Transform").property("X Position");
+            var yProp = layer.property("Transform").property("Y Position");
+
+            // Check for expressions on separated props
+            if ((xProp.expressionEnabled && xProp.expression !== "") ||
+                (yProp.expressionEnabled && yProp.expression !== "")) {
+                return { adjusted: false, hasExpression: true };
+            }
+
+            // Adjust X
+            if (xProp.numKeys === 0) {
+                xProp.setValue(xProp.value + offset[0]);
+            } else {
+                for (var k = 1; k <= xProp.numKeys; k++) {
+                    xProp.setValueAtKey(k, xProp.keyValue(k) + offset[0]);
+                }
+            }
+
+            // Adjust Y
+            if (yProp.numKeys === 0) {
+                yProp.setValue(yProp.value + offset[1]);
+            } else {
+                for (var k = 1; k <= yProp.numKeys; k++) {
+                    yProp.setValueAtKey(k, yProp.keyValue(k) + offset[1]);
+                }
+            }
+        } else {
+            // Combined position
+            if (positionProp.numKeys === 0) {
+                var val = positionProp.value;
+                // Preserve dimensionality - don't add Z if it's a 2D layer
+                var newVal;
+                if (val.length === 2) {
+                    newVal = [val[0] + offset[0], val[1] + offset[1]];
+                } else {
+                    newVal = [val[0] + offset[0], val[1] + offset[1], val[2]];
+                }
+                DEBUG_JSX.log("    Setting position from [" + val[0].toFixed(1) + ", " + val[1].toFixed(1) + "] to [" + newVal[0].toFixed(1) + ", " + newVal[1].toFixed(1) + "]");
+                positionProp.setValue(newVal);
+                // Verify it was set
+                var verifyVal = positionProp.value;
+                DEBUG_JSX.log("    Position after setValue: [" + verifyVal[0].toFixed(1) + ", " + verifyVal[1].toFixed(1) + "]");
+            } else {
+                for (var k = 1; k <= positionProp.numKeys; k++) {
+                    var val = positionProp.keyValue(k);
+                    if (val.length === 2) {
+                        positionProp.setValueAtKey(k, [val[0] + offset[0], val[1] + offset[1]]);
+                    } else {
+                        positionProp.setValueAtKey(k, [val[0] + offset[0], val[1] + offset[1], val[2]]);
+                    }
+                }
+            }
+        }
+
+        return { adjusted: true, hasExpression: false };
+    } catch (e) {
+        DEBUG_JSX.log("adjustLayerPositionByOffset error: " + e.toString());
+        return { adjusted: false, hasExpression: false };
+    }
+}
+
+/**
+ * Find all instances of a comp in the project and adjust their positions
+ * @param {CompItem} croppedComp - The comp that was cropped
+ * @param {Array} positionOffset - [x, y] offset to apply to instances
+ * @returns {Object} - {adjustedCount: number, expressionWarnings: Array}
+ */
+function adjustInstancesInProject(croppedComp, positionOffset) {
+    var adjustedCount = 0;
+    var expressionWarnings = [];
+
+    DEBUG_JSX.log("=== ADJUSTING INSTANCES ===");
+    DEBUG_JSX.log("Looking for instances of comp '" + croppedComp.name + "' (id: " + croppedComp.id + ")");
+    DEBUG_JSX.log("Instance offset to apply: [" + positionOffset[0].toFixed(1) + ", " + positionOffset[1].toFixed(1) + "]");
+
+    for (var i = 1; i <= app.project.numItems; i++) {
+        var item = app.project.item(i);
+        // Double-check: skip if same comp by reference OR by ID
+        if (item instanceof CompItem && item !== croppedComp && item.id !== croppedComp.id) {
+            for (var j = 1; j <= item.numLayers; j++) {
+                var layer = item.layer(j);
+                if (layer.source === croppedComp) {
+                    // This is an instance of the cropped comp
+                    DEBUG_JSX.log("Found instance: '" + item.name + "' > '" + layer.name + "'");
+                    var oldPos = layer.property("Transform").property("Position").value;
+                    DEBUG_JSX.log("  Instance position before: [" + oldPos[0].toFixed(1) + ", " + oldPos[1].toFixed(1) + "]");
+
+                    var result = adjustLayerPositionByOffset(layer, positionOffset);
+
+                    var newPos = layer.property("Transform").property("Position").value;
+                    DEBUG_JSX.log("  Instance position after: [" + newPos[0].toFixed(1) + ", " + newPos[1].toFixed(1) + "]");
+
+                    if (result.adjusted) {
+                        adjustedCount++;
+                        DEBUG_JSX.log("  → Adjusted successfully");
+                    } else if (result.hasExpression) {
+                        expressionWarnings.push(item.name + " > " + layer.name);
+                        DEBUG_JSX.log("  → Skipped (has expression)");
+                    }
+                }
+            }
+        }
+    }
+
+    return {
+        adjustedCount: adjustedCount,
+        expressionWarnings: expressionWarnings
+    };
+}
+
+/**
+ * Crop a composition to the specified bounds
+ * @param {CompItem} comp - The composition to crop
+ * @param {Object} bounds - {left, top, width, height}
+ * @param {boolean} adjustInstances - Whether to adjust instances in other comps
+ * @returns {Object} - {success: boolean, adjustedCount: number, expressionWarnings: Array}
+ */
+function cropCompToBounds(comp, bounds, adjustInstances) {
+    var result = {
+        success: false,
+        adjustedCount: 0,
+        expressionWarnings: []
+    };
+
+    try {
+        // Calculate the offset to move layers
+        var offset = [-bounds.left, -bounds.top];
+
+        // Calculate position offset for instances (content center shift)
+        // Before: content center was at (bounds.left + bounds.width/2, bounds.top + bounds.height/2)
+        // After: content center is at (bounds.width/2, bounds.height/2) relative to new comp origin
+        // Instance position offset = old content center - old comp center
+        var oldCompCenter = [comp.width / 2, comp.height / 2];
+        var contentCenter = [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2];
+        var instanceOffset = [contentCenter[0] - oldCompCenter[0], contentCenter[1] - oldCompCenter[1]];
+
+        // Store original dimensions for instance adjustment
+        var originalWidth = comp.width;
+        var originalHeight = comp.height;
+
+        // Log operation details
+        DEBUG_JSX.log("=== CROPPING COMP: '" + comp.name + "' (id: " + comp.id + ") ===");
+        DEBUG_JSX.log("Input bounds: left=" + bounds.left + ", top=" + bounds.top + ", width=" + bounds.width + ", height=" + bounds.height);
+        DEBUG_JSX.log("Old comp center: [" + oldCompCenter[0].toFixed(1) + ", " + oldCompCenter[1].toFixed(1) + "]");
+        DEBUG_JSX.log("Content center: [" + contentCenter[0].toFixed(1) + ", " + contentCenter[1].toFixed(1) + "]");
+        DEBUG_JSX.log("Instance offset (for instances in other comps): [" + instanceOffset[0].toFixed(1) + ", " + instanceOffset[1].toFixed(1) + "]");
+        DEBUG_JSX.log("Layer offset (for layers inside this comp): [" + offset[0] + ", " + offset[1] + "]");
+
+        // IMPORTANT: Adjust layer positions FIRST, before resizing the comp
+        // This ensures AE processes position changes in the original coordinate space
+        DEBUG_JSX.log("Applying offset [" + offset[0] + ", " + offset[1] + "] to " + comp.numLayers + " layers (BEFORE resize)");
+
+        // Offset all layers to compensate
+        for (var i = 1; i <= comp.numLayers; i++) {
+            var layer = comp.layer(i);
+
+            // Get position and anchor point before adjustment
+            var posProp = layer.property("Transform").property("Position");
+            var anchorProp = layer.property("Transform").property("Anchor Point");
+            var oldPos = posProp.value;
+            var anchor = anchorProp.value;
+            DEBUG_JSX.log("  Layer '" + layer.name + "' anchor: [" + anchor[0].toFixed(1) + ", " + anchor[1].toFixed(1) + "]");
+            DEBUG_JSX.log("  Layer '" + layer.name + "' position before: [" + oldPos[0].toFixed(1) + ", " + oldPos[1].toFixed(1) + "]");
+
+            // Temporarily unlock if locked
+            var wasLocked = layer.locked;
+            if (wasLocked) {
+                layer.locked = false;
+            }
+
+            var adjustResult = adjustLayerPositionByOffset(layer, offset);
+
+            // Re-lock if it was locked
+            if (wasLocked) {
+                layer.locked = true;
+            }
+
+            // Get position after adjustment and verify
+            var newPos = posProp.value;
+            DEBUG_JSX.log("  Layer '" + layer.name + "' position after: [" + newPos[0].toFixed(1) + ", " + newPos[1].toFixed(1) + "] (adjusted: " + adjustResult.adjusted + ")");
+
+            // Calculate where content should now appear (accounting for scale)
+            var sourceTime = comp.time - layer.startTime + layer.inPoint;
+            var rect = layer.sourceRectAtTime(sourceTime, true);
+            if (rect) {
+                var scale = layer.property("Transform").property("Scale").value;
+                var scaledLeft = rect.left * scale[0] / 100;
+                var scaledTop = rect.top * scale[1] / 100;
+                var contentLeft = newPos[0] + scaledLeft;
+                var contentTop = newPos[1] + scaledTop;
+                DEBUG_JSX.log("  Layer '" + layer.name + "' scale: [" + scale[0].toFixed(1) + ", " + scale[1].toFixed(1) + "]");
+                DEBUG_JSX.log("  Layer '" + layer.name + "' sourceRect: left=" + rect.left.toFixed(1) + ", top=" + rect.top.toFixed(1));
+                DEBUG_JSX.log("  Layer '" + layer.name + "' content should be at: [" + contentLeft.toFixed(1) + ", " + contentTop.toFixed(1) + "]");
+            }
+        }
+
+        // NOW resize the comp (after layer positions have been adjusted)
+        DEBUG_JSX.log("Resizing comp from " + comp.width + "x" + comp.height + " to " + Math.ceil(bounds.width) + "x" + Math.ceil(bounds.height));
+        comp.width = Math.ceil(bounds.width);
+        comp.height = Math.ceil(bounds.height);
+
+        // Adjust instances in other comps
+        if (adjustInstances) {
+            var instanceResult = adjustInstancesInProject(comp, instanceOffset);
+            result.adjustedCount = instanceResult.adjustedCount;
+            result.expressionWarnings = instanceResult.expressionWarnings;
+        }
+
+        // Final verification: re-calculate bounds to confirm content is at origin
+        DEBUG_JSX.log("=== FINAL VERIFICATION ===");
+        DEBUG_JSX.log("New comp dimensions: " + comp.width + "x" + comp.height);
+        var verifyBounds = getCompBoundsAtTime(comp, comp.time, false);
+        if (verifyBounds) {
+            DEBUG_JSX.log("Verified content bounds: left=" + verifyBounds.left.toFixed(1) +
+                          ", top=" + verifyBounds.top.toFixed(1) +
+                          ", right=" + verifyBounds.right.toFixed(1) +
+                          ", bottom=" + verifyBounds.bottom.toFixed(1));
+            DEBUG_JSX.log("Expected: left≈0, top≈0, right≈" + comp.width + ", bottom≈" + comp.height);
+        }
+
+        // Force AE to refresh by nudging the time and restoring it
+        var originalTime = comp.time;
+        comp.time = comp.time + 0.001;
+        comp.time = originalTime;
+
+        result.success = true;
+        return result;
+
+    } catch (e) {
+        DEBUG_JSX.log("cropCompToBounds error: " + e.toString());
+        result.success = false;
+        return result;
+    }
+}
+
+/**
+ * Main entry point for Crop Comp feature
+ * @param {string} mode - "currentFrame" or "entireDuration"
+ * @returns {string} - Status message
+ */
+function cropCompFromPanel(mode) {
+    var undoGroupStarted = false;
+
+    try {
+        DEBUG_JSX.clear();
+        DEBUG_JSX.log("cropCompFromPanel called with mode: " + mode);
+
+        var comp = app.project.activeItem;
+        if (!(comp instanceof CompItem)) {
+            return "error|No active composition";
+        }
+
+        // Check for selected layers
+        var selectedLayers = [];
+        for (var i = 1; i <= comp.numLayers; i++) {
+            if (comp.layer(i).selected) {
+                selectedLayers.push(comp.layer(i));
+            }
+        }
+
+        var isPrecompMode = selectedLayers.length > 0;
+        DEBUG_JSX.log("Mode: " + (isPrecompMode ? "Precomp selected layers" : "Crop comp in place"));
+        DEBUG_JSX.log("Selected layers: " + selectedLayers.length);
+
+        // Calculate bounds
+        var bounds;
+        if (mode === "entireDuration") {
+            // Show progress window for entire duration mode
+            var progressWin = new Window('palette', 'Calculating bounds...', undefined, {resizeable: false});
+            progressWin.orientation = 'column';
+            progressWin.alignChildren = ['fill', 'center'];
+            var progressText = progressWin.add('statictext', undefined, 'Analyzing frames...');
+            var progressBar = progressWin.add('progressbar', undefined, 0, 100);
+            progressBar.preferredSize.width = 200;
+            progressWin.show();
+
+            bounds = getCompBoundsForDuration(comp, isPrecompMode, function(progress) {
+                progressBar.value = Math.round(progress * 100);
+                progressText.text = 'Analyzing frames... ' + Math.round(progress * 100) + '%';
+                progressWin.update();
+            });
+
+            progressWin.close();
+        } else {
+            // Current frame
+            bounds = getCompBoundsAtTime(comp, comp.time, isPrecompMode);
+        }
+
+        if (!bounds) {
+            var debugMessages = DEBUG_JSX.getMessages();
+            return "error|No visible content found|" + debugMessages.join("|");
+        }
+
+        // Round bounds to whole pixels
+        bounds.left = Math.floor(bounds.left);
+        bounds.top = Math.floor(bounds.top);
+        bounds.width = Math.ceil(bounds.right - bounds.left);
+        bounds.height = Math.ceil(bounds.bottom - bounds.top);
+        bounds.right = bounds.left + bounds.width;
+        bounds.bottom = bounds.top + bounds.height;
+
+        DEBUG_JSX.log("Calculated bounds: left=" + bounds.left + ", top=" + bounds.top +
+                      ", width=" + bounds.width + ", height=" + bounds.height);
+
+        // Check if bounds are same as comp (no cropping needed)
+        if (bounds.left === 0 && bounds.top === 0 &&
+            bounds.width === comp.width && bounds.height === comp.height) {
+            return "success|No cropping needed - content already fills composition";
+        }
+
+        // Start undo group - ALL modifications must happen after this
+        app.beginUndoGroup("Crop Comp");
+        undoGroupStarted = true;
+
+        var resultMessage = "";
+        var adjustedCount = 0;
+        var expressionWarnings = [];
+
+        if (isPrecompMode) {
+            // PRECOMP MODE: Precompose selected layers, then crop the precomp
+
+            // Get layer indices (1-based)
+            var layerIndices = [];
+            for (var i = 0; i < selectedLayers.length; i++) {
+                layerIndices.push(selectedLayers[i].index);
+            }
+
+            // Sort indices (precompose needs them in order)
+            layerIndices.sort(function(a, b) { return a - b; });
+
+            // Get name from first (topmost) selected layer
+            var firstName = selectedLayers[0].name;
+            var precompName = firstName;
+
+            // Store the original position of where the content should appear
+            // We'll use the bounds center as reference
+            var contentCenterInParent = [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2];
+
+            // Find or create 03_Precomps folder in the same parent folder as the source comp
+            var parentFolder = comp.parentFolder;
+            var precompsFolder = null;
+
+            // Look for existing 03_Precomps folder in the parent folder
+            for (var f = 1; f <= parentFolder.numItems; f++) {
+                var item = parentFolder.item(f);
+                if (item instanceof FolderItem && item.name === "03_Precomps") {
+                    precompsFolder = item;
+                    break;
+                }
+            }
+
+            // Create the folder if it doesn't exist
+            if (!precompsFolder) {
+                precompsFolder = parentFolder.items.addFolder("03_Precomps");
+            }
+
+            // Precompose the layers (moveAllAttributes must be true for multiple layers)
+            var precomp = comp.layers.precompose(layerIndices, precompName, true);
+
+            // Move precomp to the 03_Precomps folder
+            precomp.parentFolder = precompsFolder;
+
+            // Find the precomp layer by checking source property
+            var precompLayer = null;
+            for (var i = 1; i <= comp.numLayers; i++) {
+                var testLayer = comp.layer(i);
+                // Check if layer has a source and if it matches our precomp
+                try {
+                    if (testLayer.source && testLayer.source === precomp) {
+                        precompLayer = testLayer;
+                        break;
+                    }
+                } catch (e) {
+                    // Layer doesn't have source property, skip
+                }
+            }
+
+            if (!precompLayer) {
+                app.endUndoGroup();
+                return "error|Could not find precomp layer after precomposing";
+            }
+
+            // Calculate bounds within the new precomp (content is at same positions)
+            var precompBounds;
+            if (mode === "entireDuration") {
+                precompBounds = getCompBoundsForDuration(precomp, false, null);
+            } else {
+                precompBounds = getCompBoundsAtTime(precomp, comp.time, false);
+            }
+
+            if (!precompBounds) {
+                app.endUndoGroup();
+                return "error|No visible content in precomp";
+            }
+
+            // Round bounds
+            precompBounds.left = Math.floor(precompBounds.left);
+            precompBounds.top = Math.floor(precompBounds.top);
+            precompBounds.width = Math.ceil(precompBounds.right - precompBounds.left);
+            precompBounds.height = Math.ceil(precompBounds.bottom - precompBounds.top);
+
+            // Crop the precomp (no instance adjustment needed, it's new)
+            var cropResult = cropCompToBounds(precomp, precompBounds, false);
+
+            if (!cropResult.success) {
+                app.endUndoGroup();
+                return "error|Failed to crop precomp";
+            }
+
+            // Adjust the precomp layer position in parent comp
+            // The precomp anchor is now at center of cropped comp
+            // We want content to appear at its original position
+            var newAnchor = [precompBounds.width / 2, precompBounds.height / 2];
+            var oldCompCenter = [comp.width / 2, comp.height / 2];
+
+            // Content center in original precomp was at:
+            var oldContentCenter = [precompBounds.left + precompBounds.width / 2,
+                                    precompBounds.top + precompBounds.height / 2];
+
+            // Position offset needed
+            var precompLayerOffset = [oldContentCenter[0] - oldCompCenter[0],
+                                      oldContentCenter[1] - oldCompCenter[1]];
+
+            adjustLayerPositionByOffset(precompLayer, precompLayerOffset);
+
+            // Select the new precomp in the project panel
+            precomp.selected = true;
+
+            resultMessage = "Cropped to " + precompBounds.width + "×" + precompBounds.height;
+
+        } else {
+            // CROP IN PLACE MODE: Resize comp and adjust all layers
+            var cropResult = cropCompToBounds(comp, bounds, true);
+
+            if (!cropResult.success) {
+                app.endUndoGroup();
+                return "error|Failed to crop composition";
+            }
+
+            adjustedCount = cropResult.adjustedCount;
+            expressionWarnings = cropResult.expressionWarnings;
+
+            resultMessage = "Cropped to " + bounds.width + "×" + bounds.height;
+        }
+
+        app.endUndoGroup();
+
+        // Build result message
+        if (adjustedCount > 0) {
+            resultMessage += "\nAdjusted " + adjustedCount + " instance" + (adjustedCount > 1 ? "s" : "");
+        }
+        if (expressionWarnings.length > 0) {
+            resultMessage += "\n\n⚠️ " + expressionWarnings.length + " instance" +
+                (expressionWarnings.length > 1 ? "s have" : " has") + " expressions";
+        }
+
+        // Get debug messages
+        var debugMessages = DEBUG_JSX.getMessages();
+        var debugStr = debugMessages.length > 0 ? "|" + debugMessages.join("|") : "";
+
+        // Show native AE alert if there are instances or warnings
+        if (adjustedCount > 0 || expressionWarnings.length > 0) {
+            alert("Crop Complete\n\n" + resultMessage);
+        }
+
+        return "success|" + debugStr;
+
+    } catch (e) {
+        if (undoGroupStarted) {
+            app.endUndoGroup();
+        }
+        DEBUG_JSX.error("cropCompFromPanel failed", e);
+        var debugMessages = DEBUG_JSX.getMessages();
+
+        // Show native AE error alert
+        alert("Crop Failed\n\n" + e.toString());
+
+        return "error|" + e.toString() + "|" + debugMessages.join("|");
+    }
+}
+
+// ============================================================================
+// END CROP COMP FUNCTIONS
+// ============================================================================
+
 /**
  * Update layer in/out points after nudging keyframes
  * Adjusts layer points if they were originally aligned with first/last selected keyframes

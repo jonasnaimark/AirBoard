@@ -22,6 +22,62 @@ const DEBUG = {
     warn: (msg, data) => console.warn(`⚠️ AirBoard Warning: ${msg}`, data || '')
 };
 
+// Styled alert dialog (macOS-style)
+function showStyledAlert(title, message, buttonText) {
+    buttonText = buttonText || 'OK';
+
+    // Create overlay
+    var overlay = document.createElement('div');
+    overlay.className = 'styled-alert-overlay';
+
+    // Create dialog
+    var dialog = document.createElement('div');
+    dialog.className = 'styled-alert-dialog';
+
+    // Title
+    var titleEl = document.createElement('div');
+    titleEl.className = 'styled-alert-title';
+    titleEl.textContent = title;
+    dialog.appendChild(titleEl);
+
+    // Message
+    var messageEl = document.createElement('div');
+    messageEl.className = 'styled-alert-message';
+    messageEl.textContent = message;
+    dialog.appendChild(messageEl);
+
+    // Button
+    var button = document.createElement('button');
+    button.className = 'styled-alert-button';
+    button.textContent = buttonText;
+    button.onclick = function() {
+        document.body.removeChild(overlay);
+    };
+    dialog.appendChild(button);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Focus button
+    button.focus();
+
+    // Close on overlay click
+    overlay.onclick = function(e) {
+        if (e.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    };
+
+    // Close on Escape
+    var escHandler = function(e) {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
 // Helper function to update stagger row margin based on position row visibility
 function updateStaggerMargin() {
     var staggerRow = document.getElementById('staggerRow');
@@ -2339,6 +2395,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                         });
                     }
+                } else if (action === 'crop-comp') {
+                    console.log('Crop comp action triggered');
+                    // Show the crop comp dialog
+                    var overlay = document.getElementById('cropCompOverlay');
+                    if (overlay) {
+                        // Reset to default option
+                        var currentFrameRadio = overlay.querySelector('input[value="currentFrame"]');
+                        if (currentFrameRadio) {
+                            currentFrameRadio.checked = true;
+                        }
+                        overlay.classList.add('active');
+                    }
                 }
             });
         });
@@ -3140,6 +3208,84 @@ document.addEventListener('DOMContentLoaded', function() {
         extendCompOverlay.addEventListener('click', function(e) {
             if (e.target === extendCompOverlay) {
                 extendCompOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    // Crop Comp Dialog event handlers
+    var cropCompOverlay = document.getElementById('cropCompOverlay');
+    var cropCompApply = document.getElementById('cropCompApply');
+    var cropCompCancel = document.getElementById('cropCompCancel');
+
+    // Cancel button - close dialog
+    if (cropCompCancel) {
+        cropCompCancel.addEventListener('click', function() {
+            if (cropCompOverlay) {
+                cropCompOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    // Apply button - crop comp with selected mode
+    if (cropCompApply) {
+        cropCompApply.addEventListener('click', function() {
+            if (!cropCompOverlay) return;
+
+            // Get selected mode
+            var selectedMode = cropCompOverlay.querySelector('input[name="cropMode"]:checked');
+            var mode = selectedMode ? selectedMode.value : 'currentFrame';
+
+            // Close dialog
+            cropCompOverlay.classList.remove('active');
+
+            // Call JSX function
+            if (csInterface) {
+                csInterface.evalScript('cropCompFromPanel("' + mode + '")', function(result) {
+                    console.log('Crop comp result:', result);
+                    if (result) {
+                        var parts = result.split('|');
+                        var status = parts[0];
+                        var message = parts[1] || '';
+
+                        // Display debug messages in debug panel if open (do this first)
+                        var debugMessages = [];
+                        for (var i = 2; i < parts.length; i++) {
+                            if (parts[i]) debugMessages.push(parts[i]);
+                        }
+                        if (debugMessages.length > 0) {
+                            var debugLog = document.getElementById('debug-log');
+                            if (debugLog) {
+                                debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🔲 Crop Comp Debug:</div>';
+                                for (var j = 0; j < debugMessages.length; j++) {
+                                    debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                                }
+                                debugLog.scrollTop = debugLog.scrollHeight;
+                            }
+                        }
+
+                        // Alerts are now shown by JSX using native AE dialog
+                        // No action needed here - JSX handles the alert display
+                    }
+                });
+            }
+        });
+    }
+
+    // Allow Escape key to close crop comp dialog
+    if (cropCompOverlay) {
+        cropCompOverlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                cropCompOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    // Close crop comp dialog when clicking overlay background
+    if (cropCompOverlay) {
+        cropCompOverlay.addEventListener('click', function(e) {
+            if (e.target === cropCompOverlay) {
+                cropCompOverlay.classList.remove('active');
             }
         });
     }

@@ -160,6 +160,14 @@
                                 </svg>
                                 <span>Paste springs</span>
                             </div>
+                            <div class="custom-select-option" data-action="3-point-curve">
+                                <svg width="18" height="18" viewBox="0 0 72 62" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M24.078 23.0782L18.9998 18L6.27183 30.7279L18.9998 43.4558L24.078 38.3776" stroke="currentColor" stroke-width="4"/>
+                                    <path d="M41.0782 23.0782L36 18L23.2721 30.7279L36 43.4558L41.0782 38.3776" stroke="currentColor" stroke-width="4"/>
+                                    <rect x="53" y="18.1716" width="18" height="18" transform="rotate(45 53 18.1716)" fill="black" stroke="currentColor" stroke-width="4"/>
+                                </svg>
+                                <span>Make 3 point curve</span>
+                            </div>
                             <div class="custom-select-option" data-action="extend-comp">
                                 <svg width="18" height="18" viewBox="0 0 72 62" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <rect x="7" y="11" width="57" height="40" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
@@ -169,13 +177,12 @@
                                 </svg>
                                 <span>Extend comp</span>
                             </div>
-                            <div class="custom-select-option" data-action="3-point-curve">
+                            <div class="custom-select-option" data-action="crop-comp">
                                 <svg width="18" height="18" viewBox="0 0 72 62" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M24.078 23.0782L18.9998 18L6.27183 30.7279L18.9998 43.4558L24.078 38.3776" stroke="currentColor" stroke-width="4"/>
-                                    <path d="M41.0782 23.0782L36 18L23.2721 30.7279L36 43.4558L41.0782 38.3776" stroke="currentColor" stroke-width="4"/>
-                                    <rect x="53" y="18.1716" width="18" height="18" transform="rotate(45 53 18.1716)" fill="black" stroke="currentColor" stroke-width="4"/>
+                                    <path d="M20 4V47H45.8M63 47H52.25" stroke="currentColor" stroke-width="4"/>
+                                    <path d="M52 58L52 15L26.2 15M9 15L19.75 15" stroke="currentColor" stroke-width="4"/>
                                 </svg>
-                                <span>Make 3 point curve</span>
+                                <span>Crop comp</span>
                             </div>
                         </div>
                     </div>
@@ -442,6 +449,31 @@
                 <div class="dialog-buttons">
                     <button id="extendCompCancel" class="dialog-btn cancel-btn">Cancel</button>
                     <button id="extendCompApply" class="dialog-btn apply-btn">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Crop Comp Dialog -->
+    <div id="cropCompOverlay" class="dialog-overlay">
+        <div id="cropCompDialog" class="extend-comp-dialog">
+            <div class="dialog-content">
+                <label class="dialog-label" style="margin-bottom: 6px; line-height: 1.5;">Crops comp to fit content and adjusts all comp instances.</label>
+                <div class="dialog-radio-group">
+                    <label class="dialog-radio-option">
+                        <input type="radio" name="cropMode" value="currentFrame" checked>
+                        <span class="radio-custom"></span>
+                        <span class="radio-label">Crop to current frame</span>
+                    </label>
+                    <label class="dialog-radio-option">
+                        <input type="radio" name="cropMode" value="entireDuration">
+                        <span class="radio-custom"></span>
+                        <span class="radio-label">Crop to entire duration</span>
+                    </label>
+                </div>
+                <div class="dialog-buttons">
+                    <button id="cropCompCancel" class="dialog-btn cancel-btn">Cancel</button>
+                    <button id="cropCompApply" class="dialog-btn apply-btn">Crop</button>
                 </div>
             </div>
         </div>
