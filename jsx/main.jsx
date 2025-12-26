@@ -676,6 +676,490 @@ function layerPointToComp(layer, point, time) {
 }
 
 /**
+ * Get all path vertices from a shape layer for precise bounds calculation
+ * @param {ShapeLayer} layer - The shape layer
+ * @param {number} time - The time to evaluate
+ * @returns {Array} - Array of [x, y] points in layer space
+ */
+function getShapeLayerVertices(layer, time) {
+    var vertices = [];
+
+    function processShapeGroup(group, groupTransform) {
+        if (!group) return;
+
+        try {
+            for (var i = 1; i <= group.numProperties; i++) {
+                var prop = group.property(i);
+                if (!prop) continue;
+
+                var matchName = prop.matchName;
+
+                // Check for path shapes
+                if (matchName === "ADBE Vector Shape - Group") {
+                    // Bezier path - sample along curves for accurate bounds
+                    var pathProp = prop.property("ADBE Vector Shape");
+                    if (pathProp && pathProp.value) {
+                        var pathValue = pathProp.valueAtTime(time, false);
+                        var verts = pathValue.vertices;
+                        var inTans = pathValue.inTangents;
+                        var outTans = pathValue.outTangents;
+                        var isClosed = pathValue.closed;
+
+                        // Sample points along bezier curves
+                        var numSegments = isClosed ? verts.length : verts.length - 1;
+                        for (var seg = 0; seg < numSegments; seg++) {
+                            var nextSeg = (seg + 1) % verts.length;
+
+                            var p0 = verts[seg];
+                            var p1 = [verts[seg][0] + outTans[seg][0], verts[seg][1] + outTans[seg][1]];
+                            var p2 = [verts[nextSeg][0] + inTans[nextSeg][0], verts[nextSeg][1] + inTans[nextSeg][1]];
+                            var p3 = verts[nextSeg];
+
+                            // Sample 8 points along each segment
+                            for (var t = 0; t <= 1; t += 0.125) {
+                                var mt = 1 - t;
+                                var mt2 = mt * mt;
+                                var mt3 = mt2 * mt;
+                                var t2 = t * t;
+                                var t3 = t2 * t;
+
+                                var x = mt3 * p0[0] + 3 * mt2 * t * p1[0] + 3 * mt * t2 * p2[0] + t3 * p3[0];
+                                var y = mt3 * p0[1] + 3 * mt2 * t * p1[1] + 3 * mt * t2 * p2[1] + t3 * p3[1];
+
+                                var pt = [x, y];
+                                if (groupTransform) {
+                                    pt = applyShapeTransform(pt, groupTransform, time);
+                                }
+                                vertices.push(pt);
+                            }
+                        }
+                    }
+                } else if (matchName === "ADBE Vector Shape - Rect") {
+                    // Rectangle - get corners
+                    var size = prop.property("ADBE Vector Rect Size").valueAtTime(time, false);
+                    var pos = prop.property("ADBE Vector Rect Position").valueAtTime(time, false);
+                    var corners = [
+                        [pos[0] - size[0]/2, pos[1] - size[1]/2],
+                        [pos[0] + size[0]/2, pos[1] - size[1]/2],
+                        [pos[0] - size[0]/2, pos[1] + size[1]/2],
+                        [pos[0] + size[0]/2, pos[1] + size[1]/2]
+                    ];
+                    for (var c = 0; c < corners.length; c++) {
+                        var pt = corners[c];
+                        if (groupTransform) pt = applyShapeTransform(pt, groupTransform, time);
+                        vertices.push(pt);
+                    }
+                } else if (matchName === "ADBE Vector Shape - Ellipse") {
+                    // Ellipse - sample points around the perimeter
+                    var size = prop.property("ADBE Vector Ellipse Size").valueAtTime(time, false);
+                    var pos = prop.property("ADBE Vector Ellipse Position").valueAtTime(time, false);
+                    // Sample 8 points around ellipse for good approximation
+                    for (var a = 0; a < 8; a++) {
+                        var angle = a * Math.PI / 4;
+                        var pt = [
+                            pos[0] + Math.cos(angle) * size[0] / 2,
+                            pos[1] + Math.sin(angle) * size[1] / 2
+                        ];
+                        if (groupTransform) pt = applyShapeTransform(pt, groupTransform, time);
+                        vertices.push(pt);
+                    }
+                } else if (matchName === "ADBE Vector Shape - Star") {
+                    // Star/Polygon - get the points
+                    var starPos = prop.property("ADBE Vector Star Position").valueAtTime(time, false);
+                    var outerRadius = prop.property("ADBE Vector Star Outer Radius").valueAtTime(time, false);
+                    var innerRadius = prop.property("ADBE Vector Star Inner Radius");
+                    var numPoints = prop.property("ADBE Vector Star Points").valueAtTime(time, false);
+                    var rotation = prop.property("ADBE Vector Star Rotation").valueAtTime(time, false);
+                    var innerRad = innerRadius ? innerRadius.valueAtTime(time, false) : outerRadius * 0.5;
+
+                    for (var p = 0; p < numPoints * 2; p++) {
+                        var angle = (p * Math.PI / numPoints) + (rotation * Math.PI / 180) - Math.PI/2;
+                        var radius = (p % 2 === 0) ? outerRadius : innerRad;
+                        var pt = [
+                            starPos[0] + Math.cos(angle) * radius,
+                            starPos[1] + Math.sin(angle) * radius
+                        ];
+                        if (groupTransform) pt = applyShapeTransform(pt, groupTransform, time);
+                        vertices.push(pt);
+                    }
+                } else if (matchName === "ADBE Vector Group") {
+                    // Nested group - get its transform and recurse
+                    var nestedTransform = prop.property("ADBE Vector Transform Group");
+                    processShapeGroup(prop.property("ADBE Vectors Group"), nestedTransform);
+                }
+            }
+        } catch (e) {
+            DEBUG_JSX.log("Error processing shape group: " + e.toString());
+        }
+    }
+
+    function applyShapeTransform(point, transformGroup, time) {
+        if (!transformGroup) return point;
+        try {
+            var anchor = transformGroup.property("ADBE Vector Anchor").valueAtTime(time, false);
+            var pos = transformGroup.property("ADBE Vector Position").valueAtTime(time, false);
+            var scale = transformGroup.property("ADBE Vector Scale").valueAtTime(time, false);
+            var rotation = transformGroup.property("ADBE Vector Rotation").valueAtTime(time, false);
+
+            // Transform: anchor, scale, rotate, position
+            var x = point[0] - anchor[0];
+            var y = point[1] - anchor[1];
+
+            // Scale
+            x = x * scale[0] / 100;
+            y = y * scale[1] / 100;
+
+            // Rotate
+            var rad = rotation * Math.PI / 180;
+            var cos = Math.cos(rad);
+            var sin = Math.sin(rad);
+            var rx = x * cos - y * sin;
+            var ry = x * sin + y * cos;
+
+            // Position
+            return [rx + pos[0], ry + pos[1]];
+        } catch (e) {
+            return point;
+        }
+    }
+
+    // Start processing from the Contents group
+    var contents = layer.property("ADBE Root Vectors Group");
+    if (contents) {
+        processShapeGroup(contents, null);
+    }
+
+    return vertices;
+}
+
+// Global cache for text layer vertices (cleared before each crop operation)
+var _textVerticesCache = {};
+var _preconvertedTextLayers = {}; // Maps original layer index to shape layer
+
+/**
+ * Clear the text vertices cache - call before starting a crop operation
+ */
+function clearTextVerticesCache() {
+    _textVerticesCache = {};
+}
+
+/**
+ * Pre-convert all text layers to shape layers for faster duration sampling
+ * Call this before getCompBoundsForDuration to avoid repeated conversions
+ * @param {CompItem} comp - The composition
+ * @param {boolean} selectedOnly - Only process selected layers
+ */
+function preconvertTextLayers(comp, selectedOnly) {
+    _preconvertedTextLayers = {};
+
+    // Store original selection
+    var originalSelection = [];
+    for (var i = 1; i <= comp.numLayers; i++) {
+        if (comp.layer(i).selected) {
+            originalSelection.push(comp.layer(i));
+        }
+    }
+
+    // Find all text layers
+    var textLayers = [];
+    for (var i = 1; i <= comp.numLayers; i++) {
+        var layer = comp.layer(i);
+        if (layer instanceof TextLayer) {
+            if (selectedOnly && !layer.selected) continue;
+            textLayers.push({layer: layer, index: layer.index});
+        }
+    }
+
+    DEBUG_JSX.log("Pre-converting " + textLayers.length + " text layers to shapes");
+
+    // Convert each text layer
+    for (var t = 0; t < textLayers.length; t++) {
+        var textLayer = textLayers[t].layer;
+        var originalIndex = textLayers[t].index;
+
+        try {
+            // Store original visibility
+            var originalEnabled = textLayer.enabled;
+
+            // Deselect all, select only this text layer
+            for (var i = 1; i <= comp.numLayers; i++) {
+                comp.layer(i).selected = false;
+            }
+            textLayer.selected = true;
+
+            // Execute "Create Shapes from Text"
+            app.executeCommand(3781);
+
+            // Restore original visibility (command hides the text layer)
+            textLayer.enabled = originalEnabled;
+
+            // Find the newly created shape layer
+            for (var i = 1; i <= comp.numLayers; i++) {
+                var checkLayer = comp.layer(i);
+                if (checkLayer.selected && checkLayer instanceof ShapeLayer && checkLayer.name.indexOf("Outlines") !== -1) {
+                    // Store mapping from original text layer to shape layer
+                    _preconvertedTextLayers[originalIndex] = checkLayer;
+                    DEBUG_JSX.log("  Pre-converted text layer " + originalIndex + " -> " + checkLayer.name);
+                    break;
+                }
+            }
+        } catch (e) {
+            DEBUG_JSX.log("  Error pre-converting text layer " + originalIndex + ": " + e.toString());
+        }
+    }
+
+    // Restore original selection
+    for (var i = 1; i <= comp.numLayers; i++) {
+        comp.layer(i).selected = false;
+    }
+    for (var i = 0; i < originalSelection.length; i++) {
+        try {
+            originalSelection[i].selected = true;
+        } catch (e) {}
+    }
+}
+
+/**
+ * Clean up pre-converted text shape layers
+ * Call this after cropping is complete
+ */
+function cleanupPreconvertedTextLayers() {
+    for (var key in _preconvertedTextLayers) {
+        if (_preconvertedTextLayers.hasOwnProperty(key)) {
+            try {
+                var shapeLayer = _preconvertedTextLayers[key];
+                if (shapeLayer && shapeLayer.index) {
+                    shapeLayer.remove();
+                    DEBUG_JSX.log("  Removed pre-converted shape layer for text " + key);
+                }
+            } catch (e) {
+                DEBUG_JSX.log("  Error removing pre-converted layer: " + e.toString());
+            }
+        }
+    }
+    _preconvertedTextLayers = {};
+}
+
+/**
+ * Check if a text layer has animated source text
+ */
+function hasAnimatedSourceText(layer) {
+    try {
+        var sourceText = layer.property("Source Text");
+        if (sourceText && sourceText.numKeys > 0) {
+            return true;
+        }
+        // Also check for text animators that might change bounds
+        var animators = layer.property("ADBE Text Properties").property("ADBE Text Animators");
+        if (animators && animators.numProperties > 0) {
+            return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
+/**
+ * Get vertices from a text layer by temporarily converting to shapes
+ * Uses pre-converted shape layer if available (for duration mode)
+ * Results are cached for non-animated text to avoid repeated conversions
+ * @param {TextLayer} layer - The text layer
+ * @param {CompItem} comp - The composition
+ * @param {number} time - The time to evaluate
+ * @returns {Array} - Array of [x, y] points in layer space, or empty array
+ */
+function getTextLayerVertices(layer, comp, time) {
+    var vertices = [];
+
+    // Create cache key using layer's unique identifier
+    var cacheKey = comp.id + "_" + layer.index + "_" + layer.name;
+
+    // Check if text is animated
+    var isAnimated = hasAnimatedSourceText(layer);
+
+    // If not animated and we have cached vertices, return them
+    if (!isAnimated && _textVerticesCache[cacheKey]) {
+        DEBUG_JSX.log("    Using cached text vertices (" + _textVerticesCache[cacheKey].length + " points)");
+        return _textVerticesCache[cacheKey];
+    }
+
+    // Check if there's a pre-converted shape layer available (duration mode)
+    var preconvertedLayer = _preconvertedTextLayers[layer.index];
+    if (preconvertedLayer) {
+        try {
+            var sourceTime = time - layer.startTime + layer.inPoint;
+            vertices = getShapeLayerVertices(preconvertedLayer, sourceTime);
+            DEBUG_JSX.log("    Using pre-converted shape layer, got " + vertices.length + " vertices");
+            return vertices;
+        } catch (e) {
+            DEBUG_JSX.log("    Error using pre-converted layer: " + e.toString());
+        }
+    }
+
+    try {
+        // Store original selection and visibility
+        var originalSelection = [];
+        for (var i = 1; i <= comp.numLayers; i++) {
+            if (comp.layer(i).selected) {
+                originalSelection.push(comp.layer(i));
+            }
+        }
+        var originalEnabled = layer.enabled;
+
+        // Deselect all layers
+        for (var i = 1; i <= comp.numLayers; i++) {
+            comp.layer(i).selected = false;
+        }
+
+        // Select only the text layer
+        layer.selected = true;
+
+        // Execute "Create Shapes from Text" command (ID 3781)
+        // This creates a new shape layer from the text (and hides the original)
+        app.executeCommand(3781);
+
+        // Restore the original text layer's visibility (command hides it)
+        layer.enabled = originalEnabled;
+
+        // Find the newly created shape layer (should be selected and above the text layer)
+        var shapeLayer = null;
+        for (var i = 1; i <= comp.numLayers; i++) {
+            var checkLayer = comp.layer(i);
+            if (checkLayer.selected && checkLayer instanceof ShapeLayer && checkLayer.name.indexOf("Outlines") !== -1) {
+                shapeLayer = checkLayer;
+                break;
+            }
+        }
+
+        if (shapeLayer) {
+            DEBUG_JSX.log("    Created temp shape layer: " + shapeLayer.name);
+
+            // Get vertices from the shape layer
+            var sourceTime = time - layer.startTime + layer.inPoint;
+            vertices = getShapeLayerVertices(shapeLayer, sourceTime);
+
+            DEBUG_JSX.log("    Got " + vertices.length + " vertices from text shapes");
+
+            // Delete the temporary shape layer
+            shapeLayer.remove();
+        } else {
+            DEBUG_JSX.log("    Could not find created shape layer");
+        }
+
+        // Restore original selection
+        for (var i = 1; i <= comp.numLayers; i++) {
+            comp.layer(i).selected = false;
+        }
+        for (var i = 0; i < originalSelection.length; i++) {
+            try {
+                originalSelection[i].selected = true;
+            } catch (e) {}
+        }
+
+    } catch (e) {
+        DEBUG_JSX.log("    Error converting text to shapes: " + e.toString());
+        // Try to clean up any temp layers
+        try {
+            for (var i = 1; i <= comp.numLayers; i++) {
+                var checkLayer = comp.layer(i);
+                if (checkLayer.name.indexOf("Outlines") !== -1 && checkLayer instanceof ShapeLayer) {
+                    // Check if it was just created (no keyframes, at same position)
+                    checkLayer.remove();
+                    break;
+                }
+            }
+        } catch (e2) {}
+    }
+
+    // Cache the results for non-animated text
+    if (!isAnimated && vertices.length > 0) {
+        _textVerticesCache[cacheKey] = vertices;
+    }
+
+    return vertices;
+}
+
+/**
+ * Get all mask path vertices from a layer for precise bounds calculation
+ * @param {Layer} layer - The layer with masks
+ * @param {number} time - The time to evaluate
+ * @returns {Array} - Array of [x, y] points in layer space, or empty if no masks
+ */
+function getMaskVertices(layer, time) {
+    var vertices = [];
+
+    try {
+        // Check if layer has masks using the mask property
+        if (!layer.mask || layer.mask.numProperties === 0) {
+            return vertices;
+        }
+
+        var numMasks = layer.mask.numProperties;
+        DEBUG_JSX.log("    Found " + numMasks + " mask(s) on layer");
+
+        for (var m = 1; m <= numMasks; m++) {
+            var mask = layer.mask(m);
+            if (!mask) continue;
+
+            // Check mask mode - only use Add mode masks for bounds
+            var maskMode = mask.maskMode;
+            DEBUG_JSX.log("    Mask " + m + " '" + mask.name + "' mode: " + maskMode);
+            // MaskMode enum: MaskMode.NONE, MaskMode.ADD, MaskMode.SUBTRACT, etc.
+            if (maskMode === MaskMode.NONE) continue;
+
+            var maskPath = mask.maskPath;
+            if (!maskPath) {
+                DEBUG_JSX.log("    Mask " + m + " has no path property");
+                continue;
+            }
+
+            var pathValue = maskPath.valueAtTime(time, false);
+            if (!pathValue || !pathValue.vertices) {
+                DEBUG_JSX.log("    Mask " + m + " has no vertices");
+                continue;
+            }
+
+            var verts = pathValue.vertices;
+            var inTans = pathValue.inTangents;
+            var outTans = pathValue.outTangents;
+            var isClosed = pathValue.closed;
+
+            DEBUG_JSX.log("    Mask " + m + " has " + verts.length + " vertices, closed: " + isClosed);
+
+            // Sample points along bezier curves for accurate bounds
+            var numSegments = isClosed ? verts.length : verts.length - 1;
+            for (var seg = 0; seg < numSegments; seg++) {
+                var nextSeg = (seg + 1) % verts.length;
+
+                // Bezier control points for this segment
+                var p0 = verts[seg];
+                var p1 = [verts[seg][0] + outTans[seg][0], verts[seg][1] + outTans[seg][1]];
+                var p2 = [verts[nextSeg][0] + inTans[nextSeg][0], verts[nextSeg][1] + inTans[nextSeg][1]];
+                var p3 = verts[nextSeg];
+
+                // Sample 8 points along each bezier segment
+                for (var t = 0; t <= 1; t += 0.125) {
+                    var mt = 1 - t;
+                    var mt2 = mt * mt;
+                    var mt3 = mt2 * mt;
+                    var t2 = t * t;
+                    var t3 = t2 * t;
+
+                    // Cubic bezier formula
+                    var x = mt3 * p0[0] + 3 * mt2 * t * p1[0] + 3 * mt * t2 * p2[0] + t3 * p3[0];
+                    var y = mt3 * p0[1] + 3 * mt2 * t * p1[1] + 3 * mt * t2 * p2[1] + t3 * p3[1];
+
+                    vertices.push([x, y]);
+                }
+            }
+        }
+    } catch (e) {
+        DEBUG_JSX.log("Error getting mask vertices: " + e.toString());
+    }
+
+    return vertices;
+}
+
+/**
  * Get the bounding box of a single layer at a specific time in comp space
  * Handles transforms (position, scale, rotation, parenting)
  * @param {Layer} layer - The layer to get bounds for
@@ -725,7 +1209,7 @@ function getLayerBoundsAtTime(layer, time, comp) {
         var sourceTime = time - layer.startTime + layer.inPoint;
         DEBUG_JSX.log("    sourceTime for sourceRectAtTime: " + sourceTime.toFixed(3));
 
-        var rect = layer.sourceRectAtTime(sourceTime, true); // true = include effect extents
+        var rect = layer.sourceRectAtTime(sourceTime, false); // false = exclude effect extents for tighter bounds
         DEBUG_JSX.log("    sourceRectAtTime result: " + (rect ? "left=" + rect.left.toFixed(1) + ", top=" + rect.top.toFixed(1) + ", width=" + rect.width.toFixed(1) + ", height=" + rect.height.toFixed(1) : "null"));
 
         // Log anchor point for debugging footage layers
@@ -759,30 +1243,74 @@ function getLayerBoundsAtTime(layer, time, comp) {
             }
         }
 
-        // Convert sourceRect to anchor-relative coordinates for proper rotation handling
-        // sourceRectAtTime returns bounds in layer space, we need anchor-relative for rotation math
-        var anchorRelativeRect = {
-            left: rect.left - anchor[0],
-            top: rect.top - anchor[1],
-            width: rect.width,
-            height: rect.height
-        };
-        DEBUG_JSX.log("    Anchor-relative rect: left=" + anchorRelativeRect.left.toFixed(1) + ", top=" + anchorRelativeRect.top.toFixed(1));
+        // For shape layers, use actual path vertices for precise bounds
+        // For masked layers, use mask vertices
+        // For other layers, use the 4 corners of the bounding box
+        var pointsToTransform = [];
 
-        // Get the 4 corners relative to anchor point
-        var corners = [
-            [anchorRelativeRect.left, anchorRelativeRect.top],
-            [anchorRelativeRect.left + anchorRelativeRect.width, anchorRelativeRect.top],
-            [anchorRelativeRect.left, anchorRelativeRect.top + anchorRelativeRect.height],
-            [anchorRelativeRect.left + anchorRelativeRect.width, anchorRelativeRect.top + anchorRelativeRect.height]
-        ];
+        // First check for masks - they constrain the visible area
+        var maskVertices = getMaskVertices(layer, sourceTime);
+        if (maskVertices && maskVertices.length > 0) {
+            DEBUG_JSX.log("    Using " + maskVertices.length + " mask vertices for precise bounds");
+            // Mask vertices are in layer space, need to convert to anchor-relative
+            for (var v = 0; v < maskVertices.length; v++) {
+                pointsToTransform.push([
+                    maskVertices[v][0] - anchor[0],
+                    maskVertices[v][1] - anchor[1]
+                ]);
+            }
+        } else if (layer instanceof TextLayer) {
+            // Convert text to shapes temporarily to get exact vertices
+            DEBUG_JSX.log("    Text layer detected - converting to shapes for precise bounds");
+            var textVertices = getTextLayerVertices(layer, comp, time);
+            if (textVertices && textVertices.length > 0) {
+                DEBUG_JSX.log("    Using " + textVertices.length + " text shape vertices for precise bounds");
+                // Text vertices are in layer space, convert to anchor-relative
+                for (var v = 0; v < textVertices.length; v++) {
+                    pointsToTransform.push([
+                        textVertices[v][0] - anchor[0],
+                        textVertices[v][1] - anchor[1]
+                    ]);
+                }
+            }
+        } else if (layer instanceof ShapeLayer) {
+            // Try to get actual shape vertices for tighter bounds
+            var shapeVertices = getShapeLayerVertices(layer, sourceTime);
+            if (shapeVertices && shapeVertices.length > 0) {
+                DEBUG_JSX.log("    Using " + shapeVertices.length + " shape vertices for precise bounds");
+                // Shape vertices are in layer space, need to convert to anchor-relative
+                for (var v = 0; v < shapeVertices.length; v++) {
+                    pointsToTransform.push([
+                        shapeVertices[v][0] - anchor[0],
+                        shapeVertices[v][1] - anchor[1]
+                    ]);
+                }
+            }
+        }
 
-        // Transform each corner to comp space
+        // Fallback to bounding box corners if no shape vertices
+        if (pointsToTransform.length === 0) {
+            // Convert sourceRect to anchor-relative coordinates
+            var anchorRelativeRect = {
+                left: rect.left - anchor[0],
+                top: rect.top - anchor[1],
+                width: rect.width,
+                height: rect.height
+            };
+            pointsToTransform = [
+                [anchorRelativeRect.left, anchorRelativeRect.top],
+                [anchorRelativeRect.left + anchorRelativeRect.width, anchorRelativeRect.top],
+                [anchorRelativeRect.left, anchorRelativeRect.top + anchorRelativeRect.height],
+                [anchorRelativeRect.left + anchorRelativeRect.width, anchorRelativeRect.top + anchorRelativeRect.height]
+            ];
+        }
+
+        // Transform each point to comp space
         var minX = Infinity, minY = Infinity;
         var maxX = -Infinity, maxY = -Infinity;
 
-        for (var i = 0; i < corners.length; i++) {
-            var compPoint = layerPointToComp(layer, corners[i], time);
+        for (var i = 0; i < pointsToTransform.length; i++) {
+            var compPoint = layerPointToComp(layer, pointsToTransform[i], time);
             if (compPoint[0] < minX) minX = compPoint[0];
             if (compPoint[0] > maxX) maxX = compPoint[0];
             if (compPoint[1] < minY) minY = compPoint[1];
@@ -861,7 +1389,70 @@ function getCompBoundsAtTime(comp, time, selectedOnly) {
 }
 
 /**
+ * Collect all keyframe times from a property group recursively
+ */
+function collectKeyframeTimes(propGroup, times, depth) {
+    depth = depth || 0;
+    if (depth > 10) return;
+
+    for (var p = 1; p <= propGroup.numProperties; p++) {
+        try {
+            var prop = propGroup.property(p);
+            if (!prop) continue;
+
+            if (prop.propertyType === PropertyType.PROPERTY) {
+                if (prop.canVaryOverTime && prop.numKeys > 0) {
+                    for (var k = 1; k <= prop.numKeys; k++) {
+                        times[prop.keyTime(k)] = true;
+                    }
+                }
+            } else if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                       prop.propertyType === PropertyType.NAMED_GROUP) {
+                collectKeyframeTimes(prop, times, depth + 1);
+            }
+        } catch (e) {}
+    }
+}
+
+/**
+ * Get all relevant sample times for a layer (keyframes + in/out points)
+ */
+function getLayerSampleTimes(layer, times) {
+    // Add layer in/out points
+    times[layer.inPoint] = true;
+    times[layer.outPoint] = true;
+
+    // Collect all keyframe times from transform and other properties
+    try {
+        collectKeyframeTimes(layer.property("Transform"), times, 0);
+    } catch (e) {}
+
+    // For shape layers, also check shape contents
+    if (layer instanceof ShapeLayer) {
+        try {
+            var contents = layer.property("ADBE Root Vectors Group");
+            if (contents) collectKeyframeTimes(contents, times, 0);
+        } catch (e) {}
+    }
+
+    // For text layers, check text properties
+    if (layer instanceof TextLayer) {
+        try {
+            collectKeyframeTimes(layer.property("ADBE Text Properties"), times, 0);
+        } catch (e) {}
+    }
+
+    // Check masks
+    try {
+        if (layer.mask && layer.mask.numProperties > 0) {
+            collectKeyframeTimes(layer.mask, times, 0);
+        }
+    } catch (e) {}
+}
+
+/**
  * Get the combined bounding box across the entire comp duration
+ * Uses smart sampling - only at keyframe times instead of every frame
  * @param {CompItem} comp - The composition
  * @param {boolean} selectedOnly - If true, only consider selected layers
  * @param {function} progressCallback - Optional callback for progress updates (receives 0-1)
@@ -872,12 +1463,62 @@ function getCompBoundsForDuration(comp, selectedOnly, progressCallback) {
     var maxX = -Infinity, maxY = -Infinity;
     var foundAny = false;
 
-    var frameDuration = comp.frameDuration;
-    var totalFrames = Math.ceil(comp.duration / frameDuration);
+    // Collect all relevant sample times from all layers
+    var sampleTimesObj = {};
+    sampleTimesObj[0] = true; // Always sample start
+    sampleTimesObj[comp.duration] = true; // Always sample end
 
-    for (var f = 0; f <= totalFrames; f++) {
-        var time = f * frameDuration;
-        if (time > comp.duration) time = comp.duration;
+    for (var i = 1; i <= comp.numLayers; i++) {
+        var layer = comp.layer(i);
+        if (selectedOnly && !layer.selected) continue;
+        if (!layer.enabled) continue;
+
+        getLayerSampleTimes(layer, sampleTimesObj);
+    }
+
+    // Convert to sorted array
+    var sampleTimes = [];
+    for (var t in sampleTimesObj) {
+        if (sampleTimesObj.hasOwnProperty(t)) {
+            var time = parseFloat(t);
+            if (time >= 0 && time <= comp.duration) {
+                sampleTimes.push(time);
+            }
+        }
+    }
+    sampleTimes.sort(function(a, b) { return a - b; });
+
+    // If very few keyframes, add some intermediate samples for safety
+    // (in case of expressions or other dynamic content)
+    if (sampleTimes.length < 10) {
+        var frameDuration = comp.frameDuration;
+        // Sample every 0.5 seconds or 15 frames, whichever is less
+        var sampleInterval = Math.min(0.5, frameDuration * 15);
+        for (var t = 0; t <= comp.duration; t += sampleInterval) {
+            sampleTimesObj[t] = true;
+        }
+        // Rebuild array
+        sampleTimes = [];
+        for (var t in sampleTimesObj) {
+            if (sampleTimesObj.hasOwnProperty(t)) {
+                var time = parseFloat(t);
+                if (time >= 0 && time <= comp.duration) {
+                    sampleTimes.push(time);
+                }
+            }
+        }
+        sampleTimes.sort(function(a, b) { return a - b; });
+    }
+
+    DEBUG_JSX.log("Smart sampling: " + sampleTimes.length + " sample times (vs " +
+                  Math.ceil(comp.duration / comp.frameDuration) + " frames)");
+
+    for (var s = 0; s < sampleTimes.length; s++) {
+        if (progressCallback) {
+            progressCallback(s / sampleTimes.length);
+        }
+
+        var time = sampleTimes[s];
 
         var bounds = getCompBoundsAtTime(comp, time, selectedOnly);
         if (bounds) {
@@ -886,11 +1527,6 @@ function getCompBoundsForDuration(comp, selectedOnly, progressCallback) {
             if (bounds.top < minY) minY = bounds.top;
             if (bounds.right > maxX) maxX = bounds.right;
             if (bounds.bottom > maxY) maxY = bounds.bottom;
-        }
-
-        // Progress callback
-        if (progressCallback && f % 10 === 0) {
-            progressCallback(f / totalFrames);
         }
     }
 
@@ -1172,6 +1808,9 @@ function cropCompFromPanel(mode) {
         DEBUG_JSX.clear();
         DEBUG_JSX.log("cropCompFromPanel called with mode: " + mode);
 
+        // Clear text vertices cache for fresh calculation
+        clearTextVerticesCache();
+
         var comp = app.project.activeItem;
         if (!(comp instanceof CompItem)) {
             return "error|No active composition";
@@ -1189,9 +1828,16 @@ function cropCompFromPanel(mode) {
         DEBUG_JSX.log("Mode: " + (isPrecompMode ? "Precomp selected layers" : "Crop comp in place"));
         DEBUG_JSX.log("Selected layers: " + selectedLayers.length);
 
+        // Start undo group early so text pre-conversion is included
+        app.beginUndoGroup("Crop Comp");
+        undoGroupStarted = true;
+
         // Calculate bounds
         var bounds;
         if (mode === "entireDuration") {
+            // Pre-convert text layers to shapes ONCE for faster duration sampling
+            preconvertTextLayers(comp, isPrecompMode);
+
             // Show progress window for entire duration mode
             var progressWin = new Window('palette', 'Calculating bounds...', undefined, {resizeable: false});
             progressWin.orientation = 'column';
@@ -1208,12 +1854,16 @@ function cropCompFromPanel(mode) {
             });
 
             progressWin.close();
+
+            // Clean up pre-converted text layers
+            cleanupPreconvertedTextLayers();
         } else {
             // Current frame
             bounds = getCompBoundsAtTime(comp, comp.time, isPrecompMode);
         }
 
         if (!bounds) {
+            app.endUndoGroup();
             var debugMessages = DEBUG_JSX.getMessages();
             return "error|No visible content found|" + debugMessages.join("|");
         }
@@ -1232,12 +1882,9 @@ function cropCompFromPanel(mode) {
         // Check if bounds are same as comp (no cropping needed)
         if (bounds.left === 0 && bounds.top === 0 &&
             bounds.width === comp.width && bounds.height === comp.height) {
+            app.endUndoGroup();
             return "success|No cropping needed - content already fills composition";
         }
-
-        // Start undo group - ALL modifications must happen after this
-        app.beginUndoGroup("Crop Comp");
-        undoGroupStarted = true;
 
         var resultMessage = "";
         var adjustedCount = 0;
@@ -1310,7 +1957,10 @@ function cropCompFromPanel(mode) {
             // Calculate bounds within the new precomp (content is at same positions)
             var precompBounds;
             if (mode === "entireDuration") {
+                // Pre-convert text layers in precomp for faster duration sampling
+                preconvertTextLayers(precomp, false);
                 precompBounds = getCompBoundsForDuration(precomp, false, null);
+                cleanupPreconvertedTextLayers();
             } else {
                 precompBounds = getCompBoundsAtTime(precomp, comp.time, false);
             }
@@ -1393,6 +2043,9 @@ function cropCompFromPanel(mode) {
         return "success|" + debugStr;
 
     } catch (e) {
+        // Clean up any pre-converted text layers on error
+        cleanupPreconvertedTextLayers();
+
         if (undoGroupStarted) {
             app.endUndoGroup();
         }
