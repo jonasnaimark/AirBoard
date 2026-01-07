@@ -24075,7 +24075,17 @@ function makeThreePointCurve() {
             // addKey() will sample the existing curve and create proper interpolated value
             var middleKeyIdx = prop.addKey(middleKeyTime);
 
-            // Step 3: Find the new index of key2 (it shifted due to insertion)
+            // Step 3: Capture the middle key's ease immediately after creation
+            // This is the smooth, curve-continuing ease that AE calculated
+            var middleInInterp = prop.keyInInterpolationType(middleKeyIdx);
+            var middleOutInterp = prop.keyOutInterpolationType(middleKeyIdx);
+            var middleInEase = null;
+            var middleOutEase = null;
+            try { middleInEase = prop.keyInTemporalEase(middleKeyIdx); } catch(e) {}
+            try { middleOutEase = prop.keyOutTemporalEase(middleKeyIdx); } catch(e) {}
+            DEBUG_JSX.log("  Captured middle key ease after creation");
+
+            // Step 4: Find the new index of key2 (it shifted due to insertion)
             var newKey2Idx = -1;
             for (var k = 1; k <= prop.numKeys; k++) {
                 if (Math.abs(prop.keyTime(k) - key2Time) < 0.0001) {
@@ -24089,7 +24099,7 @@ function makeThreePointCurve() {
                 continue;
             }
 
-            // Step 4: Capture key2's INCOMING ease AFTER middle key was added
+            // Step 5: Capture key2's INCOMING ease AFTER middle key was added
             // This is the ease AE calculated to flow from the middle key to key2
             // When manually dragging key2, these exact values stay the same
             var key2InInterp = prop.keyInInterpolationType(newKey2Idx);
@@ -24097,7 +24107,7 @@ function makeThreePointCurve() {
             try { key2InEase = prop.keyInTemporalEase(newKey2Idx); } catch(e) {}
             DEBUG_JSX.log("  Captured key2 incoming ease after middle key added");
 
-            // Step 5: Remove key2 and recreate it at new position
+            // Step 6: Remove key2 and recreate it at new position
             prop.removeKey(newKey2Idx);
 
             // Add key2 at new position (this creates default ease)
@@ -24139,63 +24149,16 @@ function makeThreePointCurve() {
                 else if (Math.abs(kTime - middleKeyTime) < 0.0001) finalMiddleIdx = k;
             }
 
-            // For Position (combined 2D), AE calculates ease based on 2D motion path,
-            // not independent 1D curves. This creates wrong ease values.
-            // Fix: Adjust the middle key's outgoing ease using path distance.
-            // See docs/3-POINT-CURVE-OVERSHOOT-FIX.md for detailed explanation.
-            try {
-                var numDims = 1;
+            // Step 7: Restore the middle key's ease that we captured right after it was created
+            // Removing key2 may have caused AE to recalculate the middle key's outgoing ease
+            if (finalMiddleIdx > 0 && middleInEase !== null && middleOutEase !== null) {
                 try {
-                    var testEase = prop.keyOutTemporalEase(finalKey1Idx);
-                    numDims = testEase.length;
-                } catch(e) {}
-
-                // Fix middle key's outgoing ease for Position (combined 2D)
-                // AE returns numDims=1 for Position because it uses combined path velocity
-                var isPosition = (prop.matchName === "ADBE Position");
-
-                if (isPosition && numDims === 1) {
-                    var midVal = prop.keyValue(finalMiddleIdx);
-                    var key3Val = prop.keyValue(finalKey2Idx);
-                    var dur2 = newKey2Time - middleKeyTime;
-
-                    // Calculate Euclidean path distance
-                    var deltaX = key3Val[0] - midVal[0];
-                    var deltaY = key3Val[1] - midVal[1];
-                    var pathDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-                    // Target: bezier (0.30, 1.00) - handle reaches target value
-                    var targetInfluence = 30;
-                    var targetSpeed = pathDistance / (0.30 * dur2);
-
-                    var midInEase = prop.keyInTemporalEase(finalMiddleIdx);
-                    var newMidOutEase = [new KeyframeEase(targetSpeed, targetInfluence)];
-
-                    prop.setTemporalEaseAtKey(finalMiddleIdx, midInEase, newMidOutEase);
+                    prop.setInterpolationTypeAtKey(finalMiddleIdx, middleInInterp, middleOutInterp);
+                    prop.setTemporalEaseAtKey(finalMiddleIdx, middleInEase, middleOutEase);
+                    DEBUG_JSX.log("  Restored middle key ease");
+                } catch(e) {
+                    DEBUG_JSX.log("  Could not restore middle key ease: " + e.toString());
                 }
-                // For other multi-dimensional properties (Scale, etc.)
-                else if (numDims > 1) {
-                    var midVal = prop.keyValue(finalMiddleIdx);
-                    var key3Val = prop.keyValue(finalKey2Idx);
-                    var dur2 = newKey2Time - middleKeyTime;
-
-                    var midInEase = prop.keyInTemporalEase(finalMiddleIdx);
-                    var newMidOutEase = [];
-
-                    for (var d = 0; d < numDims; d++) {
-                        var valueChange = key3Val[d] - midVal[d];
-                        var influence = 30;
-                        var speed1D = 0;
-                        if (dur2 > 0) {
-                            speed1D = valueChange / (0.30 * dur2);
-                        }
-                        newMidOutEase.push(new KeyframeEase(speed1D, influence));
-                    }
-
-                    prop.setTemporalEaseAtKey(finalMiddleIdx, midInEase, newMidOutEase);
-                }
-            } catch(e) {
-                DEBUG_JSX.log("EASE FIX ERROR: " + e.toString());
             }
 
             // === OVERSHOOT PREVENTION ===
@@ -24205,7 +24168,7 @@ function makeThreePointCurve() {
             if (finalMiddleIdx > 0 && finalKey2Idx > 0) {
                 try {
                     var middleValue = prop.keyValue(finalMiddleIdx);
-                    var middleOutEase = prop.keyOutTemporalEase(finalMiddleIdx);
+                    var currentMiddleOutEase = prop.keyOutTemporalEase(finalMiddleIdx);
                     var segDuration = newKey2Time - middleKeyTime;
 
                     var needsShift = false;
@@ -24221,9 +24184,9 @@ function makeThreePointCurve() {
                         newMiddleValue = middleValue;
                     }
 
-                    for (var d = 0; d < middleOutEase.length; d++) {
-                        var speed = middleOutEase[d].speed;
-                        var influence = middleOutEase[d].influence;
+                    for (var d = 0; d < currentMiddleOutEase.length; d++) {
+                        var speed = currentMiddleOutEase[d].speed;
+                        var influence = currentMiddleOutEase[d].influence;
 
                         var midVal = isMultiDim ? middleValue[d] : middleValue;
                         var endVal = (typeof key2Value === "number") ? key2Value : key2Value[d];
