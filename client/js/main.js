@@ -298,6 +298,58 @@ document.addEventListener('DOMContentLoaded', function() {
     var addBlurButton = document.getElementById('addBlur');
     var resolutionInput = document.getElementById('resolutionMultiplier');
 
+    // Generic dropdown positioning function (works for any menu + trigger element)
+    function positionDropdownMenu(menu, trigger, align) {
+        align = align || 'center'; // default to center
+        var rect = trigger.getBoundingClientRect();
+
+        menu.style.position = 'fixed';
+
+        // Initial positioning based on alignment
+        if (align === 'right') {
+            menu.style.right = (window.innerWidth - rect.right) + 'px';
+            menu.style.left = 'auto';
+        } else {
+            menu.style.left = rect.left + 'px';
+            menu.style.right = 'auto';
+        }
+
+        menu.style.top = (rect.bottom + 4) + 'px';
+
+        if (align !== 'right') {
+            menu.style.minWidth = rect.width + 'px';
+        }
+
+        // Check if menu goes off bottom of viewport
+        requestAnimationFrame(function() {
+            var menuRect = menu.getBoundingClientRect();
+            var spaceBelow = window.innerHeight - rect.bottom;
+            var spaceAbove = rect.top;
+
+            // Only open above if menu is actually cut off AND there's more space above
+            if (menuRect.bottom > window.innerHeight && spaceAbove > spaceBelow) {
+                // Position above trigger instead
+                menu.style.top = (rect.top - menuRect.height - 4) + 'px';
+            }
+
+            // Center dropdown horizontally over button (only if align === 'center')
+            if (align === 'center') {
+                var buttonCenter = rect.left + (rect.width / 2);
+                var menuCenter = menuRect.width / 2;
+                var centeredLeft = buttonCenter - menuCenter;
+
+                // Clamp to viewport edges
+                if (centeredLeft < 10) {
+                    centeredLeft = 10;
+                } else if (centeredLeft + menuRect.width > window.innerWidth - 10) {
+                    centeredLeft = window.innerWidth - menuRect.width - 10;
+                }
+
+                menu.style.left = centeredLeft + 'px';
+            }
+        });
+    }
+
     // Custom dropdown functionality - replaces native select dropdown with styled menu
     function initializeCustomDropdowns() {
         var selects = document.querySelectorAll('select.dropdown');
@@ -349,40 +401,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return menu;
         }
 
-        // Position menu below select
+        // Position menu below select (uses generic positioning function)
         function positionMenu(menu, select) {
-            var rect = select.getBoundingClientRect();
-
-            // Position below select, initially left-aligned
-            menu.style.left = rect.left + 'px';
-            menu.style.top = (rect.bottom + 4) + 'px';
-            menu.style.minWidth = rect.width + 'px';
-
-            // Check if menu goes off bottom of viewport
-            requestAnimationFrame(function() {
-                var menuRect = menu.getBoundingClientRect();
-                var spaceBelow = window.innerHeight - rect.bottom;
-                var spaceAbove = rect.top;
-                // Only open above if menu is actually cut off AND there's more space above
-                if (menuRect.bottom > window.innerHeight && spaceAbove > spaceBelow) {
-                    // Position above select instead
-                    menu.style.top = (rect.top - menuRect.height - 4) + 'px';
-                }
-
-                // Center dropdown horizontally over button (especially for small buttons like resolution)
-                var buttonCenter = rect.left + (rect.width / 2);
-                var menuCenter = menuRect.width / 2;
-                var centeredLeft = buttonCenter - menuCenter;
-
-                // Clamp to viewport edges
-                if (centeredLeft < 10) {
-                    centeredLeft = 10;
-                } else if (centeredLeft + menuRect.width > window.innerWidth - 10) {
-                    centeredLeft = window.innerWidth - menuRect.width - 10;
-                }
-
-                menu.style.left = centeredLeft + 'px';
-            });
+            positionDropdownMenu(menu, select, 'center');
         }
 
         // Update selected state in menu
@@ -2311,6 +2332,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
             moreActionsDropdown.classList.toggle('open');
             console.log('More actions dropdown toggled');
+
+            // Position dropdown below button (right-aligned)
+            if (moreActionsDropdown.classList.contains('open')) {
+                positionDropdownMenu(moreActionsDropdown, moreActionsBtn, 'right');
+            }
         });
 
         // Handle dropdown item clicks
@@ -2407,6 +2433,30 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         overlay.classList.add('active');
                     }
+                } else if (action === 'child-rig') {
+                    console.log('Child Rig action triggered');
+                    if (!csInterface) {
+                        console.log('CSInterface not available');
+                        return;
+                    }
+
+                    // Pass the extension path to the JSX
+                    var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
+                    csInterface.evalScript(setPathScript);
+
+                    csInterface.evalScript('addChildRig()', function(result) {
+                        if (result) {
+                            console.log('Child Rig result:', result);
+                            if (result.indexOf('error') === 0) {
+                                // Error case
+                                var parts = result.split('|');
+                                console.error('Child Rig error:', parts.slice(1).join(' | '));
+                            } else {
+                                // Success case
+                                console.log('Child Rig applied successfully:', result);
+                            }
+                        }
+                    });
                 }
             });
         });

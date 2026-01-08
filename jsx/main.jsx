@@ -24253,3 +24253,539 @@ function makeThreePointCurve() {
         return "error|" + e.toString() + "|" + debugMessages.join("|");
     }
 }
+
+// ============================================
+// CHILD RIG SYSTEM
+// ============================================
+
+// Calculate world position of a layer (accounting for entire parent chain)
+function getLayerWorldPosition(layer, time) {
+    var pos = layer.transform.position.valueAtTime(time, false);
+    var worldX = pos[0];
+    var worldY = pos[1];
+    var worldZ = pos.length > 2 ? pos[2] : 0;
+
+    // Walk up the parent chain, transforming the point through each parent's transform
+    var currentLayer = layer.parent;
+    while (currentLayer) {
+        var parentPos = currentLayer.transform.position.valueAtTime(time, false);
+        var parentScale = currentLayer.transform.scale.valueAtTime(time, false);
+        var parentRot = currentLayer.transform.rotation.valueAtTime(time, false);
+
+        // Apply parent's scale
+        var scaleX = parentScale[0] / 100;
+        var scaleY = parentScale[1] / 100;
+        worldX *= scaleX;
+        worldY *= scaleY;
+
+        // Apply parent's rotation
+        var rad = parentRot * Math.PI / 180;
+        var cosR = Math.cos(rad);
+        var sinR = Math.sin(rad);
+        var rotatedX = worldX * cosR - worldY * sinR;
+        var rotatedY = worldX * sinR + worldY * cosR;
+        worldX = rotatedX;
+        worldY = rotatedY;
+
+        // Add parent's position to get position in grandparent/comp space
+        worldX += parentPos[0];
+        worldY += parentPos[1];
+
+        currentLayer = currentLayer.parent;
+    }
+
+    return [worldX, worldY, worldZ];
+}
+
+function getLayerWorldScale(layer, time) {
+    // Calculate cumulative scale from entire parent chain
+    // Returns percentage values (100 = 100%)
+    var worldScaleX = 1;
+    var worldScaleY = 1;
+    var worldScaleZ = 1;
+
+    var currentLayer = layer;
+    while (currentLayer) {
+        var scale = currentLayer.transform.scale.valueAtTime(time, false);
+        worldScaleX *= scale[0] / 100;
+        worldScaleY *= scale[1] / 100;
+        if (scale.length > 2) {
+            worldScaleZ *= scale[2] / 100;
+        }
+        currentLayer = currentLayer.parent;
+    }
+
+    // Convert back to percentage (1 -> 100%)
+    return [worldScaleX * 100, worldScaleY * 100, worldScaleZ * 100];
+}
+
+function addChildRig() {
+    try {
+    var comp = app.project.activeItem;
+    if (!comp || !(comp instanceof CompItem)) {
+        alert("Please select a composition.");
+        return;
+    }
+
+    var selectedLayers = comp.selectedLayers;
+    if (selectedLayers.length === 0) {
+        alert("Please select one or more layers that are parented to another layer.");
+        return;
+    }
+
+    // Separate layers into new rigs vs refresh existing
+    var layersToRig = [];
+    var layersToRefresh = [];
+
+    for (var i = 0; i < selectedLayers.length; i++) {
+        var layer = selectedLayers[i];
+        var effects = layer.property("ADBE Effect Parade");
+        var existingEffect = null;
+
+        // Check if already has Child Rig
+        for (var ei = 1; ei <= effects.numProperties; ei++) {
+            var eff = effects.property(ei);
+            if (eff.matchName === "Pseudo/ChildRig" || (eff.name && eff.name.indexOf("Child Rig") === 0)) {
+                existingEffect = eff;
+                break;
+            }
+        }
+
+        if (existingEffect) {
+            // Has existing Child Rig - refresh rest values
+            layersToRefresh.push({ layer: layer, effect: existingEffect });
+        } else {
+            // New rig - needs parent
+            if (!layer.parent) {
+                alert("Layer '" + layer.name + "' is not parented to another layer.\n\nChild Rig only works on layers that are already parented.");
+                return;
+            }
+            layersToRig.push(layer);
+        }
+    }
+
+    app.beginUndoGroup("Add Child Rig");
+
+    // Refresh existing Child Rigs - update rest values to current state
+    for (var r = 0; r < layersToRefresh.length; r++) {
+        var child = layersToRefresh[r].layer;
+        var eff = layersToRefresh[r].effect;
+        var is3D = child.threeDLayer;
+
+        // Get parent name from effect name ("Child Rig - ParentName")
+        var effectName = eff.name;
+        var parentName = effectName.replace("Child Rig - ", "");
+        var comp = child.containingComp;
+        var parent = null;
+
+        // Find parent layer by name
+        for (var li = 1; li <= comp.numLayers; li++) {
+            if (comp.layer(li).name === parentName) {
+                parent = comp.layer(li);
+                break;
+            }
+        }
+
+        if (!parent) {
+            alert("Could not find parent layer '" + parentName + "' for refresh.");
+            continue;
+        }
+
+        // Capture the current VISUAL position (expression output) before we change anything
+        var visualPos = child.transform.position.valueAtTime(comp.time, false);
+
+        // Capture current base values
+        var childPosBase = child.transform.position.value;
+        var childScale = child.transform.scale.value;
+        var childRot = child.transform.rotation.value;
+        var childOpacity = child.transform.opacity.value;
+
+        // Get parent's WORLD position and scale
+        var parentPos = getLayerWorldPosition(parent, comp.time);
+        var parentScale = getLayerWorldScale(parent, comp.time);
+        var parentRot = parent.transform.rotation.value;
+        var parentOpacity = parent.transform.opacity.value;
+        var parentAnchor = parent.transform.anchorPoint.value;
+
+        // Update rest values in the effect
+        eff(15).setValue(visualPos[0]);  // Rest Pos X
+        eff(16).setValue(visualPos[1]);  // Rest Pos Y
+        eff(17).setValue(is3D ? visualPos[2] : 0);  // Rest Pos Z
+        eff(18).setValue(childScale[0]);  // Rest Scale X
+        eff(19).setValue(childScale[1]);  // Rest Scale Y
+        eff(20).setValue(is3D && childScale.length > 2 ? childScale[2] : 100);  // Rest Scale Z
+        eff(21).setValue(childRot);  // Rest Rotation
+        eff(22).setValue(childOpacity);  // Rest Opacity
+
+        eff(26).setValue(parentPos[0]);  // Parent Rest Pos X
+        eff(27).setValue(parentPos[1]);  // Parent Rest Pos Y
+        eff(28).setValue(is3D && parentPos.length > 2 ? parentPos[2] : 0);  // Parent Rest Pos Z
+        eff(29).setValue(parentScale[0]);  // Parent Rest Scale X
+        eff(30).setValue(parentScale[1]);  // Parent Rest Scale Y
+        eff(31).setValue(is3D && parentScale.length > 2 ? parentScale[2] : 100);  // Parent Rest Scale Z
+        eff(32).setValue(parentRot);  // Parent Rest Rotation
+        eff(33).setValue(parentOpacity);  // Parent Rest Opacity
+        eff(34).setValue(parentAnchor[0]);  // Parent Rest Anchor X
+        eff(35).setValue(parentAnchor[1]);  // Parent Rest Anchor Y
+        eff(36).setValue(is3D && parentAnchor.length > 2 ? parentAnchor[2] : 0);  // Parent Rest Anchor Z
+
+        // Update the base position to match the visual position
+        child.transform.position.setValue(visualPos);
+    }
+
+    // Apply new Child Rigs
+    if (layersToRig.length === 0 && layersToRefresh.length === 0) {
+        alert("No layers to rig or refresh. Make sure selected layers are parented to another layer.");
+        app.endUndoGroup();
+        return;
+    }
+
+    for (var i = 0; i < layersToRig.length; i++) {
+        var child = layersToRig[i];
+        var parent = child.parent;
+        var is3D = child.threeDLayer;
+
+        // Store rest values before unparenting
+        var childRestScale = child.transform.scale.value;
+        var childRestRot = child.transform.rotation.value;
+        var childRestOpacity = child.transform.opacity.value;
+        var childRestAnchor = child.transform.anchorPoint.value;
+
+        // Get parent's current values
+        // Calculate world position of anchor point (equivalent to toWorld(anchor) in expressions)
+        // For a layer, toWorld(anchor) = position transformed through parent chain
+        var parentAnchor = parent.transform.anchorPoint.value;
+        var parentPos = parent.transform.position.value;
+        var parentRestPos;
+        if (parent.parent) {
+            // Parent has its own parent - need to transform through chain
+            parentRestPos = getLayerWorldPosition(parent, comp.time);
+        } else {
+            // No grandparent - toWorld(anchor) = position
+            parentRestPos = parentPos;
+        }
+        var parentRestScale = getLayerWorldScale(parent, comp.time);
+        var parentRestRot = parent.transform.rotation.value;
+        var parentRestOpacity = parent.transform.opacity.value;
+        var parentRestAnchor = parentAnchor;
+
+        // Unparent the layer (AE automatically converts position to world space)
+        child.parent = null;
+
+        // Get values after unparenting
+        var worldPos;
+        var posProp = child.transform.position;
+        if (posProp.dimensionsSeparated) {
+            worldPos = [
+                child.transform.xPosition.value,
+                child.transform.yPosition.value,
+                is3D ? child.transform.zPosition.value : 0
+            ];
+        } else {
+            worldPos = posProp.value;
+        }
+        var worldScale = child.transform.scale.value;
+        var worldAnchor = child.transform.anchorPoint.value;
+
+        // Add the pseudo effect
+        var effects = child.property("ADBE Effect Parade");
+        var eff = null;
+        var pseudoEffectApplied = false;
+
+        // Effect name includes parent layer name for reference
+        var effectName = "Child Rig - " + parent.name;
+
+        // Try to add pseudo effect by matchname first (uses PresetEffects.xml)
+        try {
+            eff = effects.addProperty("Pseudo/ChildRig");
+            if (eff && eff.numProperties >= 30) {
+                eff.name = effectName;
+                pseudoEffectApplied = true;
+            } else if (eff) {
+                eff.remove();
+            }
+        } catch (e) {
+            pseudoEffectApplied = false;
+        }
+
+        // Fallback: Try FFX preset if matchname approach failed
+        if (!pseudoEffectApplied && extensionRoot !== "") {
+            var ffxPath = extensionRoot + "/assets/presets/Child Rig.ffx";
+            var ffxFile = new File(ffxPath);
+
+            if (ffxFile.exists) {
+                try {
+                    child.applyPreset(ffxFile);
+                    // Find the effect we just applied
+                    for (var ei = 1; ei <= effects.numProperties; ei++) {
+                        var testEff = effects.property(ei);
+                        if (testEff.matchName === "Pseudo/ChildRig" || testEff.name === "Child Rig" || testEff.name.indexOf("Child Rig - ") === 0) {
+                            eff = testEff;
+                            eff.name = effectName;
+                            pseudoEffectApplied = true;
+                            break;
+                        }
+                    }
+                } catch (e2) {
+                    pseudoEffectApplied = false;
+                }
+            }
+        }
+
+        if (!pseudoEffectApplied || !eff) {
+            alert("Child Rig pseudo effect not found.\n\nPlease ensure:\n1. Child Rig.ffx is in assets/presets/\n2. After Effects was restarted");
+            app.endUndoGroup();
+            return;
+        }
+
+        // Set rest values using indices
+        eff(15).setValue(worldPos[0]);  // Rest Pos X
+        eff(16).setValue(worldPos[1]);  // Rest Pos Y
+        eff(17).setValue(is3D ? worldPos[2] : 0);  // Rest Pos Z
+        eff(18).setValue(worldScale[0]);  // Rest Scale X
+        eff(19).setValue(worldScale[1]);  // Rest Scale Y
+        eff(20).setValue(is3D && worldScale.length > 2 ? worldScale[2] : 100);  // Rest Scale Z
+        eff(21).setValue(childRestRot);  // Rest Rotation
+        eff(22).setValue(childRestOpacity);  // Rest Opacity
+
+        eff(26).setValue(parentRestPos[0]);  // Parent Rest Pos X
+        eff(27).setValue(parentRestPos[1]);  // Parent Rest Pos Y
+        eff(28).setValue(is3D && parentRestPos.length > 2 ? parentRestPos[2] : 0);  // Parent Rest Pos Z
+        eff(29).setValue(parentRestScale[0]);  // Parent Rest Scale X
+        eff(30).setValue(parentRestScale[1]);  // Parent Rest Scale Y
+        eff(31).setValue(is3D && parentRestScale.length > 2 ? parentRestScale[2] : 100);  // Parent Rest Scale Z
+        eff(32).setValue(parentRestRot);  // Parent Rest Rotation
+        eff(33).setValue(parentRestOpacity);  // Parent Rest Opacity
+        eff(34).setValue(parentRestAnchor[0]);  // Parent Rest Anchor X
+        eff(35).setValue(parentRestAnchor[1]);  // Parent Rest Anchor Y
+        eff(36).setValue(is3D && parentRestAnchor.length > 2 ? parentRestAnchor[2] : 0);  // Parent Rest Anchor Z
+
+        // Apply expressions
+        var parentNameEscaped = parent.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        var effectNameEscaped = effectName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        applyChildRigExpressions(child, parentNameEscaped, effectNameEscaped, is3D);
+    }
+
+    app.endUndoGroup();
+
+    // Build result message
+    var msg = "";
+    if (layersToRig.length > 0) {
+        msg += "Child Rig applied to " + layersToRig.length + " layer(s)";
+    }
+    if (layersToRefresh.length > 0) {
+        if (msg) msg += ", ";
+        msg += "Rest values refreshed on " + layersToRefresh.length + " layer(s)";
+    }
+    return msg || "No changes made";
+    } catch (e) {
+        alert("addChildRig error: " + e.message + " at line " + e.line);
+        app.endUndoGroup();
+    }
+}
+
+function applyChildRigExpressions(child, parentName, effectName, is3D) {
+    var header = [
+        '// Child Rig Expression',
+        'var parentLayer = thisComp.layer("' + parentName + '");',
+        'var eff = effect("' + effectName + '");',
+        '',
+        '// Controls',
+        'var globalInfluence = eff(1).value / 100;',
+        'var delayFrames = eff(2).value;',
+        'var delaySecs = delayFrames * thisComp.frameDuration;',
+        'var scaleAroundMode = eff(3).value;  // 1=Parent, 2=Child',
+        'var rotateAroundMode = eff(4).value;  // 1=Parent, 2=Child',
+        '',
+        '// Individual influence sliders',
+        'var influencePosX = globalInfluence * eff(9).value / 100;',
+        'var influencePosY = globalInfluence * eff(10).value / 100;',
+        'var influencePosZ = globalInfluence * eff(11).value / 100;',
+        'var influenceScale = globalInfluence * eff(12).value / 100;',
+        'var influenceRotation = globalInfluence * eff(13).value / 100;',
+        'var influenceOpacity = globalInfluence * eff(14).value / 100;',
+        '',
+        '// Rest values',
+        'var restPosX = eff(15).value;',
+        'var restPosY = eff(16).value;',
+        'var restPosZ = eff(17).value;',
+        'var restScaleX = eff(18).value;',
+        'var restScaleY = eff(19).value;',
+        'var restScaleZ = eff(20).value;',
+        'var restRot = eff(21).value;',
+        'var restOpacity = eff(22).value;',
+        '',
+        '// Parent rest values',
+        'var parentRestPosX = eff(26).value;',
+        'var parentRestPosY = eff(27).value;',
+        'var parentRestPosZ = eff(28).value;',
+        'var parentRestScaleX = eff(29).value;',
+        'var parentRestScaleY = eff(30).value;',
+        'var parentRestScaleZ = eff(31).value;',
+        'var parentRestRot = eff(32).value;',
+        'var parentRestOpacity = eff(33).value;',
+        'var parentRestAnchorX = eff(34).value;',
+        'var parentRestAnchorY = eff(35).value;',
+        'var parentRestAnchorZ = eff(36).value;',
+        ''
+    ].join('\n');
+
+    // Position expression
+    var posExpr = header + [
+        'var t = Math.max(0, time - delaySecs);',
+        '',
+        '// Track a fixed point on parent (rest anchor) in world space',
+        '// This point moves with parent position/rotation/scale but is immune to anchor changes',
+        'var parentPos = parentLayer.toWorld([parentRestAnchorX, parentRestAnchorY' + (is3D ? ', parentRestAnchorZ' : '') + '], t);',
+        'var parentScale = parentLayer.transform.scale.valueAtTime(t);',
+        'var parentRot = parentLayer.transform.' + (is3D ? 'zRotation' : 'rotation') + '.valueAtTime(t);',
+        '',
+        '// Start with keyframed value',
+        'var result = value.slice ? value.slice() : [value[0], value[1]' + (is3D ? ', value[2]' : '') + '];',
+        '',
+        '// Base position delta from parent movement',
+        'var posDeltaX = (parentPos[0] - parentRestPosX) * influencePosX;',
+        'var posDeltaY = (parentPos[1] - parentRestPosY) * influencePosY;',
+        (is3D ? 'var posDeltaZ = (parentPos[2] - parentRestPosZ) * influencePosZ;' : ''),
+        '',
+        '// ANCHOR COMPENSATION: When anchor moves, toWorld(restAnchor) shifts because',
+        '// restAnchor gets transformed by current scale/rotation around the NEW anchor.',
+        '// We must compensate for this shift to achieve anchor immunity.',
+        'var currentAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
+        'var anchorOffsetX = parentRestAnchorX - currentAnchor[0];',
+        'var anchorOffsetY = parentRestAnchorY - currentAnchor[1];',
+        '',
+        'if (anchorOffsetX !== 0 || anchorOffsetY !== 0) {',
+        '    // In AE, transforms apply in order: Scale -> Rotation',
+        '    // 1. Scale the anchor offset',
+        '    var scaleRatioX = parentScale[0] / 100;',
+        '    var scaleRatioY = parentScale[1] / 100;',
+        '    var scaledOffsetX = anchorOffsetX * scaleRatioX;',
+        '    var scaledOffsetY = anchorOffsetY * scaleRatioY;',
+        '    ',
+        '    // 2. Rotate the scaled offset',
+        '    var rotRad = parentRot * Math.PI / 180;',
+        '    var cosR = Math.cos(rotRad);',
+        '    var sinR = Math.sin(rotRad);',
+        '    var transformedX = scaledOffsetX * cosR - scaledOffsetY * sinR;',
+        '    var transformedY = scaledOffsetX * sinR + scaledOffsetY * cosR;',
+        '    ',
+        '    // 3. The difference is how much toWorld(restAnchor) moved due to anchor change',
+        '    var anchorCompX = transformedX - anchorOffsetX;',
+        '    var anchorCompY = transformedY - anchorOffsetY;',
+        '    ',
+        '    // Subtract this compensation from position delta',
+        '    posDeltaX -= anchorCompX;',
+        '    posDeltaY -= anchorCompY;',
+        '}',
+        '',
+        '// Apply base position tracking',
+        'result[0] += posDeltaX;',
+        'result[1] += posDeltaY;',
+        (is3D ? 'result[2] += posDeltaZ;' : ''),
+        '',
+        '// SCALE AROUND PARENT: Add scale orbit',
+        '// Child moves outward/inward from parent anchor as parent scales',
+        'if (scaleAroundMode === 1 && influenceScale > 0) {',
+        '    var scaleRatioX = parentScale[0] / parentRestScaleX;',
+        '    var scaleRatioY = parentScale[1] / parentRestScaleY;',
+        '    // Use current anchor world position as scale pivot',
+        '    var currAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
+        '    var currAnchorWorld = parentLayer.toWorld(currAnchor, t);',
+        '    // Offset from current anchor to child',
+        '    var offsetX = restPosX - currAnchorWorld[0];',
+        '    var offsetY = restPosY - currAnchorWorld[1];',
+        '    // Scale this offset',
+        '    var scaledOffsetX = offsetX * scaleRatioX;',
+        '    var scaledOffsetY = offsetY * scaleRatioY;',
+        '    // Add the orbit',
+        '    result[0] += (scaledOffsetX - offsetX) * influenceScale;',
+        '    result[1] += (scaledOffsetY - offsetY) * influenceScale;',
+        '}',
+        '',
+        '// ROTATE AROUND PARENT: Add rotation orbit',
+        '// Child orbits around parent anchor as parent rotates',
+        'if (rotateAroundMode === 1 && influenceRotation > 0) {',
+        '    var rotDelta = (parentRot - parentRestRot) * influenceRotation;',
+        '    var rad = rotDelta * Math.PI / 180;',
+        '    // Use current anchor world position as rotation pivot',
+        '    var currAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
+        '    var currAnchorWorld = parentLayer.toWorld(currAnchor, t);',
+        '    // Offset from current anchor to child',
+        '    var offsetX = restPosX - currAnchorWorld[0];',
+        '    var offsetY = restPosY - currAnchorWorld[1];',
+        '    // Rotate this offset',
+        '    var cosR = Math.cos(rad);',
+        '    var sinR = Math.sin(rad);',
+        '    var rotatedX = offsetX * cosR - offsetY * sinR;',
+        '    var rotatedY = offsetX * sinR + offsetY * cosR;',
+        '    // Add the orbit',
+        '    result[0] += rotatedX - offsetX;',
+        '    result[1] += rotatedY - offsetY;',
+        '}',
+        '',
+        '// NOTE: "around child" modes (2) require no additional code.',
+        '// The base tracking + anchor compensation already keeps child in place.',
+        '',
+        'result;'
+    ].join('\n');
+
+    // Scale expression
+    var scaleExpr = header + [
+        'var t = Math.max(0, time - delaySecs);',
+        '',
+        'function getWorldScale(layer, time) {',
+        '    var worldScaleX = 1;',
+        '    var worldScaleY = 1;',
+        '    var worldScaleZ = 1;',
+        '    var currentLayer = layer;',
+        '    while (currentLayer) {',
+        '        var s = currentLayer.transform.scale.valueAtTime(time);',
+        '        worldScaleX *= s[0] / 100;',
+        '        worldScaleY *= s[1] / 100;',
+        '        if (s.length > 2) worldScaleZ *= s[2] / 100;',
+        '        try { currentLayer = currentLayer.parent; } catch(e) { currentLayer = null; }',
+        '    }',
+        '    return [worldScaleX * 100, worldScaleY * 100, worldScaleZ * 100];',
+        '}',
+        '',
+        'var parentWorldScale = getWorldScale(parentLayer, t);',
+        '',
+        'var scaleRatioX = parentWorldScale[0] / parentRestScaleX;',
+        'var scaleRatioY = parentWorldScale[1] / parentRestScaleY;',
+        (is3D ? 'var scaleRatioZ = parentWorldScale[2] / parentRestScaleZ;' : ''),
+        '',
+        'var blendedRatioX = 1 + (scaleRatioX - 1) * influenceScale;',
+        'var blendedRatioY = 1 + (scaleRatioY - 1) * influenceScale;',
+        (is3D ? 'var blendedRatioZ = 1 + (scaleRatioZ - 1) * influenceScale;' : ''),
+        '',
+        'var result = value.slice();',
+        'result[0] *= blendedRatioX;',
+        'result[1] *= blendedRatioY;',
+        (is3D ? 'result[2] *= blendedRatioZ;' : ''),
+        'result;'
+    ].join('\n');
+
+    // Rotation expression
+    var rotExpr = header + [
+        'var t = Math.max(0, time - delaySecs);',
+        'var parentRot = parentLayer.transform.' + (is3D ? 'zRotation' : 'rotation') + '.valueAtTime(t);',
+        'var rotDelta = (parentRot - parentRestRot) * influenceRotation;',
+        'value + rotDelta;'
+    ].join('\n');
+
+    // Opacity expression
+    var opacityExpr = header + [
+        'var t = Math.max(0, time - delaySecs);',
+        'var parentOpacity = parentLayer.transform.opacity.valueAtTime(t);',
+        'var opacityRatio = parentOpacity / parentRestOpacity;',
+        'var blendedRatio = 1 + (opacityRatio - 1) * influenceOpacity;',
+        'value * blendedRatio;'
+    ].join('\n');
+
+    // Apply expressions
+    child.transform.position.expression = posExpr;
+    child.transform.scale.expression = scaleExpr;
+    child.transform.rotation.expression = rotExpr;
+    child.transform.opacity.expression = opacityExpr;
+}
