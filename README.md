@@ -17,17 +17,21 @@
 
 ## 🚀 What It Does
 
-**Keyframe Nudger**: Precise control over keyframe timing, duration, staggers, and position with smart snapping
+**Keyframe Nudger**: Precise control over keyframe timing, duration, staggers, and position. Includes snap to playhead, mirror keys, trim points, copy/paste springs, 3-point curves, and smart cross-property staggering
 
-**Device Templates**: Auto-generate iPhone and desktop compositions with proper scaling
+**Device Templates**: Auto-generate iPhone and desktop compositions with proper scaling at 1x-6x resolutions
 
-**Gesture Library**: Pre-built tap, click, and interaction animations
+**Gesture Library**: Pre-built tap, click, and interaction animations that scale with your comp resolution
 
-**Effects**: Squircles, shadows, materials, and shimmers
+**Shape Tools**: Parametric squircles with radius control, fit layers to squircle bounds with padding, and vertex null generation
 
-**Components**: Loaders, counters, logos & more to come
+**Effects & Materials**: Elevation-based shadows, glass effects, light/dark blur materials with resolution-aware settings
 
-**File Setup**: Auto-generate an AE and Finder folder structure
+**Components**: Animated loaders, timers, Belo spin, and more that scale with resolution
+
+**Comp Tools**: Extend comp duration, crop to content, and child rig for indirect parenting with opacity inheritance
+
+**Project Setup**: Auto-generate AE project folder structure and Finder save folders
 
 ---
 
