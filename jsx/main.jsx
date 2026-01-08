@@ -24352,7 +24352,7 @@ function addChildRig() {
         }
 
         if (existingEffect) {
-            // Has existing Child Rig - refresh rest values
+            // Has existing Child Rig - remove it and restore native parenting
             layersToRefresh.push({ layer: layer, effect: existingEffect });
         } else {
             // New rig - needs parent
@@ -24364,18 +24364,16 @@ function addChildRig() {
         }
     }
 
-    app.beginUndoGroup("Add Child Rig");
+    app.beginUndoGroup("Child Rig");
 
-    // Refresh existing Child Rigs - update rest values to current state
+    // Remove existing Child Rigs and restore native parenting
     for (var r = 0; r < layersToRefresh.length; r++) {
         var child = layersToRefresh[r].layer;
         var eff = layersToRefresh[r].effect;
-        var is3D = child.threeDLayer;
 
         // Get parent name from effect name ("Child Rig - ParentName")
         var effectName = eff.name;
         var parentName = effectName.replace("Child Rig - ", "");
-        var comp = child.containingComp;
         var parent = null;
 
         // Find parent layer by name
@@ -24386,56 +24384,38 @@ function addChildRig() {
             }
         }
 
-        if (!parent) {
-            alert("Could not find parent layer '" + parentName + "' for refresh.");
-            continue;
-        }
-
-        // Capture the current VISUAL position (expression output) before we change anything
+        // Capture current visual values before removing expressions
         var visualPos = child.transform.position.valueAtTime(comp.time, false);
+        var visualScale = child.transform.scale.valueAtTime(comp.time, false);
+        var visualRot = child.transform.rotation.valueAtTime(comp.time, false);
+        var visualOpacity = child.transform.opacity.valueAtTime(comp.time, false);
 
-        // Capture current base values
-        var childPosBase = child.transform.position.value;
-        var childScale = child.transform.scale.value;
-        var childRot = child.transform.rotation.value;
-        var childOpacity = child.transform.opacity.value;
+        // Remove expressions
+        child.transform.position.expression = "";
+        child.transform.scale.expression = "";
+        child.transform.rotation.expression = "";
+        child.transform.opacity.expression = "";
 
-        // Get parent's WORLD position and scale
-        var parentPos = getLayerWorldPosition(parent, comp.time);
-        var parentScale = getLayerWorldScale(parent, comp.time);
-        var parentRot = parent.transform.rotation.value;
-        var parentOpacity = parent.transform.opacity.value;
-        var parentAnchor = parent.transform.anchorPoint.value;
-
-        // Update rest values in the effect
-        eff(15).setValue(visualPos[0]);  // Rest Pos X
-        eff(16).setValue(visualPos[1]);  // Rest Pos Y
-        eff(17).setValue(is3D ? visualPos[2] : 0);  // Rest Pos Z
-        eff(18).setValue(childScale[0]);  // Rest Scale X
-        eff(19).setValue(childScale[1]);  // Rest Scale Y
-        eff(20).setValue(is3D && childScale.length > 2 ? childScale[2] : 100);  // Rest Scale Z
-        eff(21).setValue(childRot);  // Rest Rotation
-        eff(22).setValue(childOpacity);  // Rest Opacity
-
-        eff(26).setValue(parentPos[0]);  // Parent Rest Pos X
-        eff(27).setValue(parentPos[1]);  // Parent Rest Pos Y
-        eff(28).setValue(is3D && parentPos.length > 2 ? parentPos[2] : 0);  // Parent Rest Pos Z
-        eff(29).setValue(parentScale[0]);  // Parent Rest Scale X
-        eff(30).setValue(parentScale[1]);  // Parent Rest Scale Y
-        eff(31).setValue(is3D && parentScale.length > 2 ? parentScale[2] : 100);  // Parent Rest Scale Z
-        eff(32).setValue(parentRot);  // Parent Rest Rotation
-        eff(33).setValue(parentOpacity);  // Parent Rest Opacity
-        eff(34).setValue(parentAnchor[0]);  // Parent Rest Anchor X
-        eff(35).setValue(parentAnchor[1]);  // Parent Rest Anchor Y
-        eff(36).setValue(is3D && parentAnchor.length > 2 ? parentAnchor[2] : 0);  // Parent Rest Anchor Z
-
-        // Update the base position to match the visual position
+        // Set values to what they were visually
         child.transform.position.setValue(visualPos);
+        child.transform.scale.setValue(visualScale);
+        child.transform.rotation.setValue(visualRot);
+        child.transform.opacity.setValue(visualOpacity);
+
+        // Remove the effect
+        eff.remove();
+
+        // Re-parent to original parent if found
+        if (parent) {
+            child.parent = parent;
+        } else {
+            alert("Could not find original parent layer '" + parentName + "'. Layer left unparented.");
+        }
     }
 
     // Apply new Child Rigs
     if (layersToRig.length === 0 && layersToRefresh.length === 0) {
-        alert("No layers to rig or refresh. Make sure selected layers are parented to another layer.");
+        alert("No layers to rig or remove. Make sure selected layers are parented to another layer.");
         app.endUndoGroup();
         return;
     }
@@ -24644,39 +24624,40 @@ function applyChildRigExpressions(child, parentName, effectName, is3D) {
         'var result = value.slice ? value.slice() : [value[0], value[1]' + (is3D ? ', value[2]' : '') + '];',
         '',
         '// Base position delta from parent movement',
+        '// toWorld(restAnchor) is immune to anchor changes (Pan Behind handles this).',
         'var posDeltaX = (parentPos[0] - parentRestPosX) * influencePosX;',
         'var posDeltaY = (parentPos[1] - parentRestPosY) * influencePosY;',
         (is3D ? 'var posDeltaZ = (parentPos[2] - parentRestPosZ) * influencePosZ;' : ''),
         '',
-        '// ANCHOR COMPENSATION: When anchor moves, toWorld(restAnchor) shifts because',
-        '// restAnchor gets transformed by current scale/rotation around the NEW anchor.',
-        '// We must compensate for this shift to achieve anchor immunity.',
-        'var currentAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
-        'var anchorOffsetX = parentRestAnchorX - currentAnchor[0];',
-        'var anchorOffsetY = parentRestAnchorY - currentAnchor[1];',
-        '',
-        'if (anchorOffsetX !== 0 || anchorOffsetY !== 0) {',
-        '    // In AE, transforms apply in order: Scale -> Rotation',
-        '    // 1. Scale the anchor offset',
-        '    var scaleRatioX = parentScale[0] / 100;',
-        '    var scaleRatioY = parentScale[1] / 100;',
-        '    var scaledOffsetX = anchorOffsetX * scaleRatioX;',
-        '    var scaledOffsetY = anchorOffsetY * scaleRatioY;',
-        '    ',
-        '    // 2. Rotate the scaled offset',
-        '    var rotRad = parentRot * Math.PI / 180;',
-        '    var cosR = Math.cos(rotRad);',
-        '    var sinR = Math.sin(rotRad);',
-        '    var transformedX = scaledOffsetX * cosR - scaledOffsetY * sinR;',
-        '    var transformedY = scaledOffsetX * sinR + scaledOffsetY * cosR;',
-        '    ',
-        '    // 3. The difference is how much toWorld(restAnchor) moved due to anchor change',
-        '    var anchorCompX = transformedX - anchorOffsetX;',
-        '    var anchorCompY = transformedY - anchorOffsetY;',
-        '    ',
-        '    // Subtract this compensation from position delta',
-        '    posDeltaX -= anchorCompX;',
-        '    posDeltaY -= anchorCompY;',
+        '// SCALE AROUND CHILD compensation:',
+        '// When anchor has moved and parent scales/rotates, toWorld(restAnchor) shifts because',
+        '// transforms happen around currentAnchor, not restAnchor. Compensate for this.',
+        'if (scaleAroundMode === 2) {',
+        '    var currentAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
+        '    var anchorOffsetX = parentRestAnchorX - currentAnchor[0];',
+        '    var anchorOffsetY = parentRestAnchorY - currentAnchor[1];',
+        '    if (anchorOffsetX !== 0 || anchorOffsetY !== 0) {',
+        '        // Apply transforms in AE order: Scale -> Rotation',
+        '        var scaleRatioX = parentScale[0] / 100;',
+        '        var scaleRatioY = parentScale[1] / 100;',
+        '        var scaledOffsetX = anchorOffsetX * scaleRatioX;',
+        '        var scaledOffsetY = anchorOffsetY * scaleRatioY;',
+        '        ',
+        '        // Rotate the scaled offset',
+        '        var rotRad = parentRot * Math.PI / 180;',
+        '        var cosR = Math.cos(rotRad);',
+        '        var sinR = Math.sin(rotRad);',
+        '        var transformedX = scaledOffsetX * cosR - scaledOffsetY * sinR;',
+        '        var transformedY = scaledOffsetX * sinR + scaledOffsetY * cosR;',
+        '        ',
+        '        // The difference is how much toWorld(restAnchor) shifted',
+        '        var shiftX = transformedX - anchorOffsetX;',
+        '        var shiftY = transformedY - anchorOffsetY;',
+        '        ',
+        '        // Remove this shift from position delta',
+        '        posDeltaX -= shiftX * influencePosX;',
+        '        posDeltaY -= shiftY * influencePosY;',
+        '    }',
         '}',
         '',
         '// Apply base position tracking',
@@ -24685,16 +24666,14 @@ function applyChildRigExpressions(child, parentName, effectName, is3D) {
         (is3D ? 'result[2] += posDeltaZ;' : ''),
         '',
         '// SCALE AROUND PARENT: Add scale orbit',
-        '// Child moves outward/inward from parent anchor as parent scales',
+        '// Child moves outward/inward from parent as parent scales',
+        '// Use parentPos (toWorld(restAnchor)) as pivot - it is immune to anchor changes',
         'if (scaleAroundMode === 1 && influenceScale > 0) {',
         '    var scaleRatioX = parentScale[0] / parentRestScaleX;',
         '    var scaleRatioY = parentScale[1] / parentRestScaleY;',
-        '    // Use current anchor world position as scale pivot',
-        '    var currAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
-        '    var currAnchorWorld = parentLayer.toWorld(currAnchor, t);',
-        '    // Offset from current anchor to child',
-        '    var offsetX = restPosX - currAnchorWorld[0];',
-        '    var offsetY = restPosY - currAnchorWorld[1];',
+        '    // Offset from parent pivot (restAnchor world pos) to child',
+        '    var offsetX = restPosX - parentRestPosX;',
+        '    var offsetY = restPosY - parentRestPosY;',
         '    // Scale this offset',
         '    var scaledOffsetX = offsetX * scaleRatioX;',
         '    var scaledOffsetY = offsetY * scaleRatioY;',
@@ -24704,16 +24683,14 @@ function applyChildRigExpressions(child, parentName, effectName, is3D) {
         '}',
         '',
         '// ROTATE AROUND PARENT: Add rotation orbit',
-        '// Child orbits around parent anchor as parent rotates',
+        '// Child orbits around parent as parent rotates',
+        '// Use parentPos (toWorld(restAnchor)) as pivot - it is immune to anchor changes',
         'if (rotateAroundMode === 1 && influenceRotation > 0) {',
         '    var rotDelta = (parentRot - parentRestRot) * influenceRotation;',
         '    var rad = rotDelta * Math.PI / 180;',
-        '    // Use current anchor world position as rotation pivot',
-        '    var currAnchor = parentLayer.transform.anchorPoint.valueAtTime(t);',
-        '    var currAnchorWorld = parentLayer.toWorld(currAnchor, t);',
-        '    // Offset from current anchor to child',
-        '    var offsetX = restPosX - currAnchorWorld[0];',
-        '    var offsetY = restPosY - currAnchorWorld[1];',
+        '    // Offset from parent pivot (restAnchor world pos) to child',
+        '    var offsetX = restPosX - parentRestPosX;',
+        '    var offsetY = restPosY - parentRestPosY;',
         '    // Rotate this offset',
         '    var cosR = Math.cos(rad);',
         '    var sinR = Math.sin(rad);',
@@ -24725,7 +24702,7 @@ function applyChildRigExpressions(child, parentName, effectName, is3D) {
         '}',
         '',
         '// NOTE: "around child" modes (2) require no additional code.',
-        '// The base tracking + anchor compensation already keeps child in place.',
+        '// The base tracking already keeps child in place without orbital effects.',
         '',
         'result;'
     ].join('\n');
