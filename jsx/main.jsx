@@ -24384,7 +24384,7 @@ function addChildRig() {
             }
         }
 
-        // Capture current visual values before removing expressions
+        // Capture current visual values before removing expressions (only needed if no keyframes)
         var visualPos = child.transform.position.valueAtTime(comp.time, false);
         var visualScale = child.transform.scale.valueAtTime(comp.time, false);
         var visualRot = child.transform.rotation.valueAtTime(comp.time, false);
@@ -24396,11 +24396,19 @@ function addChildRig() {
         child.transform.rotation.expression = "";
         child.transform.opacity.expression = "";
 
-        // Set values to what they were visually
-        child.transform.position.setValue(visualPos);
-        child.transform.scale.setValue(visualScale);
-        child.transform.rotation.setValue(visualRot);
-        child.transform.opacity.setValue(visualOpacity);
+        // Set values only if no keyframes exist (keyframes will handle animation automatically)
+        if (child.transform.position.numKeys === 0) {
+            child.transform.position.setValue(visualPos);
+        }
+        if (child.transform.scale.numKeys === 0) {
+            child.transform.scale.setValue(visualScale);
+        }
+        if (child.transform.rotation.numKeys === 0) {
+            child.transform.rotation.setValue(visualRot);
+        }
+        if (child.transform.opacity.numKeys === 0) {
+            child.transform.opacity.setValue(visualOpacity);
+        }
 
         // Remove the effect
         eff.remove();
@@ -24449,12 +24457,23 @@ function addChildRig() {
         var parentRestOpacity = parent.transform.opacity.value;
         var parentRestAnchor = parentAnchor;
 
+        // Record keyframe counts before unparenting (AE may add keyframes at current time)
+        var posProp = child.transform.position;
+        var posKeyCountBefore = posProp.numKeys;
+        var xPosKeyCountBefore = 0, yPosKeyCountBefore = 0, zPosKeyCountBefore = 0;
+        if (posProp.dimensionsSeparated) {
+            xPosKeyCountBefore = child.transform.xPosition.numKeys;
+            yPosKeyCountBefore = child.transform.yPosition.numKeys;
+            if (is3D) zPosKeyCountBefore = child.transform.zPosition.numKeys;
+        }
+        var scaleKeyCountBefore = child.transform.scale.numKeys;
+        var rotKeyCountBefore = child.transform.rotation.numKeys;
+
         // Unparent the layer (AE automatically converts position to world space)
         child.parent = null;
 
         // Get values after unparenting
         var worldPos;
-        var posProp = child.transform.position;
         if (posProp.dimensionsSeparated) {
             worldPos = [
                 child.transform.xPosition.value,
@@ -24466,6 +24485,28 @@ function addChildRig() {
         }
         var worldScale = child.transform.scale.value;
         var worldAnchor = child.transform.anchorPoint.value;
+
+        // Remove any keyframes that AE added at current time during unparenting
+        var currentTime = comp.time;
+        function removeKeyframeAtTime(prop, keyCountBefore) {
+            if (prop.numKeys > keyCountBefore) {
+                // A keyframe was added - find and remove it
+                var keyIdx = prop.nearestKeyIndex(currentTime);
+                if (keyIdx > 0 && Math.abs(prop.keyTime(keyIdx) - currentTime) < 0.001) {
+                    prop.removeKey(keyIdx);
+                }
+            }
+        }
+
+        if (posProp.dimensionsSeparated) {
+            removeKeyframeAtTime(child.transform.xPosition, xPosKeyCountBefore);
+            removeKeyframeAtTime(child.transform.yPosition, yPosKeyCountBefore);
+            if (is3D) removeKeyframeAtTime(child.transform.zPosition, zPosKeyCountBefore);
+        } else {
+            removeKeyframeAtTime(posProp, posKeyCountBefore);
+        }
+        removeKeyframeAtTime(child.transform.scale, scaleKeyCountBefore);
+        removeKeyframeAtTime(child.transform.rotation, rotKeyCountBefore);
 
         // Add the pseudo effect
         var effects = child.property("ADBE Effect Parade");
