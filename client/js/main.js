@@ -2447,13 +2447,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     csInterface.evalScript('addChildRig()', function(result) {
                         if (result) {
                             console.log('Child Rig result:', result);
-                            if (result.indexOf('error') === 0) {
-                                // Error case
-                                var parts = result.split('|');
+                            var parts = result.split('|');
+                            var status = parts[0];
+
+                            // Extract debug messages (starting from index 2)
+                            var debugMessages = [];
+                            for (var i = 2; i < parts.length; i++) {
+                                if (parts[i] && parts[i].trim()) {
+                                    debugMessages.push(parts[i]);
+                                }
+                            }
+
+                            // Display debug messages in panel
+                            if (debugMessages.length > 0) {
+                                var debugLog = document.getElementById('debug-log');
+                                if (debugLog) {
+                                    debugLog.innerHTML += '<div style="margin: 4px 0; color: #4a9eff; font-weight: bold;">🔗 Child Rig:</div>';
+                                    for (var j = 0; j < debugMessages.length; j++) {
+                                        debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + debugMessages[j] + '</div>';
+                                    }
+                                    debugLog.scrollTop = debugLog.scrollHeight;
+                                }
+                            }
+
+                            if (status === 'error') {
                                 console.error('Child Rig error:', parts.slice(1).join(' | '));
                             } else {
-                                // Success case
-                                console.log('Child Rig applied successfully:', result);
+                                console.log('Child Rig applied successfully:', parts[1]);
                             }
                         }
                     });
