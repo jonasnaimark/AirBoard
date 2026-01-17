@@ -5,6 +5,20 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.8] - 2025-01-17 🔗 **Child Rig Nested Parenting Fix**
+### 🐛 Bug Fixes
+- **Child Rig Nested Parenting**: Fixed layer movement when applying Child Rig to layers parented to another parented layer (3+ level hierarchy)
+  - Root cause: Was storing world scale instead of local scale, causing scale orbit to apply incorrect offset
+  - Layers now stay in place when Child Rig is applied, regardless of parent chain depth
+
+### 🔧 Technical Improvements
+- Updated `getLayerWorldPosition()` to properly handle 3D layers (uses zRotation)
+- Fixed expression generation to use parent's 3D status for rotation property access
+- Improved debug message display in panel for Child Rig operations
+
+### 🔗 Associated Build
+- AirBoard-v4.17.8.zxp
+
 ## [4.17.4] - 2025-12-19 🪟 **Glass Polish & UI Fixes**
 ### 🪟 Glass Effect
 - **Renamed Layer**: "Glass Sweep" → "Glass Highlight" for clarity
