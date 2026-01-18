@@ -23623,36 +23623,71 @@ function copySelectedKeyframes() {
         }
 
         var layer = selectedLayers[0];
-        var selectedProps = layer.selectedProperties;
 
-        // Collect all selected keyframes
+        // Collect all selected keyframes by walking ALL properties (not just selectedProperties)
+        // This is necessary because selectedProperties only returns explicitly selected properties,
+        // not properties that just have selected keyframes
         var copiedProperties = [];
         var allKeyframeTimes = [];
 
-        for (var i = 0; i < selectedProps.length; i++) {
-            var prop = selectedProps[i];
-            if (!prop || prop.propertyValueType === PropertyValueType.NO_VALUE) continue;
-            if (!prop.canVaryOverTime || prop.numKeys === 0) continue;
+        function collectSelectedKeyframes(propGroup) {
+            try {
+                for (var i = 1; i <= propGroup.numProperties; i++) {
+                    var prop;
+                    try {
+                        prop = propGroup.property(i);
+                    } catch(e) {
+                        continue;
+                    }
+                    if (!prop) continue;
 
-            var selectedKeyframes = [];
-            for (var k = 1; k <= prop.numKeys; k++) {
-                if (prop.keySelected(k)) {
-                    var keyData = captureKeyframeState(prop, k);
-                    if (keyData) {
-                        selectedKeyframes.push(keyData);
-                        allKeyframeTimes.push(keyData.time);
+                    // Check if this property has keyframes with selections
+                    try {
+                        if (prop.canVaryOverTime && prop.numKeys > 0) {
+                            var selectedKeyframes = [];
+                            for (var k = 1; k <= prop.numKeys; k++) {
+                                try {
+                                    if (prop.keySelected(k)) {
+                                        var keyData = captureKeyframeState(prop, k);
+                                        if (keyData) {
+                                            selectedKeyframes.push(keyData);
+                                            allKeyframeTimes.push(keyData.time);
+                                        }
+                                    }
+                                } catch(keyErr) {
+                                    // Skip this keyframe if there's an error
+                                }
+                            }
+
+                            if (selectedKeyframes.length > 0) {
+                                copiedProperties.push({
+                                    matchPath: getPropertyMatchPath(prop),
+                                    name: prop.name,
+                                    keyframes: selectedKeyframes
+                                });
+                            }
+                        }
+                    } catch(propErr) {
+                        // Skip this property if there's an error checking it
+                    }
+
+                    // Recurse into property groups
+                    try {
+                        if (prop.propertyType === PropertyType.INDEXED_GROUP ||
+                            prop.propertyType === PropertyType.NAMED_GROUP) {
+                            collectSelectedKeyframes(prop);
+                        }
+                    } catch(recurseErr) {
+                        // Skip recursion if there's an error
                     }
                 }
-            }
-
-            if (selectedKeyframes.length > 0) {
-                copiedProperties.push({
-                    matchPath: getPropertyMatchPath(prop),
-                    name: prop.name,
-                    keyframes: selectedKeyframes
-                });
+            } catch(groupErr) {
+                // Skip this group if there's an error
             }
         }
+
+        // Walk all properties on the layer
+        collectSelectedKeyframes(layer);
 
         // Also check Time Remap
         if (layer.timeRemapEnabled && layer.timeRemap && layer.timeRemap.numKeys > 0) {

@@ -5,6 +5,17 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.9] - 2025-01-18 📋 **Copy/Paste Springs Multi-Property Fix**
+### 🐛 Bug Fixes
+- **Copy/Paste Springs**: Fixed copy/paste failing when non-spring properties (like Opacity) were included in the selection
+  - Root cause: Was using `layer.selectedProperties` which only returns explicitly highlighted properties, not all properties with selected keyframes
+  - Now recursively walks ALL layer properties to find selected keyframes
+  - Added robust error handling to prevent single property errors from breaking entire copy operation
+- Copy/Paste Springs now works with any combination of spring and non-spring properties (Position, Scale, Opacity, etc.)
+
+### 🔗 Associated Build
+- AirBoard-v4.17.9.zxp
+
 ## [4.17.8] - 2025-01-17 🔗 **Child Rig Nested Parenting Fix**
 ### 🐛 Bug Fixes
 - **Child Rig Nested Parenting**: Fixed layer movement when applying Child Rig to layers parented to another parented layer (3+ level hierarchy)
