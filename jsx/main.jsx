@@ -16029,11 +16029,11 @@ function createDeviceComposition(deviceType, multiplier) {
                 debugInfo.push("Template path: " + templatePath);
                 var templateFile = new File(templatePath);
                 
-                // Check alternate path separator
+                // Try with normalized path (replace backslashes with forward slashes)
                 if (!templateFile.exists) {
-                    debugInfo.push("Template file not found at first path, trying alternate...");
-                    templatePath = extensionRoot + "\\assets\\templates\\AirBoard Templates.aep";
-                    debugInfo.push("Alternate template path: " + templatePath);
+                    debugInfo.push("Template file not found at first path, trying normalized...");
+                    templatePath = (extensionRoot + "/assets/templates/AirBoard Templates.aep").replace(/\\/g, "/");
+                    debugInfo.push("Normalized template path: " + templatePath);
                     templateFile = new File(templatePath);
                 }
                 
@@ -16659,12 +16659,12 @@ function addGestureFromPanel(gestureType, multiplier) {
         var templateFile = new File(templatePath);
         
         if (!templateFile.exists) {
-            templatePath = extensionRoot + "\\assets\\templates\\AirBoard Templates.aep";
+            templatePath = (extensionRoot + "/assets/templates/AirBoard Templates.aep").replace(/\\/g, "/");
             templateFile = new File(templatePath);
         }
-        
+
         if (!templateFile.exists) {
-            alert("Cannot find AirBoard Templates.aep file.");
+            alert("Cannot find AirBoard Templates.aep file.\n\nExpected location:\n" + templatePath);
             app.endUndoGroup();
             return "error";
         }
@@ -16951,14 +16951,14 @@ function addComponentFromPanel(componentType, multiplier) {
         var templatePath = extensionRoot + "/assets/templates/" + data.templateFile;
         var templateFile = new File(templatePath);
         
-        // Check alternate path separator
+        // Try with normalized path (replace backslashes with forward slashes)
         if (!templateFile.exists) {
-            templatePath = extensionRoot + "\\assets\\templates\\" + data.templateFile;
+            templatePath = (extensionRoot + "/assets/templates/" + data.templateFile).replace(/\\/g, "/");
             templateFile = new File(templatePath);
         }
-        
+
         if (!templateFile.exists) {
-            alert("Cannot find template file at: " + templatePath);
+            alert("Cannot find template file.\n\nExpected location:\n" + templatePath);
             app.endUndoGroup();
             return "error";
         }
@@ -17850,12 +17850,12 @@ function applyFitToShape(mode) {
                         var presetPath = extensionRoot + "/assets/presets/FitToShape.ffx";
                         var presetFile = new File(presetPath);
                         
-                        // Check alternate path separator
+                        // Try with normalized path
                         if (!presetFile.exists) {
-                            presetPath = extensionRoot + "\\assets\\presets\\FitToShape.ffx";
+                            presetPath = (extensionRoot + "/assets/presets/FitToShape.ffx").replace(/\\/g, "/");
                             presetFile = new File(presetPath);
                         }
-                        
+
                         if (presetFile.exists) {
                             // Count effects before applying preset
                             var effectCountBefore = effects.numProperties;
@@ -18278,12 +18278,12 @@ function applyFitToShape(mode) {
                         var presetPath = extensionRoot + "/assets/presets/FitToShape.ffx";
                         var presetFile = new File(presetPath);
                         
-                        // Check alternate path separator
+                        // Try with normalized path
                         if (!presetFile.exists) {
-                            presetPath = extensionRoot + "\\assets\\presets\\FitToShape.ffx";
+                            presetPath = (extensionRoot + "/assets/presets/FitToShape.ffx").replace(/\\/g, "/");
                             presetFile = new File(presetPath);
                         }
-                        
+
                         if (presetFile.exists) {
                             // Count effects before applying preset
                             var effectCountBefore = effects.numProperties;
@@ -18698,12 +18698,12 @@ function applySquircle(useCompSize, resolutionMultiplier) {
     var ffxPath = extensionRoot + "/assets/presets/SquircleComplete.ffx";
     var ffxFile = new File(ffxPath);
     
-    // Check if file exists with alternate separator
+    // Try with normalized path
     if (!ffxFile.exists) {
-        ffxPath = extensionRoot + "\\assets\\presets\\SquircleComplete.ffx";
+        ffxPath = (extensionRoot + "/assets/presets/SquircleComplete.ffx").replace(/\\/g, "/");
         ffxFile = new File(ffxPath);
     }
-    
+
     // If still not found, try relative to script
     if (!ffxFile.exists) {
         var scriptFile = new File($.fileName);
@@ -18712,10 +18712,10 @@ function applySquircle(useCompSize, resolutionMultiplier) {
         ffxPath = extRoot.fsName + "/assets/presets/SquircleComplete.ffx";
         ffxFile = new File(ffxPath);
     }
-    
+
     // Check if we found the file
     if (!ffxFile.exists) {
-        alert("Cannot find SquircleComplete.ffx preset file.");
+        alert("Cannot find SquircleComplete.ffx preset file.\n\nExpected location:\n" + ffxPath);
         layer.remove();
         app.endUndoGroup();
         return;
@@ -18885,12 +18885,12 @@ function replaceRectangle() {
         // Apply the squircle preset
         var ffxPath = extensionRoot + "/assets/presets/SquircleComplete.ffx";
         var ffxFile = new File(ffxPath);
-        
+
         if (!ffxFile.exists) {
-            ffxPath = extensionRoot + "\\assets\\presets\\SquircleComplete.ffx";
+            ffxPath = (extensionRoot + "/assets/presets/SquircleComplete.ffx").replace(/\\/g, "/");
             ffxFile = new File(ffxPath);
         }
-        
+
         if (!ffxFile.exists) {
             var scriptFile = new File($.fileName);
             var scriptFolder = scriptFile.parent;
@@ -18898,9 +18898,9 @@ function replaceRectangle() {
             ffxPath = extRoot.fsName + "/assets/presets/SquircleComplete.ffx";
             ffxFile = new File(ffxPath);
         }
-        
+
         if (!ffxFile.exists) {
-            alert("Cannot find SquircleComplete.ffx preset file.");
+            alert("Cannot find SquircleComplete.ffx preset file.\n\nExpected location:\n" + ffxPath);
             newLayer.remove();
             // app.endUndoGroup();
             return;
@@ -20354,12 +20354,12 @@ function addBlurFromPanel(materialType, resolutionMultiplier) {
         var presetPath = extensionRoot + "/assets/presets/Materials/" + presetFileName;
         var presetFile = new File(presetPath);
         
-        // Check alternate path separator for Windows compatibility
+        // Try with normalized path
         if (!presetFile.exists) {
-            presetPath = extensionRoot + "\\assets\\presets\\Materials\\" + presetFileName;
+            presetPath = (extensionRoot + "/assets/presets/Materials/" + presetFileName).replace(/\\/g, "/");
             presetFile = new File(presetPath);
         }
-        
+
         if (!presetFile.exists) {
             alert("Cannot find material blur preset file:\n" + presetFileName + "\n\nExpected location:\n" + presetPath);
             return "error";
@@ -20598,7 +20598,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                 var ffxFile = new File(ffxPath);
 
                 if (!ffxFile.exists) {
-                    ffxPath = extensionRoot + "\\assets\\presets\\SquircleComplete.ffx";
+                    ffxPath = (extensionRoot + "/assets/presets/SquircleComplete.ffx").replace(/\\/g, "/");
                     ffxFile = new File(ffxPath);
                 }
 
@@ -20611,7 +20611,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                 }
 
                 if (!ffxFile.exists) {
-                    alert("Cannot find SquircleComplete.ffx preset file needed for rectangle conversion.");
+                    alert("Cannot find SquircleComplete.ffx preset file needed for rectangle conversion.\n\nExpected location:\n" + ffxPath);
                     newLayer.remove();
                     app.endUndoGroup();
                     return "error";
@@ -20759,7 +20759,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
             var blurPresetPath = extensionRoot + "/assets/presets/Materials/Light Regular.ffx";
             var blurPresetFile = new File(blurPresetPath);
             if (!blurPresetFile.exists) {
-                blurPresetPath = extensionRoot + "\\assets\\presets\\Materials\\Light Regular.ffx";
+                blurPresetPath = (extensionRoot + "/assets/presets/Materials/Light Regular.ffx").replace(/\\/g, "/");
                 blurPresetFile = new File(blurPresetPath);
             }
 

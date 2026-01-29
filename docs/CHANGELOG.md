@@ -5,6 +5,20 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.10] - 2025-01-29 🛠️ **Cross-Platform Path Fix**
+### 🐛 Bug Fixes
+- **Preset File Path Resolution**: Fixed mixed path separator bug causing "Cannot find preset file" errors on macOS
+  - Root cause: Fallback paths used Windows backslashes (`\`) which mixed with macOS forward slashes (`/`), creating invalid paths like `/Library/.../AirBoard\assets\presets\...`
+  - Now normalizes all paths using forward slashes (works on both macOS and Windows)
+  - Fixed 11 instances across template, squircle, FitToShape, and material preset loading
+
+### 🔧 Technical Improvements
+- Improved error messages to show expected file location when presets can't be found
+- Path normalization using `.replace(/\\/g, "/")` instead of hardcoded backslash fallbacks
+
+### 🔗 Associated Build
+- AirBoard-v4.17.10.zxp
+
 ## [4.17.9] - 2025-01-18 📋 **Copy/Paste Springs Multi-Property Fix**
 ### 🐛 Bug Fixes
 - **Copy/Paste Springs**: Fixed copy/paste failing when non-spring properties (like Opacity) were included in the selection
