@@ -19740,35 +19740,10 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
         // Scale factor relative to 2x (base shadow values are calibrated for 2x)
         var scaleFactor = resolutionMultiplier / 2;
 
-        var targetLayer = selectedLayers[0];
         var debugInfo = [];
-
         debugInfo.push("=== SHADOW SYSTEM (ELEVATIONS 1-4) ===");
         debugInfo.push("Resolution: " + resolutionMultiplier + "x, Scale factor: " + scaleFactor);
-        debugInfo.push("Layer name: " + targetLayer.name);
-
-        // Enhanced solid layer detection
-        var isSolidLayer = false;
-
-        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem &&
-            targetLayer.source.footageSource instanceof SolidSource) {
-            isSolidLayer = true;
-        }
-
-        if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem &&
-            targetLayer.source.footageSource &&
-            typeof targetLayer.source.footageSource.color !== 'undefined') {
-            isSolidLayer = true;
-        }
-
-        if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
-            isSolidLayer = true;
-        }
-
-        if (isSolidLayer) {
-            alert("Cannot apply shadow to solid layers. Please select a shape layer, text layer, or other content layer.");
-            return "error|" + debugInfo.join("|");
-        }
+        debugInfo.push("Selected layers: " + selectedLayers.length);
 
         // Shadow definitions - base values at 2x resolution
         // Distance and Softness scale with resolution, Opacity stays constant
@@ -19799,42 +19774,82 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
         app.beginUndoGroup("Add Elevation " + elevationType + " Shadow");
 
         try {
-            // Remove existing elevation shadows before adding new ones
-            var effects = targetLayer.Effects;
-            for (var e = effects.numProperties; e >= 1; e--) {
-                var eff = effects.property(e);
-                if (eff.name.indexOf("Elevation") === 0) {
-                    eff.remove();
-                    debugInfo.push("Removed existing: " + eff.name);
-                }
-            }
+            var successCount = 0;
+            var skippedLayers = [];
 
-            // Add drop shadow effects
-            for (var s = 0; s < shadows.length; s++) {
-                var shadowDef = shadows[s];
-                var dropShadow = targetLayer.Effects.addProperty("ADBE Drop Shadow");
+            // Apply shadow to ALL selected layers
+            for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                var targetLayer = selectedLayers[layerIdx];
 
-                // Name the effect
-                if (shadows.length === 1) {
-                    dropShadow.name = "Elevation " + elevationType;
-                } else {
-                    dropShadow.name = "Elevation " + elevationType + " (" + (s + 1) + ")";
+                // Enhanced solid layer detection
+                var isSolidLayer = false;
+
+                if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem &&
+                    targetLayer.source.footageSource instanceof SolidSource) {
+                    isSolidLayer = true;
                 }
 
-                // Set shadow parameters (distance and softness scale, opacity doesn't)
-                // Drop Shadow displays 0-100% but expects 0-255 value, so multiply by 2.55
-                dropShadow.property("Opacity").setValue(shadowDef.opacity * 2.55);
-                dropShadow.property("Direction").setValue(180); // Straight down
-                dropShadow.property("Distance").setValue(shadowDef.distance * scaleFactor);
-                dropShadow.property("Softness").setValue(shadowDef.softness * scaleFactor);
-                dropShadow.property("Shadow Color").setValue([0, 0, 0]); // Black
+                if (targetLayer instanceof AVLayer && targetLayer.source instanceof FootageItem &&
+                    targetLayer.source.footageSource &&
+                    typeof targetLayer.source.footageSource.color !== 'undefined') {
+                    isSolidLayer = true;
+                }
 
-                debugInfo.push("Added " + dropShadow.name + ": opacity=" + shadowDef.opacity +
-                    ", distance=" + (shadowDef.distance * scaleFactor) +
-                    ", softness=" + (shadowDef.softness * scaleFactor));
+                if (targetLayer.name && targetLayer.name.indexOf("Solid") === 0) {
+                    isSolidLayer = true;
+                }
+
+                if (isSolidLayer) {
+                    skippedLayers.push(targetLayer.name);
+                    debugInfo.push("⏭️ Skipped solid layer: " + targetLayer.name);
+                    continue;
+                }
+
+                debugInfo.push("Processing: " + targetLayer.name);
+
+                // Remove existing elevation shadows before adding new ones
+                var effects = targetLayer.Effects;
+                for (var e = effects.numProperties; e >= 1; e--) {
+                    var eff = effects.property(e);
+                    if (eff.name.indexOf("Elevation") === 0) {
+                        eff.remove();
+                        debugInfo.push("  Removed existing: " + eff.name);
+                    }
+                }
+
+                // Add drop shadow effects
+                for (var s = 0; s < shadows.length; s++) {
+                    var shadowDef = shadows[s];
+                    var dropShadow = targetLayer.Effects.addProperty("ADBE Drop Shadow");
+
+                    // Name the effect
+                    if (shadows.length === 1) {
+                        dropShadow.name = "Elevation " + elevationType;
+                    } else {
+                        dropShadow.name = "Elevation " + elevationType + " (" + (s + 1) + ")";
+                    }
+
+                    // Set shadow parameters (distance and softness scale, opacity doesn't)
+                    // Drop Shadow displays 0-100% but expects 0-255 value, so multiply by 2.55
+                    dropShadow.property("Opacity").setValue(shadowDef.opacity * 2.55);
+                    dropShadow.property("Direction").setValue(180); // Straight down
+                    dropShadow.property("Distance").setValue(shadowDef.distance * scaleFactor);
+                    dropShadow.property("Softness").setValue(shadowDef.softness * scaleFactor);
+                    dropShadow.property("Shadow Color").setValue([0, 0, 0]); // Black
+                }
+
+                successCount++;
             }
 
-            debugInfo.push("✅ Elevation " + elevationType + " shadow applied successfully");
+            if (skippedLayers.length > 0 && successCount === 0) {
+                alert("Cannot apply shadow to solid layers. Please select shape layers, text layers, or other content layers.");
+                return "error|" + debugInfo.join("|");
+            }
+
+            debugInfo.push("✅ Elevation " + elevationType + " shadow applied to " + successCount + " layer(s)");
+            if (skippedLayers.length > 0) {
+                debugInfo.push("⏭️ Skipped " + skippedLayers.length + " solid layer(s)");
+            }
 
             return "success|" + debugInfo.join("|");
 
