@@ -19867,6 +19867,152 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
     }
 }
 
+// Add Elevation 0 Stroke - Adds a #DDDDDD stroke to shape layers
+// Stroke width scales with resolution: 2px at 2x, 4px at 4x, etc. (1px per scale factor)
+function addElevation0Stroke(resolutionMultiplier) {
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            alert("Please select a composition first.");
+            return "error";
+        }
+
+        var selectedLayers = comp.selectedLayers;
+        if (!selectedLayers || selectedLayers.length === 0) {
+            alert("Please select a shape layer to apply Elevation 0 stroke to.");
+            return "error";
+        }
+
+        // Default to 2x if not provided
+        resolutionMultiplier = resolutionMultiplier || 2;
+        // Stroke width is 1px per resolution multiplier (2px at 2x, 4px at 4x, etc.)
+        var strokeWidth = resolutionMultiplier;
+
+        // Stroke color #DDDDDD converted to 0-1 range
+        var strokeColor = [0xDD/255, 0xDD/255, 0xDD/255]; // [0.867, 0.867, 0.867]
+
+        var debugInfo = [];
+        debugInfo.push("=== ELEVATION 0 STROKE ===");
+        debugInfo.push("Resolution: " + resolutionMultiplier + "x, Stroke width: " + strokeWidth + "px");
+        debugInfo.push("Selected layers: " + selectedLayers.length);
+
+        app.beginUndoGroup("Add Elevation 0 Stroke");
+
+        try {
+            var successCount = 0;
+            var skippedLayers = [];
+
+            for (var layerIdx = 0; layerIdx < selectedLayers.length; layerIdx++) {
+                var targetLayer = selectedLayers[layerIdx];
+
+                // Check if it's a shape layer
+                if (!(targetLayer instanceof ShapeLayer)) {
+                    skippedLayers.push(targetLayer.name + " (not a shape layer)");
+                    debugInfo.push("Skipped: " + targetLayer.name + " - not a shape layer");
+                    continue;
+                }
+
+                debugInfo.push("Processing: " + targetLayer.name);
+
+                // Get the Contents property of the shape layer
+                var contents = targetLayer.property("Contents");
+                if (!contents) {
+                    skippedLayers.push(targetLayer.name + " (no contents)");
+                    debugInfo.push("  Skipped: no contents property");
+                    continue;
+                }
+
+                // Track if we added any strokes to this layer
+                var strokesAdded = 0;
+
+                // Process each shape group in the layer
+                for (var g = 1; g <= contents.numProperties; g++) {
+                    var group = contents.property(g);
+
+                    // Check if this is a shape group (ADBE Vector Group)
+                    if (group.matchName === "ADBE Vector Group") {
+                        var groupContents = group.property("Contents");
+                        if (!groupContents) continue;
+
+                        // First, look for an existing stroke with width 0
+                        var existingStroke = null;
+                        for (var s = 1; s <= groupContents.numProperties; s++) {
+                            var prop = groupContents.property(s);
+                            if (prop.matchName === "ADBE Vector Graphic - Stroke") {
+                                try {
+                                    var currentWidth = prop.property("Stroke Width").value;
+                                    if (currentWidth === 0) {
+                                        existingStroke = prop;
+                                        break;
+                                    }
+                                } catch(e) {}
+                            }
+                        }
+
+                        try {
+                            if (existingStroke) {
+                                // Update the existing stroke with width 0
+                                existingStroke.name = "Elevation 0";
+                                existingStroke.property("Color").setValue(strokeColor);
+                                existingStroke.property("Stroke Width").setValue(strokeWidth);
+                                existingStroke.property("Opacity").setValue(100);
+                                strokesAdded++;
+                                debugInfo.push("  Updated existing stroke in group: " + group.name);
+                            } else {
+                                // Add a new Elevation 0 stroke
+                                var newStroke = groupContents.addProperty("ADBE Vector Graphic - Stroke");
+                                newStroke.name = "Elevation 0";
+                                newStroke.property("Color").setValue(strokeColor);
+                                newStroke.property("Stroke Width").setValue(strokeWidth);
+                                newStroke.property("Opacity").setValue(100);
+                                strokesAdded++;
+                                debugInfo.push("  Added stroke to group: " + group.name);
+                            }
+                        } catch(strokeError) {
+                            debugInfo.push("  Error with stroke in " + group.name + ": " + strokeError.toString());
+                        }
+                    }
+                }
+
+                if (strokesAdded > 0) {
+                    successCount++;
+                    debugInfo.push("  Added " + strokesAdded + " stroke(s) to " + targetLayer.name);
+                } else {
+                    skippedLayers.push(targetLayer.name + " (no shape groups found)");
+                    debugInfo.push("  No shape groups found in " + targetLayer.name);
+                }
+            }
+
+            if (successCount === 0) {
+                if (skippedLayers.length > 0) {
+                    alert("Could not apply Elevation 0 stroke. Please select shape layers with shape groups.\n\nSkipped: " + skippedLayers.join(", "));
+                } else {
+                    alert("Please select a shape layer to apply Elevation 0 stroke to.");
+                }
+                return "error|" + debugInfo.join("|");
+            }
+
+            debugInfo.push("Elevation 0 stroke applied to " + successCount + " layer(s)");
+            if (skippedLayers.length > 0) {
+                debugInfo.push("Skipped " + skippedLayers.length + " layer(s)");
+            }
+
+            return "success|" + debugInfo.join("|");
+
+        } catch(applyError) {
+            debugInfo.push("Error: " + applyError.toString());
+            alert("Error applying Elevation 0 stroke: " + applyError.toString());
+            return "error|" + debugInfo.join("|");
+        } finally {
+            app.endUndoGroup();
+        }
+
+    } catch(e) {
+        alert("Error adding Elevation 0 stroke: " + e.toString());
+        return "error";
+    }
+}
+
 // Add Shimmer functionality - Creates shimmer loading effect layers
 function addShimmerFromPanel() {
     try {

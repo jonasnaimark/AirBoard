@@ -1079,8 +1079,8 @@ document.addEventListener('DOMContentLoaded', function() {
             durationIncrementBtn.disabled = true;
 
             // Call the frame-based function that maintains selection and uses dynamic input
-            // Pass isAltHeld to ignore in/out point tracking
-            var script = 'stretchKeyframesWithFrames(1, ' + durationFrames + ', ' + isAltHeld + ')';
+            // Always ignore in/out point tracking (feature removed)
+            var script = 'stretchKeyframesWithFrames(1, ' + durationFrames + ', true)';
             csInterface.evalScript(script, function(result) {
                 console.log('Duration stretch forward result:', result);
                 
@@ -1160,8 +1160,8 @@ document.addEventListener('DOMContentLoaded', function() {
             durationDecrementBtn.disabled = true;
 
             // Call the frame-based function that maintains selection and uses dynamic input
-            // Pass isAltHeld to ignore in/out point tracking
-            var script = 'stretchKeyframesWithFrames(-1, ' + durationFrames + ', ' + isAltHeld + ')';
+            // Always ignore in/out point tracking (feature removed)
+            var script = 'stretchKeyframesWithFrames(-1, ' + durationFrames + ', true)';
             csInterface.evalScript(script, function(result) {
                 console.log('Duration stretch backward result:', result);
                 
@@ -1247,8 +1247,8 @@ document.addEventListener('DOMContentLoaded', function() {
             delayIncrementBtn.disabled = true;
 
             // Timeline mode with optional skipPrecomps for global delay
-            // Pass isAltHeld to ignore in/out point tracking
-            var script = 'nudgeDelayTimelineMode(1, ' + delayFrames + ', ' + isShiftHeld + ', ' + isAltHeld + ')';
+            // Always ignore in/out point tracking (feature removed)
+            var script = 'nudgeDelayTimelineMode(1, ' + delayFrames + ', ' + isShiftHeld + ', true)';
 
             csInterface.evalScript(script, function(result) {
                 console.log('Delay nudge forward result:', result);
@@ -1329,8 +1329,8 @@ document.addEventListener('DOMContentLoaded', function() {
             delayDecrementBtn.disabled = true;
 
             // Timeline mode with optional skipPrecomps for global delay
-            // Pass isAltHeld to ignore in/out point tracking
-            var script = 'nudgeDelayTimelineMode(-1, ' + delayFrames + ', ' + isShiftHeld + ', ' + isAltHeld + ')';
+            // Always ignore in/out point tracking (feature removed)
+            var script = 'nudgeDelayTimelineMode(-1, ' + delayFrames + ', ' + isShiftHeld + ', true)';
 
             csInterface.evalScript(script, function(result) {
                 console.log('Delay nudge backward result:', result);
@@ -2021,7 +2021,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Normal: global offset (preserve all relative delays)
             // Shift: per-property snapping (each property's earliest → playhead)
             // Alt: ignore in/out point tracking
-            var script = 'snapToPlayheadFromPanel(' + preserveDelays + ', ' + isAltHeld + ')';
+            var script = 'snapToPlayheadFromPanel(' + preserveDelays + ', true)';
             csInterface.evalScript(script, function(result) {
                 console.log('Snap to playhead result' + (preserveDelays ? ' [PRESERVE DELAYS]' : ' [REMOVE DELAYS]') + ':', result);
 
@@ -2101,7 +2101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 staggerIncrementBtn.disabled = true;
 
             // Call the ExtendScript function with +1 direction, frame count, layer order flag, and alt key
-            var script = 'applyStagger(1, ' + staggerFrames + ', ' + isTopToBottom + ', ' + isAltHeld + ')';
+            var script = 'applyStagger(1, ' + staggerFrames + ', ' + isTopToBottom + ', true)';
             csInterface.evalScript(script, function(result) {
                 console.log('Stagger increment result:', result);
                 
@@ -2211,7 +2211,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 staggerDecrementBtn.disabled = true;
 
             // Call the ExtendScript function with -1 direction, frame count, layer order flag, and alt key
-            var script = 'applyStagger(-1, ' + staggerFrames + ', ' + isTopToBottom + ', ' + isAltHeld + ')';
+            var script = 'applyStagger(-1, ' + staggerFrames + ', ' + isTopToBottom + ', true)';
             csInterface.evalScript(script, function(result) {
                 console.log('Stagger decrement result:', result);
                 
@@ -3118,41 +3118,64 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add Shadow button handler
     var addShadowButton = document.getElementById('addShadow');
+    var elevationDropdown = document.getElementById('elevationType');
+
+    // Update button text based on dropdown selection
+    function updateElevationButtonText() {
+        if (elevationDropdown.value === '0') {
+            addShadowButton.textContent = 'Add Stroke';
+        } else {
+            addShadowButton.textContent = 'Add Shadow';
+        }
+    }
+
+    // Listen for dropdown changes
+    elevationDropdown.addEventListener('change', updateElevationButtonText);
+
+    // Set initial button text
+    updateElevationButtonText();
+
     addShadowButton.addEventListener('click', function() {
         console.log('Add Shadow clicked');
-        
+
         // Get elevation type and resolution multiplier
         var elevationType = document.getElementById('elevationType').value;
         var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value);
-        
+
         console.log('Elevation Type:', elevationType, 'Resolution Multiplier:', resolutionMultiplier);
-        
+
         // Disable button while working
         addShadowButton.disabled = true;
-        
+
         // Check if CSInterface is available
         if (!csInterface) {
             alert('CSInterface not available. Please run this in After Effects.');
             addShadowButton.disabled = false;
             return;
         }
-        
+
         // Pass the extension path to the JSX
         var setPathScript = 'var extensionRoot = "' + extensionPath.replace(/\\/g, '\\\\') + '";';
         csInterface.evalScript(setPathScript);
-        
-        // Call the After Effects script
-        var script = 'addShadowFromPanel("' + elevationType + '", ' + resolutionMultiplier + ')';
+
+        // Call the appropriate After Effects script based on elevation type
+        var script;
+        if (elevationType === '0') {
+            // Elevation 0 adds a stroke instead of a shadow
+            script = 'addElevation0Stroke(' + resolutionMultiplier + ')';
+        } else {
+            script = 'addShadowFromPanel("' + elevationType + '", ' + resolutionMultiplier + ')';
+        }
         console.log('Executing script:', script);
-        
+
         csInterface.evalScript(script, function(result) {
             console.log('Shadow result:', result);
-            
+
             // Parse debug information and show in debug panel
             if (result && result.indexOf('|') > -1) {
                 var parts = result.split('|');
                 var debugInfo = parts.slice(1);
-                
+
                 // Show debug info in the debug panel
                 var debugPanel = document.getElementById('debugPanel');
                 if (debugPanel) {
@@ -3165,14 +3188,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                 }
-                
+
                 // Also log to console for backup
                 console.log('=== SHADOW DEBUG INFO ===');
                 for (var i = 0; i < debugInfo.length; i++) {
                     console.log(debugInfo[i]);
                 }
             }
-            
+
             // Re-enable button
             addShadowButton.disabled = false;
         });
