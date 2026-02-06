@@ -17594,6 +17594,32 @@ function applyFitToShape(mode) {
                 DEBUG_JSX.log("Could not clear path expressions: " + pathExprError.toString());
             }
 
+            // Remove Elevation 0 stroke and offset path from mask layer (not needed for masking)
+            try {
+                var maskContentsForCleanup = maskLayer.property("Contents");
+                if (maskContentsForCleanup) {
+                    for (var mc = 1; mc <= maskContentsForCleanup.numProperties; mc++) {
+                        var maskGroupForCleanup = maskContentsForCleanup.property(mc);
+                        if (maskGroupForCleanup && maskGroupForCleanup.matchName === "ADBE Vector Group") {
+                            var maskGroupContentsForCleanup = maskGroupForCleanup.property("Contents");
+                            if (maskGroupContentsForCleanup) {
+                                // Remove in reverse order to avoid index shifting
+                                for (var mcp = maskGroupContentsForCleanup.numProperties; mcp >= 1; mcp--) {
+                                    var maskPropForCleanup = maskGroupContentsForCleanup.property(mcp);
+                                    if (maskPropForCleanup.name === "Elevation 0" ||
+                                        maskPropForCleanup.name === "Offset Path - Elevation 0") {
+                                        DEBUG_JSX.log("Removing from mask layer: " + maskPropForCleanup.name);
+                                        maskPropForCleanup.remove();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch(elevation0CleanupError) {
+                DEBUG_JSX.log("Could not remove Elevation 0 properties from mask: " + elevation0CleanupError.toString());
+            }
+
             // Clean up mask layer effects - remove ALL effects including Squircle
             var maskEffects = maskLayer.property("Effects");
             if (maskEffects && maskEffects.numProperties > 0) {
@@ -19867,8 +19893,9 @@ function addShadowFromPanel(elevationType, resolutionMultiplier) {
     }
 }
 
-// Add Elevation 0 Stroke - Adds a #DDDDDD stroke to shape layers
+// Add Elevation 0 Stroke - Adds a black stroke at 2% opacity to shape layers
 // Stroke width scales with resolution: 2px at 2x, 4px at 4x, etc. (1px per scale factor)
+// Also adds Offset Path that scales with resolution: 1px at 2x (0.5px base)
 function addElevation0Stroke(resolutionMultiplier) {
     try {
         var comp = app.project.activeItem;
@@ -19887,13 +19914,16 @@ function addElevation0Stroke(resolutionMultiplier) {
         resolutionMultiplier = resolutionMultiplier || 2;
         // Stroke width is 1px per resolution multiplier (2px at 2x, 4px at 4x, etc.)
         var strokeWidth = resolutionMultiplier;
+        // Offset path is 1px at 2x, so 0.5px base × resolution
+        var offsetAmount = resolutionMultiplier / 2;
 
-        // Stroke color #DDDDDD converted to 0-1 range
-        var strokeColor = [0xDD/255, 0xDD/255, 0xDD/255]; // [0.867, 0.867, 0.867]
+        // Stroke color is black with 2% opacity
+        var strokeColor = [0, 0, 0]; // Black
+        var strokeOpacity = 2; // 2%
 
         var debugInfo = [];
         debugInfo.push("=== ELEVATION 0 STROKE ===");
-        debugInfo.push("Resolution: " + resolutionMultiplier + "x, Stroke width: " + strokeWidth + "px");
+        debugInfo.push("Resolution: " + resolutionMultiplier + "x, Stroke width: " + strokeWidth + "px, Offset: " + offsetAmount + "px");
         debugInfo.push("Selected layers: " + selectedLayers.length);
 
         app.beginUndoGroup("Add Elevation 0 Stroke");
@@ -19955,7 +19985,7 @@ function addElevation0Stroke(resolutionMultiplier) {
                                 existingStroke.name = "Elevation 0";
                                 existingStroke.property("Color").setValue(strokeColor);
                                 existingStroke.property("Stroke Width").setValue(strokeWidth);
-                                existingStroke.property("Opacity").setValue(100);
+                                existingStroke.property("Opacity").setValue(strokeOpacity);
                                 strokesAdded++;
                                 debugInfo.push("  Updated existing stroke in group: " + group.name);
                             } else {
@@ -19964,10 +19994,26 @@ function addElevation0Stroke(resolutionMultiplier) {
                                 newStroke.name = "Elevation 0";
                                 newStroke.property("Color").setValue(strokeColor);
                                 newStroke.property("Stroke Width").setValue(strokeWidth);
-                                newStroke.property("Opacity").setValue(100);
+                                newStroke.property("Opacity").setValue(strokeOpacity);
                                 strokesAdded++;
                                 debugInfo.push("  Added stroke to group: " + group.name);
                             }
+
+                            // Check for existing Offset Path - Elevation 0 and remove it first
+                            for (var op = groupContents.numProperties; op >= 1; op--) {
+                                var existingProp = groupContents.property(op);
+                                if (existingProp.name === "Offset Path - Elevation 0") {
+                                    existingProp.remove();
+                                    debugInfo.push("  Removed existing Offset Path - Elevation 0");
+                                }
+                            }
+
+                            // Add Offset Path for Elevation 0
+                            var offsetPath = groupContents.addProperty("ADBE Vector Filter - Offset");
+                            offsetPath.name = "Offset Path - Elevation 0";
+                            offsetPath.property("Amount").setValue(offsetAmount);
+                            debugInfo.push("  Added Offset Path (" + offsetAmount + "px) to group: " + group.name);
+
                         } catch(strokeError) {
                             debugInfo.push("  Error with stroke in " + group.name + ": " + strokeError.toString());
                         }
