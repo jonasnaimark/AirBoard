@@ -19955,6 +19955,15 @@ function addElevation0Stroke(resolutionMultiplier) {
                 // Track if we added any strokes to this layer
                 var strokesAdded = 0;
 
+                // First, remove any existing "Elevation 0 Stroke" duplicate groups from previous runs
+                for (var cleanup = contents.numProperties; cleanup >= 1; cleanup--) {
+                    var cleanupProp = contents.property(cleanup);
+                    if (cleanupProp.name === "Elevation 0 Stroke" && cleanupProp.matchName === "ADBE Vector Group") {
+                        cleanupProp.remove();
+                        debugInfo.push("  Removed existing Elevation 0 Stroke group");
+                    }
+                }
+
                 // Process each shape group in the layer
                 for (var g = 1; g <= contents.numProperties; g++) {
                     var group = contents.property(g);
@@ -19964,55 +19973,225 @@ function addElevation0Stroke(resolutionMultiplier) {
                         var groupContents = group.property("Contents");
                         if (!groupContents) continue;
 
-                        // First, look for an existing stroke with width 0
-                        var existingStroke = null;
-                        for (var s = 1; s <= groupContents.numProperties; s++) {
-                            var prop = groupContents.property(s);
-                            if (prop.matchName === "ADBE Vector Graphic - Stroke") {
-                                try {
-                                    var currentWidth = prop.property("Stroke Width").value;
-                                    if (currentWidth === 0) {
-                                        existingStroke = prop;
-                                        break;
-                                    }
-                                } catch(e) {}
+                        // Detect if this group contains a parametric shape
+                        var parametricShape = null;
+                        var parametricMatchName = null;
+                        for (var p = 1; p <= groupContents.numProperties; p++) {
+                            var pProp = groupContents.property(p);
+                            if (pProp.matchName === "ADBE Vector Shape - Rect" ||
+                                pProp.matchName === "ADBE Vector Shape - Ellipse" ||
+                                pProp.matchName === "ADBE Vector Shape - Star") {
+                                parametricShape = pProp;
+                                parametricMatchName = pProp.matchName;
+                                break;
                             }
                         }
 
                         try {
-                            if (existingStroke) {
-                                // Update the existing stroke with width 0
-                                existingStroke.name = "Elevation 0";
-                                existingStroke.property("Color").setValue(strokeColor);
-                                existingStroke.property("Stroke Width").setValue(strokeWidth);
-                                existingStroke.property("Opacity").setValue(strokeOpacity);
-                                strokesAdded++;
-                                debugInfo.push("  Updated existing stroke in group: " + group.name);
-                            } else {
-                                // Add a new Elevation 0 stroke
-                                var newStroke = groupContents.addProperty("ADBE Vector Graphic - Stroke");
+                            if (parametricShape) {
+                                // PARAMETRIC SHAPE: duplicate group above, strip fills, link properties
+
+                                // Duplicate the group first (before any removals that could invalidate references)
+                                group.duplicate();
+
+                                // After duplicate(), the duplicate is at g+1, original is still at g
+                                // Move duplicate above the original
+                                contents.property(g + 1).moveTo(g);
+
+                                // After moveTo: duplicate is at g, original is at g+1
+                                // Re-obtain all references by index (duplicate/moveTo invalidate old references)
+                                var dupGroup = contents.property(g);
+                                dupGroup.name = "Elevation 0 Stroke";
+
+                                // Read names from the original group AFTER structural changes
+                                // (AE may rename groups during duplicate)
+                                var origGroup = contents.property(g + 1);
+                                var originalGroupName = origGroup.name;
+                                var origContents = origGroup.property("Contents");
+
+                                // Find the parametric shape's current name in the original
+                                var originalParamName = "";
+                                for (var fp = 1; fp <= origContents.numProperties; fp++) {
+                                    if (origContents.property(fp).matchName === parametricMatchName) {
+                                        originalParamName = origContents.property(fp).name;
+                                        break;
+                                    }
+                                }
+                                for (var eo = origContents.numProperties; eo >= 1; eo--) {
+                                    var eoProp = origContents.property(eo);
+                                    if (eoProp.name === "Elevation 0" || eoProp.name === "Offset Path - Elevation 0") {
+                                        eoProp.remove();
+                                    }
+                                }
+
+                                var dupContents = dupGroup.property("Contents");
+
+                                // Remove all fills from the duplicate
+                                for (var rf = dupContents.numProperties; rf >= 1; rf--) {
+                                    if (dupContents.property(rf).matchName === "ADBE Vector Graphic - Fill") {
+                                        dupContents.property(rf).remove();
+                                    }
+                                }
+
+                                // Remove all existing strokes from the duplicate
+                                for (var rs = dupContents.numProperties; rs >= 1; rs--) {
+                                    if (dupContents.property(rs).matchName === "ADBE Vector Graphic - Stroke") {
+                                        dupContents.property(rs).remove();
+                                    }
+                                }
+
+                                // Remove all existing offset paths from the duplicate
+                                for (var ro = dupContents.numProperties; ro >= 1; ro--) {
+                                    if (dupContents.property(ro).matchName === "ADBE Vector Filter - Offset") {
+                                        dupContents.property(ro).remove();
+                                    }
+                                }
+
+                                // Add Elevation 0 stroke to the duplicate
+                                var newStroke = dupContents.addProperty("ADBE Vector Graphic - Stroke");
                                 newStroke.name = "Elevation 0";
                                 newStroke.property("Color").setValue(strokeColor);
                                 newStroke.property("Stroke Width").setValue(strokeWidth);
                                 newStroke.property("Opacity").setValue(strokeOpacity);
-                                strokesAdded++;
-                                debugInfo.push("  Added stroke to group: " + group.name);
-                            }
 
-                            // Check for existing Offset Path - Elevation 0 and remove it first
-                            for (var op = groupContents.numProperties; op >= 1; op--) {
-                                var existingProp = groupContents.property(op);
-                                if (existingProp.name === "Offset Path - Elevation 0") {
-                                    existingProp.remove();
-                                    debugInfo.push("  Removed existing Offset Path - Elevation 0");
+                                // Add Offset Path to the duplicate
+                                var offsetPath = dupContents.addProperty("ADBE Vector Filter - Offset");
+                                offsetPath.name = "Offset Path - Elevation 0";
+                                offsetPath.property("Amount").setValue(offsetAmount);
+
+                                // Link parametric shape properties via expressions
+                                // Re-find the parametric shape in the duplicate by matchName
+                                var dupParametric = null;
+                                for (var dp = 1; dp <= dupContents.numProperties; dp++) {
+                                    if (dupContents.property(dp).matchName === parametricMatchName) {
+                                        dupParametric = dupContents.property(dp);
+                                        break;
+                                    }
+                                }
+
+                                if (dupParametric) {
+                                    var exprBase = 'thisLayer.content("' + originalGroupName + '").content("' + originalParamName + '")';
+
+                                    if (parametricMatchName === "ADBE Vector Shape - Rect") {
+                                        dupParametric.property("Size").expression = exprBase + '.size';
+                                        dupParametric.property("Position").expression = exprBase + '.position';
+                                        dupParametric.property("Roundness").expression = exprBase + '.roundness';
+                                    } else if (parametricMatchName === "ADBE Vector Shape - Ellipse") {
+                                        dupParametric.property("Size").expression = exprBase + '.size';
+                                        dupParametric.property("Position").expression = exprBase + '.position';
+                                    } else if (parametricMatchName === "ADBE Vector Shape - Star") {
+                                        dupParametric.property("Points").expression = exprBase + '.points';
+                                        dupParametric.property("Position").expression = exprBase + '.position';
+                                        dupParametric.property("Rotation").expression = exprBase + '.rotation';
+                                        dupParametric.property("Outer Radius").expression = exprBase + '.outerRadius';
+                                        dupParametric.property("Outer Roundness").expression = exprBase + '.outerRoundness';
+                                        try {
+                                            dupParametric.property("Inner Radius").expression = exprBase + '.innerRadius';
+                                            dupParametric.property("Inner Roundness").expression = exprBase + '.innerRoundness';
+                                        } catch(innerErr) {
+                                            // Inner properties only exist for Star type, not Polygon
+                                        }
+                                    }
+                                }
+
+                                // Link group transform properties via expressions
+                                // Re-obtain dupGroup reference in case addProperty invalidated it
+                                dupGroup = contents.property(g);
+                                var dupTransform = dupGroup.property("Transform");
+                                var transformExprBase = 'thisLayer.content("' + originalGroupName + '").transform';
+                                dupTransform.property("Anchor Point").expression = transformExprBase + '.anchorPoint';
+                                dupTransform.property("Position").expression = transformExprBase + '.position';
+                                dupTransform.property("Scale").expression = transformExprBase + '.scale';
+                                dupTransform.property("Rotation").expression = transformExprBase + '.rotation';
+                                dupTransform.property("Opacity").expression = transformExprBase + '.opacity';
+                                try {
+                                    dupTransform.property("Skew").expression = transformExprBase + '.skew';
+                                    dupTransform.property("Skew Axis").expression = transformExprBase + '.skewAxis';
+                                } catch(skewErr) {}
+
+                                strokesAdded++;
+                                debugInfo.push("  Created linked Elevation 0 Stroke group for parametric shape: " + originalGroupName);
+
+                                // Skip the duplicate in the loop (dupGroup is at g, original at g+1)
+                                g++;
+
+                            } else {
+                                // PATH-BASED SHAPE: add stroke directly in the group
+
+                                // First, look for an existing stroke with width 0
+                                var existingStroke = null;
+                                for (var s = 1; s <= groupContents.numProperties; s++) {
+                                    var prop = groupContents.property(s);
+                                    if (prop.matchName === "ADBE Vector Graphic - Stroke") {
+                                        try {
+                                            var currentWidth = prop.property("Stroke Width").value;
+                                            if (currentWidth === 0) {
+                                                existingStroke = prop;
+                                                break;
+                                            }
+                                        } catch(e) {}
+                                    }
+                                }
+
+                                if (existingStroke) {
+                                    // Update the existing stroke with width 0
+                                    existingStroke.name = "Elevation 0";
+                                    existingStroke.property("Color").setValue(strokeColor);
+                                    existingStroke.property("Stroke Width").setValue(strokeWidth);
+                                    existingStroke.property("Opacity").setValue(strokeOpacity);
+                                    strokesAdded++;
+                                    debugInfo.push("  Updated existing stroke in group: " + group.name);
+                                } else {
+                                    // Add a new Elevation 0 stroke
+                                    var newStroke = groupContents.addProperty("ADBE Vector Graphic - Stroke");
+                                    newStroke.name = "Elevation 0";
+                                    newStroke.property("Color").setValue(strokeColor);
+                                    newStroke.property("Stroke Width").setValue(strokeWidth);
+                                    newStroke.property("Opacity").setValue(strokeOpacity);
+                                    strokesAdded++;
+                                    debugInfo.push("  Added stroke to group: " + group.name);
+                                }
+
+                                // Check for existing Offset Path - Elevation 0 and remove it first
+                                for (var op = groupContents.numProperties; op >= 1; op--) {
+                                    var existingProp = groupContents.property(op);
+                                    if (existingProp.name === "Offset Path - Elevation 0") {
+                                        existingProp.remove();
+                                        debugInfo.push("  Removed existing Offset Path - Elevation 0");
+                                    }
+                                }
+
+                                // Add Offset Path for Elevation 0
+                                var offsetPath = groupContents.addProperty("ADBE Vector Filter - Offset");
+                                offsetPath.name = "Offset Path - Elevation 0";
+                                offsetPath.property("Amount").setValue(offsetAmount);
+                                debugInfo.push("  Added Offset Path (" + offsetAmount + "px) to group: " + group.name);
+
+                                // Reorder: ensure stroke and offset path are above any fills
+                                var strokeIdx = null;
+                                var topFillIdx = null;
+                                for (var r = 1; r <= groupContents.numProperties; r++) {
+                                    var rProp = groupContents.property(r);
+                                    if (rProp.name === "Elevation 0" && rProp.matchName === "ADBE Vector Graphic - Stroke") {
+                                        strokeIdx = r;
+                                    }
+                                    if (rProp.matchName === "ADBE Vector Graphic - Fill" && topFillIdx === null) {
+                                        topFillIdx = r;
+                                    }
+                                }
+                                if (strokeIdx !== null && topFillIdx !== null && strokeIdx > topFillIdx) {
+                                    groupContents.property(strokeIdx).moveTo(topFillIdx);
+                                    debugInfo.push("  Moved Elevation 0 stroke above fill(s)");
+                                    // Re-find and move offset path right after the stroke
+                                    for (var r2 = 1; r2 <= groupContents.numProperties; r2++) {
+                                        if (groupContents.property(r2).name === "Offset Path - Elevation 0") {
+                                            groupContents.property(r2).moveTo(topFillIdx + 1);
+                                            debugInfo.push("  Moved Offset Path above fill(s)");
+                                            break;
+                                        }
+                                    }
                                 }
                             }
-
-                            // Add Offset Path for Elevation 0
-                            var offsetPath = groupContents.addProperty("ADBE Vector Filter - Offset");
-                            offsetPath.name = "Offset Path - Elevation 0";
-                            offsetPath.property("Amount").setValue(offsetAmount);
-                            debugInfo.push("  Added Offset Path (" + offsetAmount + "px) to group: " + group.name);
 
                         } catch(strokeError) {
                             debugInfo.push("  Error with stroke in " + group.name + ": " + strokeError.toString());
