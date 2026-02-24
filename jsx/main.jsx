@@ -19216,8 +19216,6 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
     }
 
     squircleEffect.property("Alignment").setValue(newAlignmentIndex);
-
-    updateAssociatedMaskLayers(layer, newAlignmentIndex, comp);
 }
 
 // When a mask layer is selected, find the squircle it references
@@ -19289,42 +19287,6 @@ function setAnchorGenericLayer(layer, newAlignmentIndex, comp) {
 
     offsetLayerPosition(layer, deltaX, deltaY);
     offsetAnchorPointTo(anchorProp, newAnchor);
-}
-
-function updateAssociatedMaskLayers(squircleLayer, newAlignmentIndex, comp) {
-    for (var i = 1; i <= comp.numLayers; i++) {
-        var candidateLayer = comp.layer(i);
-        var fitEffect = null;
-        try { fitEffect = candidateLayer.effect("Fit to shape"); } catch(e) {}
-        if (!fitEffect) continue;
-
-        // 1. Parented to the squircle
-        var isAssociated = (candidateLayer.parent === squircleLayer);
-
-        // 2. Directly above squircle in the stack with index+1 expression pattern
-        if (!isAssociated && candidateLayer.index === squircleLayer.index - 1) {
-            var anchorP = candidateLayer.property("Transform").property("Anchor Point");
-            if (anchorP.expressionEnabled && anchorP.expression.indexOf('index + 1') !== -1) {
-                isAssociated = true;
-            }
-        }
-
-        // 3. Fallback: anchor expression references squircle by name or literal index
-        if (!isAssociated) {
-            var anchorProp = candidateLayer.property("Transform").property("Anchor Point");
-            if (anchorProp.expressionEnabled) {
-                var expr = anchorProp.expression;
-                if (expr.indexOf(squircleLayer.name) !== -1 ||
-                    expr.indexOf('layer(' + squircleLayer.index + ')') !== -1) {
-                    isAssociated = true;
-                }
-            }
-        }
-
-        if (isAssociated) {
-            try { fitEffect.property("Alignment").setValue(newAlignmentIndex); } catch(e) {}
-        }
-    }
 }
 
 // Returns [ox, oy] offset from shape center for the given alignment index.
