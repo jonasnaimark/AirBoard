@@ -1866,14 +1866,25 @@ input.distance-input[data-tooltip]:hover::after {
 }
 
 /* Anchor Grid — Update Anchor control */
-.anchor-grid-row > * {
-    flex: 0 0 calc(50% - 4px); /* force true 50/50 split (50% minus half the 8px gap) */
-    box-sizing: border-box;    /* include padding in the flex-basis width */
+.anchor-grid-row {
+    gap: 0; /* seamless join between label and grid */
+}
+
+.anchor-grid-row .anchor-display {
+    flex: 0 0 calc(50% + 6px); /* label spans left column + gap to align grid with buttons above */
+    box-sizing: border-box;
+}
+
+.anchor-grid-row .anchor-grid {
+    flex: 0 0 calc(50% - 6px); /* grid aligns with button column in rows above */
+    box-sizing: border-box;
 }
 
 .anchor-display {
-    padding-right: 12px; /* override 38% right-padding — no buttons inside */
+    padding-right: 12px;
     height: 48px;
+    border-radius: 6px 0 0 6px; /* round left corners only */
+    border-right: none;         /* remove seam between label and grid */
 }
 
 .anchor-grid {
