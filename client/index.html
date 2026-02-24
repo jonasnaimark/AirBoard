@@ -268,6 +268,42 @@
                         </div>
                     </div>
                 </div>
+                <div class="control-row compact-row position-row" id="wDistanceRow">
+                    <div class="resolution-display" id="wDistanceDisplay">
+                        <span id="wDistanceText">W distance</span>
+                        <div class="stagger-controls">
+                            <button class="stagger-btn decrement" id="wDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="wIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row compact-row position-row" id="hDistanceRow">
+                    <div class="resolution-display" id="hDistanceDisplay">
+                        <span id="hDistanceText">H distance</span>
+                        <div class="stagger-controls">
+                            <button class="stagger-btn decrement" id="hDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="hIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row compact-row position-row" id="squircleWRow">
+                    <div class="resolution-display" id="squircleWDisplay">
+                        <span id="squircleWText">Squircle W</span>
+                        <div class="stagger-controls">
+                            <button class="stagger-btn decrement" id="squircleWDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="squircleWIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-row compact-row position-row" id="squircleHRow">
+                    <div class="resolution-display" id="squircleHDisplay">
+                        <span id="squircleHText">Squircle H</span>
+                        <div class="stagger-controls">
+                            <button class="stagger-btn decrement" id="squircleHDecrementBtn" type="button">−</button>
+                            <button class="stagger-btn increment" id="squircleHIncrementBtn" type="button">+</button>
+                        </div>
+                    </div>
+                </div>
                 </div>
             </section>
         </div>
@@ -312,8 +348,8 @@
                         <div class="dual-column dual-column-right">
                             <div class="dual-column-controls">
                                 <select id="componentType" class="dropdown">
-                                    <option value="dot-loader">Dots</option>
                                     <option value="iphone-ui">iPhone UI</option>
+                                    <option value="dot-loader">Dots</option>
                                     <option value="timer">Ms Counter</option>
                                     <option value="belo-spin">Belo Spin</option>
                                 </select>
@@ -365,6 +401,22 @@
                         <option value="vertex-nulls">Add Vertex Nulls</option>
                     </select>
                     <button id="addNull" class="main-button">Fit to Squircle</button>
+                </div>
+                <div class="control-row anchor-grid-row">
+                    <div class="resolution-display anchor-display">
+                        <span>Update Anchor</span>
+                    </div>
+                    <div class="anchor-grid" id="anchorGrid">
+                        <div class="anchor-cell" data-align="6" title="Top Left"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="5" title="Top Center"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="7" title="Top Right"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="2" title="Center Left"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="1" title="Center"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="3" title="Center Right"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="10" title="Bottom Left"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="9" title="Bottom Center"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                        <div class="anchor-cell" data-align="11" title="Bottom Right"><svg viewBox="0 0 8 8" width="6" height="6"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg></div>
+                    </div>
                 </div>
                 <hr class="subsection-divider">
                 <div class="subsection-title">

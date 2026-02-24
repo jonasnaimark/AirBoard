@@ -3441,49 +3441,50 @@ function readKeyframesSmart() {
         
         DEBUG_JSX.log("Total selected keyframes count: " + totalSelectedKeyframes);
         
-        // If only 1 keyframe selected total, return special result with duration error but check for position
+        // If only 1 keyframe selected total, return special result with duration error but check for position/size
         if (totalSelectedKeyframes === 1) {
-            DEBUG_JSX.log("Only 1 keyframe selected - showing duration error but checking position");
-            
+            DEBUG_JSX.log("Only 1 keyframe selected - showing duration error but checking position/size");
+
             // Return success but with -999 duration to signal error
             var frameRate = comp.frameRate || 30;
             var delayMs = 0, delayFrames = 0; // No delay for single keyframe
             var debugInfo = "Single keyframe selected - duration operations require 2+ keyframes";
-            
-            // Calculate position distances even for single keyframe case
+
+            // Calculate position and size distances even for single keyframe case
             var xDistance = 0, yDistance = 0, hasXDistance = false, hasYDistance = false;
-            
-            // Check if the single keyframe is a position keyframe
+            var wDistance = 0, hDistance = 0, hasWDistance = false, hasHDistance = false;
+            var squircleWDistance = 0, squircleHDistance = 0, hasSqWDistance = false, hasSqHDistance = false;
+
             for (var k = 0; k < propertyTimes.length; k++) {
                 var propInfo = propertyTimes[k];
                 var prop = propInfo.property;
-                
+
+                var singleKeys = [];
+                for (var j = 1; j <= prop.numKeys; j++) {
+                    if (prop.keySelected(j)) singleKeys.push(j);
+                }
+                if (singleKeys.length < 1) continue;
+
                 if (isPositionProperty(prop)) {
-                    // Get the selected keyframe(s) for this property
-                    var selectedKeys = [];
-                    for (var j = 1; j <= prop.numKeys; j++) {
-                        if (prop.keySelected(j)) {
-                            selectedKeys.push(j);
-                        }
-                    }
-                    
-                    if (selectedKeys.length >= 1) {
-                        DEBUG_JSX.log("Found position property with " + selectedKeys.length + " selected keyframes");
-                        var distance = calculatePositionDistance(prop, selectedKeys);
-                        DEBUG_JSX.log("Single keyframe position distance: x=" + distance.x + ", y=" + distance.y + ", hasX=" + distance.hasX + ", hasY=" + distance.hasY);
-                        
-                        if (distance.hasX) {
-                            hasXDistance = true;
-                        }
-                        if (distance.hasY) {
-                            hasYDistance = true;
-                        }
-                    }
+                    DEBUG_JSX.log("Found position property with " + singleKeys.length + " selected keyframes");
+                    var distance = calculatePositionDistance(prop, singleKeys);
+                    if (distance.hasX) hasXDistance = true;
+                    if (distance.hasY) hasYDistance = true;
+                } else if (isSizeProperty(prop)) {
+                    var sc = calculateSizeChange(prop, singleKeys);
+                    if (sc.hasW) { wDistance = sc.w; hasWDistance = true; }
+                    if (sc.hasH) { hDistance = sc.h; hasHDistance = true; }
+                } else if (isSquircleWidthProperty(prop)) {
+                    var sqW = calculateScalarChange(prop, singleKeys);
+                    if (sqW.has) { squircleWDistance = sqW.value; hasSqWDistance = true; }
+                } else if (isSquircleHeightProperty(prop)) {
+                    var sqH = calculateScalarChange(prop, singleKeys);
+                    if (sqH.has) { squircleHDistance = sqH.value; hasSqHDistance = true; }
                 }
             }
-            
+
             // Use -999 as a special flag for "Select > 1 Key" in duration field
-            return "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|Stagger|" + debugInfo;
+            return "success|" + delayMs + "|" + delayFrames + "|-999|-999|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|Stagger|" + wDistance + "|" + hDistance + "|" + (hasWDistance ? "1" : "0") + "|" + (hasHDistance ? "1" : "0") + "|" + squircleWDistance + "|" + squircleHDistance + "|" + (hasSqWDistance ? "1" : "0") + "|" + (hasSqHDistance ? "1" : "0") + "|" + debugInfo;
         }
         
         // CROSS-PROPERTY MODE: Multiple properties with selected keyframes
@@ -3735,8 +3736,39 @@ function readKeyframesSmart() {
                 // Position calculation failed, use defaults
                 DEBUG_JSX.log("Position calculation failed: " + posError.toString());
             }
-            
-            // Build debug info for cross-layer support  
+
+            // Detect shape-layer size changes (W and H) and Squircle effect W/H
+            var wDistance = 0, hDistance = 0, hasWDistance = false, hasHDistance = false;
+            var squircleWDistance = 0, squircleHDistance = 0, hasSqWDistance = false, hasSqHDistance = false;
+            try {
+                for (var sk = 0; sk < propertyTimes.length; sk++) {
+                    var sPropInfo = propertyTimes[sk];
+                    var sProp = sPropInfo.property;
+
+                    // Collect all selected keyframe indices for this property
+                    var sAllKeys = [];
+                    for (var sj = 1; sj <= sProp.numKeys; sj++) {
+                        if (sProp.keySelected(sj)) sAllKeys.push(sj);
+                    }
+                    if (sAllKeys.length < 1) continue;
+
+                    if (isSizeProperty(sProp)) {
+                        var sChange = calculateSizeChange(sProp, sAllKeys);
+                        if (sChange.hasW) { wDistance = sChange.w; hasWDistance = true; }
+                        if (sChange.hasH) { hDistance = sChange.h; hasHDistance = true; }
+                    } else if (isSquircleWidthProperty(sProp)) {
+                        var sqWChange = calculateScalarChange(sProp, sAllKeys);
+                        if (sqWChange.has) { squircleWDistance = sqWChange.value; hasSqWDistance = true; }
+                    } else if (isSquircleHeightProperty(sProp)) {
+                        var sqHChange = calculateScalarChange(sProp, sAllKeys);
+                        if (sqHChange.has) { squircleHDistance = sqHChange.value; hasSqHDistance = true; }
+                    }
+                }
+            } catch(sizeError) {
+                DEBUG_JSX.log("Size calculation failed: " + sizeError.toString());
+            }
+
+            // Build debug info for cross-layer support
             var debugInfo = [];
             debugInfo.push("Found " + propertyTimes.length + " keyframes across " + selectedLayers.length + " layers");
             for (var debugIdx = 0; debugIdx < propertyTimes.length; debugIdx++) {
@@ -3767,7 +3799,7 @@ function readKeyframesSmart() {
             var allDebugMessages = DEBUG_JSX.getMessages();
             var finalDebugInfo = debugInfo.concat(allDebugMessages);
             
-            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|" + staggerText + "|" + finalDebugInfo.join(" | ");
+            return "success|" + resultDelayMs + "|" + resultDelayFrames + "|" + resultDurationMs + "|" + resultDurationFrames + "|1|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|1|" + staggerText + "|" + wDistance + "|" + hDistance + "|" + (hasWDistance ? "1" : "0") + "|" + (hasHDistance ? "1" : "0") + "|" + squircleWDistance + "|" + squircleHDistance + "|" + (hasSqWDistance ? "1" : "0") + "|" + (hasSqHDistance ? "1" : "0") + "|" + finalDebugInfo.join(" | ");
         }
         
         // SINGLE-PROPERTY MODE: Multiple keyframes on one property
@@ -4533,8 +4565,38 @@ function readKeyframesDuration() {
                 }
             }
         }
-        
-        return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|" + property.propertyIndex + "|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0");
+
+        // Detect shape-layer size and Squircle W/H changes (single-property mode)
+        var wDistance = 0, hDistance = 0, hasWDistance = false, hasHDistance = false;
+        var squircleWDistance = 0, squircleHDistance = 0, hasSqWDistance = false, hasSqHDistance = false;
+        try {
+            for (var spi = 0; spi < selectedProps.length; spi++) {
+                var sprop = selectedProps[spi];
+                if (!sprop || !sprop.numKeys) continue;
+                var spKeys = [];
+                for (var spk = 1; spk <= sprop.numKeys; spk++) {
+                    if (sprop.keySelected(spk)) spKeys.push(spk);
+                }
+                if (spKeys.length < 1) continue;
+                if (isSizeProperty(sprop)) {
+                    var spChange = calculateSizeChange(sprop, spKeys);
+                    if (spChange.hasW) { wDistance = spChange.w; hasWDistance = true; }
+                    if (spChange.hasH) { hDistance = spChange.h; hasHDistance = true; }
+                } else if (isSquircleWidthProperty(sprop)) {
+                    var spqW = calculateScalarChange(sprop, spKeys);
+                    if (spqW.has) { squircleWDistance = spqW.value; hasSqWDistance = true; }
+                } else if (isSquircleHeightProperty(sprop)) {
+                    var spqH = calculateScalarChange(sprop, spKeys);
+                    if (spqH.has) { squircleHDistance = spqH.value; hasSqHDistance = true; }
+                }
+            }
+        } catch(szErr) {
+            DEBUG_JSX.log("Size detection failed (single-property): " + szErr.toString());
+        }
+
+        // Pad indices 10 and 11 with "0" and "" so W/H data lands at the same indices (12-19) as cross-property mode
+        // This keeps isCrossPropertyMode detection (parts[10] === '1') working correctly
+        return "success|" + durationMs + "|" + durationFrames + "|" + firstKeyIndex + "|" + lastKeyIndex + "|" + property.propertyIndex + "|" + xDistance + "|" + yDistance + "|" + (hasXDistance ? "1" : "0") + "|" + (hasYDistance ? "1" : "0") + "|0||" + wDistance + "|" + hDistance + "|" + (hasWDistance ? "1" : "0") + "|" + (hasHDistance ? "1" : "0") + "|" + squircleWDistance + "|" + squircleHDistance + "|" + (hasSqWDistance ? "1" : "0") + "|" + (hasSqHDistance ? "1" : "0");
         
     } catch(e) {
         return "error|Failed to read keyframes: " + e.toString();
@@ -12113,11 +12175,153 @@ function nudgePositionAxis(axis, nudgeDirection, direction, multiplier) {
         }
         
         return "success|0|1|" + debugMessages.join("|");
-        
+
     } catch(e) {
         app.endUndoGroup();
         return "error|Failed to nudge position: " + e.toString();
     }
+}
+
+// ================================
+// SHAPE SIZE NUDGING (W / H)
+// ================================
+
+// Shared helper: find Size properties or Squircle Width/Height across selected layers
+// mode: 'shapeW' | 'shapeH' | 'squircleW' | 'squircleH'
+function nudgeSizeProperty(mode, nudgeDirection, multiplier) {
+    try {
+        DEBUG_JSX.clear();
+
+        var modeLabel = mode;
+        app.beginUndoGroup("Nudge " + modeLabel);
+
+        var comp = app.project.activeItem;
+        if (!(comp && comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error|Please select a composition";
+        }
+
+        var resolutionMultiplier = 2;
+        try {
+            var saved = app.settings.getSetting("AirBoard", "resolutionMultiplier");
+            if (saved !== "") {
+                var val = parseInt(saved);
+                if (val >= 1 && val <= 6) resolutionMultiplier = val;
+            }
+        } catch(e) {}
+
+        // Always 1px per click in raw AE units (W/H are design dimensions, not screen-space)
+        var increment = 1 * (multiplier || 1);
+        var delta = nudgeDirection * increment;
+
+        var processed = false;
+        var selectedLayers = comp.selectedLayers;
+
+        function findAndNudgeProp(propGroup) {
+            for (var i = 1; i <= propGroup.numProperties; i++) {
+                var p = propGroup.property(i);
+                if (!p) continue;
+
+                if (p.canVaryOverTime && p.numKeys > 0) {
+                    var selKeys = [];
+                    for (var j = 1; j <= p.numKeys; j++) {
+                        if (p.keySelected(j)) selKeys.push(j);
+                    }
+
+                    if (selKeys.length >= 1) {
+                        var isTarget = false;
+                        if (mode === 'shapeW' || mode === 'shapeH') {
+                            isTarget = isSizeProperty(p);
+                        } else if (mode === 'squircleW') {
+                            isTarget = isSquircleWidthProperty(p);
+                        } else if (mode === 'squircleH') {
+                            isTarget = isSquircleHeightProperty(p);
+                        }
+
+                        if (isTarget) {
+                            // Sort and pick the last selected keyframe
+                            selKeys.sort(function(a, b) {
+                                return p.keyTime(a) - p.keyTime(b);
+                            });
+                            var lastKey = selKeys[selKeys.length - 1];
+                            var curVal = p.keyValue(lastKey);
+
+                            var newVal;
+                            if (mode === 'shapeW' && curVal instanceof Array) {
+                                newVal = [curVal[0] + delta, curVal[1]];
+                            } else if (mode === 'shapeH' && curVal instanceof Array) {
+                                newVal = [curVal[0], curVal[1] + delta];
+                            } else if ((mode === 'squircleW' || mode === 'squircleH') && typeof curVal === "number") {
+                                newVal = curVal + delta;
+                            }
+
+                            if (newVal !== undefined) {
+                                try {
+                                    p.setValueAtKey(lastKey, newVal);
+                                    processed = true;
+                                    DEBUG_JSX.log("Nudged " + mode + " on " + p.name + " by " + delta);
+                                } catch(setErr) {
+                                    DEBUG_JSX.log("Failed to set value: " + setErr.toString());
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (p.propertyType === PropertyType.INDEXED_GROUP || p.propertyType === PropertyType.NAMED_GROUP) {
+                    findAndNudgeProp(p);
+                }
+            }
+        }
+
+        for (var li = 0; li < selectedLayers.length; li++) {
+            findAndNudgeProp(selectedLayers[li]);
+        }
+
+        app.endUndoGroup();
+
+        if (!processed) {
+            return "error|No matching keyframes found for " + modeLabel;
+        }
+
+        // Re-read to get updated delta for display
+        var readResult = readKeyframesSmart();
+        var debugMessages = DEBUG_JSX.getMessages();
+        if (readResult && readResult.indexOf('success|') === 0) {
+            var rParts = readResult.split('|');
+            // Both cross-property and single-property modes place W/H at indices 12-19
+            if (mode === 'shapeW' && rParts.length > 14 && rParts[14] === '1') {
+                return "success|" + rParts[12] + "|1|" + debugMessages.join("|");
+            } else if (mode === 'shapeH' && rParts.length > 15 && rParts[15] === '1') {
+                return "success|" + rParts[13] + "|1|" + debugMessages.join("|");
+            } else if (mode === 'squircleW' && rParts.length > 18 && rParts[18] === '1') {
+                return "success|" + rParts[16] + "|1|" + debugMessages.join("|");
+            } else if (mode === 'squircleH' && rParts.length > 19 && rParts[19] === '1') {
+                return "success|" + rParts[17] + "|1|" + debugMessages.join("|");
+            }
+        }
+        return "success|0|1|" + DEBUG_JSX.getMessages().join("|");
+
+    } catch(e) {
+        app.endUndoGroup();
+        return "error|Failed to nudge size: " + e.toString();
+    }
+}
+
+function nudgeShapeWidth(nudgeDirection, multiplier) {
+    return nudgeSizeProperty('shapeW', nudgeDirection, multiplier);
+}
+
+function nudgeShapeHeight(nudgeDirection, multiplier) {
+    return nudgeSizeProperty('shapeH', nudgeDirection, multiplier);
+}
+
+function nudgeSquircleWidth(nudgeDirection, multiplier) {
+    return nudgeSizeProperty('squircleW', nudgeDirection, multiplier);
+}
+
+function nudgeSquircleHeight(nudgeDirection, multiplier) {
+    return nudgeSizeProperty('squircleH', nudgeDirection, multiplier);
 }
 
 // Helper function to check if property is position-related
@@ -12125,9 +12329,72 @@ function isPositionProperty(prop) {
     if (!prop) return false;
     var name = prop.name.toLowerCase();
     var matchName = prop.matchName || "";
-    
+
     return (name === "position" || name === "x position" || name === "y position" ||
            matchName === "ADBE Position" || matchName === "ADBE Position_0" || matchName === "ADBE Position_1");
+}
+
+// Helper: detect shape-layer rectangle/ellipse Size property (2D [w, h])
+function isSizeProperty(prop) {
+    if (!prop) return false;
+    var matchName = prop.matchName || "";
+    return (matchName === "ADBE Vector Rect Size" || matchName === "ADBE Vector Ellipse Size");
+}
+
+// Helper: detect Squircle effect Width property
+function isSquircleWidthProperty(prop) {
+    if (!prop || prop.name !== "Width") return false;
+    try {
+        var parent = prop.parentProperty;
+        return parent && parent.name === "Squircle";
+    } catch(e) { return false; }
+}
+
+// Helper: detect Squircle effect Height property
+function isSquircleHeightProperty(prop) {
+    if (!prop || prop.name !== "Height") return false;
+    try {
+        var parent = prop.parentProperty;
+        return parent && parent.name === "Squircle";
+    } catch(e) { return false; }
+}
+
+// Calculate size change (w, h) from a 2D Size property [w, h] between first/last selected keyframes
+function calculateSizeChange(prop, keyIndices) {
+    if (!prop || keyIndices.length < 1) return { w: 0, h: 0, hasW: false, hasH: false };
+    // Single keyframe: show row with 0 delta (same as position behaviour)
+    if (keyIndices.length < 2) {
+        var v = prop.keyValue(keyIndices[0]);
+        if (v instanceof Array && v.length >= 2) return { w: 0, h: 0, hasW: true, hasH: true };
+        return { w: 0, h: 0, hasW: false, hasH: false };
+    }
+    var sorted = keyIndices.slice().sort(function(a, b) {
+        return prop.keyTime(a) - prop.keyTime(b);
+    });
+    var v1 = prop.keyValue(sorted[0]);
+    var v2 = prop.keyValue(sorted[sorted.length - 1]);
+    if (v1 instanceof Array && v2 instanceof Array && v1.length >= 2) {
+        return { w: Math.round(v2[0] - v1[0]), h: Math.round(v2[1] - v1[1]), hasW: true, hasH: true };
+    }
+    return { w: 0, h: 0, hasW: false, hasH: false };
+}
+
+// Calculate scalar change from a 1D property (Squircle Width or Height)
+function calculateScalarChange(prop, keyIndices) {
+    if (!prop || keyIndices.length < 1) return { value: 0, has: false };
+    // Single keyframe: show row with 0 delta
+    if (keyIndices.length < 2) {
+        return (typeof prop.keyValue(keyIndices[0]) === "number") ? { value: 0, has: true } : { value: 0, has: false };
+    }
+    var sorted = keyIndices.slice().sort(function(a, b) {
+        return prop.keyTime(a) - prop.keyTime(b);
+    });
+    var v1 = prop.keyValue(sorted[0]);
+    var v2 = prop.keyValue(sorted[sorted.length - 1]);
+    if (typeof v1 === "number" && typeof v2 === "number") {
+        return { value: Math.round(v2 - v1), has: true };
+    }
+    return { value: 0, has: false };
 }
 
 // Helper function to calculate distance for position properties
@@ -18850,6 +19117,321 @@ function applySquircle(useCompSize, resolutionMultiplier) {
     layer.transform.position.setValue([comp.width/2, comp.height/2]);
 
     app.endUndoGroup();
+}
+
+// Set Anchor — moves anchor point to the chosen position while compensating position
+// so the layer/shape stays visually in place. Works on squircle layers (via Alignment
+// effect property) and generic layers (via direct anchor point manipulation).
+function setAnchorFromPanel(newAlignmentIndex) {
+    newAlignmentIndex = parseInt(newAlignmentIndex);
+
+    app.beginUndoGroup("Set Anchor");
+
+    try {
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) {
+            app.endUndoGroup();
+            return "error:No active composition";
+        }
+
+        // Copy selected layers to array to avoid mutation during iteration
+        var selectedLayers = [];
+        for (var i = 0; i < comp.selectedLayers.length; i++) {
+            selectedLayers.push(comp.selectedLayers[i]);
+        }
+
+        if (selectedLayers.length === 0) {
+            app.endUndoGroup();
+            alert("Please select at least one layer to update the anchor point.");
+            return "error:No layers selected";
+        }
+
+        for (var i = 0; i < selectedLayers.length; i++) {
+            var layer = selectedLayers[i];
+
+            var fitEffect = null;
+            try { fitEffect = layer.effect("Fit to shape"); } catch(e) {}
+
+            var squircleEffect = null;
+            try { squircleEffect = layer.effect("Squircle"); } catch(e) {}
+
+            if (fitEffect) {
+                setAnchorMaskLayer(layer, newAlignmentIndex, comp);
+            } else if (squircleEffect) {
+                setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp);
+            } else {
+                // No effects — check if this is a mask layer via parenting or anchor expression
+                var isMaskLayer = false;
+
+                var parentLyr = layer.parent;
+                if (parentLyr) {
+                    var parentSq = null;
+                    try { parentSq = parentLyr.effect("Squircle"); } catch(e) {}
+                    if (parentSq) isMaskLayer = true;
+                }
+
+                if (!isMaskLayer) {
+                    var anchorProp = layer.property("Transform").property("Anchor Point");
+                    if (anchorProp.expressionEnabled && anchorProp.expression.indexOf('index + 1') !== -1) {
+                        try {
+                            var layerBelow = comp.layer(layer.index + 1);
+                            var belowSq = null;
+                            try { belowSq = layerBelow.effect("Squircle"); } catch(e) {}
+                            if (belowSq) isMaskLayer = true;
+                        } catch(e) {}
+                    }
+                }
+
+                if (isMaskLayer) {
+                    setAnchorMaskLayer(layer, newAlignmentIndex, comp);
+                } else {
+                    setAnchorGenericLayer(layer, newAlignmentIndex, comp);
+                }
+            }
+        }
+
+    } catch(e) {
+        app.endUndoGroup();
+        return "error:" + e.toString();
+    }
+
+    app.endUndoGroup();
+    return "success";
+}
+
+function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) {
+    var oldAlignment = Math.round(squircleEffect.property("Alignment").value);
+    var width = squircleEffect.property("Width").value;
+    var height = squircleEffect.property("Height").value;
+    var w = width / 2;
+    var h = height / 2;
+
+    var oldOffset = getAlignmentOffset(oldAlignment, w, h);
+    var newOffset = getAlignmentOffset(newAlignmentIndex, w, h);
+    var deltaX = oldOffset[0] - newOffset[0];
+    var deltaY = oldOffset[1] - newOffset[1];
+
+    if (deltaX !== 0 || deltaY !== 0) {
+        offsetLayerPosition(layer, deltaX, deltaY);
+    }
+
+    squircleEffect.property("Alignment").setValue(newAlignmentIndex);
+
+    updateAssociatedMaskLayers(layer, newAlignmentIndex, comp);
+}
+
+// When a mask layer is selected, find the squircle it references
+// and run the squircle handler on that instead — so both update together and neither moves.
+function setAnchorMaskLayer(maskLayer, newAlignmentIndex, comp) {
+    var parentSquircle = null;
+
+    // 1. Check .parent for a Squircle effect
+    var parentLayer = maskLayer.parent;
+    if (parentLayer) {
+        var sq = null;
+        try { sq = parentLayer.effect("Squircle"); } catch(e) {}
+        if (sq) parentSquircle = parentLayer;
+    }
+
+    // 2. Check the layer directly below — matches thisComp.layer(index + 1).anchorPoint pattern
+    if (!parentSquircle) {
+        try {
+            var layerBelow = comp.layer(maskLayer.index + 1);
+            var sq = null;
+            try { sq = layerBelow.effect("Squircle"); } catch(e) {}
+            if (sq) parentSquircle = layerBelow;
+        } catch(e) {}
+    }
+
+    // 3. Fallback: scan for a squircle whose name/index appears in the anchor expression
+    if (!parentSquircle) {
+        var anchorProp = maskLayer.property("Transform").property("Anchor Point");
+        if (anchorProp.expressionEnabled) {
+            var expr = anchorProp.expression;
+            for (var i = 1; i <= comp.numLayers; i++) {
+                var candidate = comp.layer(i);
+                if (candidate === maskLayer) continue;
+                var sq = null;
+                try { sq = candidate.effect("Squircle"); } catch(e) {}
+                if (!sq) continue;
+                if (expr.indexOf(candidate.name) !== -1 ||
+                    expr.indexOf('layer(' + candidate.index + ')') !== -1) {
+                    parentSquircle = candidate;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (parentSquircle) {
+        setAnchorSquircleLayer(parentSquircle, parentSquircle.effect("Squircle"), newAlignmentIndex, comp);
+    } else {
+        setAnchorGenericLayer(maskLayer, newAlignmentIndex, comp);
+    }
+}
+
+function setAnchorGenericLayer(layer, newAlignmentIndex, comp) {
+    var rect;
+    try {
+        rect = layer.sourceRectAtTime(comp.time, false);
+    } catch(e) {
+        return; // Layer doesn't support sourceRectAtTime
+    }
+
+    var newAnchor = getAnchorFromRect(newAlignmentIndex, rect);
+    var anchorProp = layer.property("Transform").property("Anchor Point");
+    var oldAnchor = anchorProp.value;
+
+    var deltaX = newAnchor[0] - oldAnchor[0];
+    var deltaY = newAnchor[1] - oldAnchor[1];
+
+    if (deltaX === 0 && deltaY === 0) return;
+
+    offsetLayerPosition(layer, deltaX, deltaY);
+    offsetAnchorPointTo(anchorProp, newAnchor);
+}
+
+function updateAssociatedMaskLayers(squircleLayer, newAlignmentIndex, comp) {
+    for (var i = 1; i <= comp.numLayers; i++) {
+        var candidateLayer = comp.layer(i);
+        var fitEffect = null;
+        try { fitEffect = candidateLayer.effect("Fit to shape"); } catch(e) {}
+        if (!fitEffect) continue;
+
+        // 1. Parented to the squircle
+        var isAssociated = (candidateLayer.parent === squircleLayer);
+
+        // 2. Directly above squircle in the stack with index+1 expression pattern
+        if (!isAssociated && candidateLayer.index === squircleLayer.index - 1) {
+            var anchorP = candidateLayer.property("Transform").property("Anchor Point");
+            if (anchorP.expressionEnabled && anchorP.expression.indexOf('index + 1') !== -1) {
+                isAssociated = true;
+            }
+        }
+
+        // 3. Fallback: anchor expression references squircle by name or literal index
+        if (!isAssociated) {
+            var anchorProp = candidateLayer.property("Transform").property("Anchor Point");
+            if (anchorProp.expressionEnabled) {
+                var expr = anchorProp.expression;
+                if (expr.indexOf(squircleLayer.name) !== -1 ||
+                    expr.indexOf('layer(' + squircleLayer.index + ')') !== -1) {
+                    isAssociated = true;
+                }
+            }
+        }
+
+        if (isAssociated) {
+            try { fitEffect.property("Alignment").setValue(newAlignmentIndex); } catch(e) {}
+        }
+    }
+}
+
+// Returns [ox, oy] offset from shape center for the given alignment index.
+// Matches the Glass/Squircle expression logic.
+function getAlignmentOffset(index, w, h) {
+    var ox = 0, oy = 0;
+    if      (index === 2)  { ox = w; }
+    else if (index === 3)  { ox = -w; }
+    else if (index === 5)  { oy = h; }
+    else if (index === 6)  { ox = w;  oy = h; }
+    else if (index === 7)  { ox = -w; oy = h; }
+    else if (index === 9)  { oy = -h; }
+    else if (index === 10) { ox = w;  oy = -h; }
+    else if (index === 11) { ox = -w; oy = -h; }
+    return [ox, oy];
+}
+
+// Returns [x, y] anchor point coordinates for a given alignment index and sourceRect.
+function getAnchorFromRect(alignIndex, rect) {
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+    var l = rect.left;
+    var r = rect.left + rect.width;
+    var t = rect.top;
+    var b = rect.top + rect.height;
+
+    if (alignIndex === 1)  return [cx, cy];
+    if (alignIndex === 2)  return [l,  cy];
+    if (alignIndex === 3)  return [r,  cy];
+    if (alignIndex === 5)  return [cx, t];
+    if (alignIndex === 6)  return [l,  t];
+    if (alignIndex === 7)  return [r,  t];
+    if (alignIndex === 9)  return [cx, b];
+    if (alignIndex === 10) return [l,  b];
+    if (alignIndex === 11) return [r,  b];
+    return [cx, cy];
+}
+
+// Offsets all position keyframes (or the static value) by [dx, dy].
+// Handles both combined Position and split X/Y Position (dimensionsSeparated).
+// Skips properties that have expressions.
+function offsetLayerPosition(layer, dx, dy) {
+    var transform = layer.property("Transform");
+
+    if (layer.dimensionsSeparated) {
+        var xProp = transform.property("X Position");
+        if (!xProp.expressionEnabled) {
+            if (xProp.numKeys > 0) {
+                for (var k = 1; k <= xProp.numKeys; k++) {
+                    xProp.setValueAtTime(xProp.keyTime(k), xProp.keyValue(k) + dx);
+                }
+            } else {
+                xProp.setValue(xProp.value + dx);
+            }
+        }
+
+        var yProp = transform.property("Y Position");
+        if (!yProp.expressionEnabled) {
+            if (yProp.numKeys > 0) {
+                for (var k = 1; k <= yProp.numKeys; k++) {
+                    yProp.setValueAtTime(yProp.keyTime(k), yProp.keyValue(k) + dy);
+                }
+            } else {
+                yProp.setValue(yProp.value + dy);
+            }
+        }
+    } else {
+        var posProp = transform.property("Position");
+        if (!posProp.expressionEnabled) {
+            if (posProp.numKeys > 0) {
+                for (var k = 1; k <= posProp.numKeys; k++) {
+                    var v = posProp.keyValue(k);
+                    var newV = (v.length === 3)
+                        ? [v[0] + dx, v[1] + dy, v[2]]
+                        : [v[0] + dx, v[1] + dy];
+                    posProp.setValueAtTime(posProp.keyTime(k), newV);
+                }
+            } else {
+                var v = posProp.value;
+                var newV = (v.length === 3)
+                    ? [v[0] + dx, v[1] + dy, v[2]]
+                    : [v[0] + dx, v[1] + dy];
+                posProp.setValue(newV);
+            }
+        }
+    }
+}
+
+// Sets the anchor point to newAnchor, offsetting all existing keyframes by the same delta.
+// Skips the property if it has an expression.
+function offsetAnchorPointTo(anchorProp, newAnchor) {
+    if (anchorProp.expressionEnabled) return;
+
+    if (anchorProp.numKeys > 0) {
+        var firstVal = anchorProp.keyValue(1);
+        var dax = newAnchor[0] - firstVal[0];
+        var day = newAnchor[1] - firstVal[1];
+        for (var k = 1; k <= anchorProp.numKeys; k++) {
+            var v = anchorProp.keyValue(k);
+            var newV = (v.length === 3)
+                ? [v[0] + dax, v[1] + day, v[2]]
+                : [v[0] + dax, v[1] + day];
+            anchorProp.setValueAtTime(anchorProp.keyTime(k), newV);
+        }
+    } else {
+        anchorProp.setValue(newAnchor);
+    }
 }
 
 // Replace selected rectangle with squircle

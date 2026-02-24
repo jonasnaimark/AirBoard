@@ -1864,3 +1864,55 @@ input.distance-input[data-tooltip]:hover::after {
 .styled-alert-button:active {
     background-color: #0055CC;
 }
+
+/* Anchor Grid — Update Anchor control */
+.anchor-grid-row > * {
+    flex: 0 0 calc(50% - 4px); /* force true 50/50 split (50% minus half the 8px gap) */
+    box-sizing: border-box;    /* include padding in the flex-basis width */
+}
+
+.anchor-display {
+    padding-right: 12px; /* override 38% right-padding — no buttons inside */
+    height: 48px;
+}
+
+.anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 1px;
+    background-color: #383838;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.anchor-cell {
+    background: #252525;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666666;
+    padding: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.anchor-cell svg {
+    transition: transform 0.15s ease;
+}
+
+.anchor-cell:hover {
+    background: #3a3a3a;
+    color: #5a9fd4;
+}
+
+.anchor-cell:hover svg {
+    transform: scale(1.5);
+}
+
+.anchor-cell:active {
+    background: #484848;
+}

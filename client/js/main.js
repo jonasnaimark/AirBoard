@@ -142,6 +142,39 @@ function showYButtons() {
     if (yControls) yControls.style.display = 'flex';
 }
 
+function hideWRow() {
+    var row = document.getElementById('wDistanceRow');
+    if (row && row.classList.contains('visible')) row.classList.remove('visible');
+}
+function showWRow() {
+    var row = document.getElementById('wDistanceRow');
+    if (row && !row.classList.contains('visible')) row.classList.add('visible');
+}
+function hideHRow() {
+    var row = document.getElementById('hDistanceRow');
+    if (row && row.classList.contains('visible')) row.classList.remove('visible');
+}
+function showHRow() {
+    var row = document.getElementById('hDistanceRow');
+    if (row && !row.classList.contains('visible')) row.classList.add('visible');
+}
+function hideSquircleWRow() {
+    var row = document.getElementById('squircleWRow');
+    if (row && row.classList.contains('visible')) row.classList.remove('visible');
+}
+function showSquircleWRow() {
+    var row = document.getElementById('squircleWRow');
+    if (row && !row.classList.contains('visible')) row.classList.add('visible');
+}
+function hideSquircleHRow() {
+    var row = document.getElementById('squircleHRow');
+    if (row && row.classList.contains('visible')) row.classList.remove('visible');
+}
+function showSquircleHRow() {
+    var row = document.getElementById('squircleHRow');
+    if (row && !row.classList.contains('visible')) row.classList.add('visible');
+}
+
 function hideDurationButtons() {
     var durationControls = document.querySelector('#durationDisplay .stagger-controls');
     if (durationControls) durationControls.style.display = 'none';
@@ -1421,6 +1454,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (updatePositionRows) {
                             hidePositionRow('x');
                             hidePositionRow('y');
+                            hideWRow(); hideHRow(); hideSquircleWRow(); hideSquircleHRow();
                         }
                     } else {
                         // Other errors: reset to default text
@@ -1443,6 +1477,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (updatePositionRows) {
                             hidePositionRow('x');
                             hidePositionRow('y');
+                            hideWRow(); hideHRow(); hideSquircleWRow(); hideSquircleHRow();
                         }
                     }
                     
@@ -1455,10 +1490,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     var delayMs, delayFrames, durationMs, durationFrames;
                     var xDistance, yDistance, hasXDistance, hasYDistance;
+                    var wDistance, hDistance, hasWDistance, hasHDistance;
+                    var squircleWDistance, squircleHDistance, hasSqWDistance, hasSqHDistance;
                     var staggerText = "Stagger";
-                    
+
                     if (isCrossPropertyMode) {
-                        // Cross-property format: success|delayMs|delayFrames|durationMs|durationFrames|1|xDistance|yDistance|hasX|hasY|1|stagger
+                        // Cross-property format: success|delayMs|delayFrames|durationMs|durationFrames|1|x|y|hasX|hasY|1|stagger|w|h|hasW|hasH|sqW|sqH|hasSqW|hasSqH|debug
                         delayMs = parseInt(parts[1]);
                         delayFrames = parseInt(parts[2]);
                         durationMs = parseInt(parts[3]);
@@ -1469,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
                         staggerText = parts.length > 11 ? parts[11] : "Stagger";
                     } else {
-                        // Single-property format: success|durationMs|durationFrames|firstKeyIndex|lastKeyIndex|propertyIndex|xDistance|yDistance|hasX|hasY|0|Stagger
+                        // Single-property format: success|durationMs|durationFrames|firstKeyIndex|lastKeyIndex|propertyIndex|x|y|hasX|hasY|0||w|h|hasW|hasH|sqW|sqH|hasSqW|hasSqH
                         durationMs = parseInt(parts[1]);
                         durationFrames = parseInt(parts[2]);
                         delayMs = 0; // No delay concept in single-property mode
@@ -1478,8 +1515,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         yDistance = parts.length > 7 ? parseInt(parts[7]) : 0;
                         hasXDistance = parts.length > 8 ? (parts[8] === '1') : false;
                         hasYDistance = parts.length > 9 ? (parts[9] === '1') : false;
-                        staggerText = parts.length > 11 ? parts[11] : "Stagger";
                     }
+                    // W/H data is at indices 12-19 in both modes (single-property pads 10-11 with "0|")
+                    wDistance = parts.length > 12 ? parseFloat(parts[12]) : 0;
+                    hDistance = parts.length > 13 ? parseFloat(parts[13]) : 0;
+                    hasWDistance = parts.length > 14 ? (parts[14] === '1') : false;
+                    hasHDistance = parts.length > 15 ? (parts[15] === '1') : false;
+                    squircleWDistance = parts.length > 16 ? parseFloat(parts[16]) : 0;
+                    squircleHDistance = parts.length > 17 ? parseFloat(parts[17]) : 0;
+                    hasSqWDistance = parts.length > 18 ? (parts[18] === '1') : false;
+                    hasSqHDistance = parts.length > 19 ? (parts[19] === '1') : false;
                     
                     DEBUG.log('Successfully parsed delay:', delayMs + 'ms, ' + delayFrames + ' frames');
                     DEBUG.log('Successfully parsed duration:', durationMs + 'ms, ' + durationFrames + ' frames');
@@ -1687,6 +1732,65 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                         }
 
+                        // Helper to format expand/shrink display text
+                        var formatSizeChangeText = function(label, rawDelta, resMult) {
+                            if (rawDelta === -999999) {
+                                return label + ': <span style="opacity: 0.75;">Multiple</span>';
+                            }
+                            var scaled = parseFloat((rawDelta / resMult).toFixed(2));
+                            if (scaled === 0) return label + ': <span style="opacity: 0.75;">0px @1x</span>';
+                            var word = scaled > 0 ? 'Expands' : 'Shrinks';
+                            return label + ': <span style="opacity: 0.75;">' + word + ' ' + Math.abs(scaled) + 'px @1x</span>';
+                        };
+
+                        // Update W (shape layer width) display
+                        var wDistanceText = document.getElementById('wDistanceText');
+                        if (wDistanceText) {
+                            if (hasWDistance) {
+                                if (updatePositionRows) showWRow();
+                                wDistanceText.innerHTML = formatSizeChangeText('Width', wDistance, resolutionMultiplier);
+                                wDistanceText.style.opacity = '1';
+                            } else {
+                                if (updatePositionRows) hideWRow();
+                            }
+                        }
+
+                        // Update H (shape layer height) display
+                        var hDistanceText = document.getElementById('hDistanceText');
+                        if (hDistanceText) {
+                            if (hasHDistance) {
+                                if (updatePositionRows) showHRow();
+                                hDistanceText.innerHTML = formatSizeChangeText('Height', hDistance, resolutionMultiplier);
+                                hDistanceText.style.opacity = '1';
+                            } else {
+                                if (updatePositionRows) hideHRow();
+                            }
+                        }
+
+                        // Update Squircle W display
+                        var squircleWText = document.getElementById('squircleWText');
+                        if (squircleWText) {
+                            if (hasSqWDistance) {
+                                if (updatePositionRows) showSquircleWRow();
+                                squircleWText.innerHTML = formatSizeChangeText('Width', squircleWDistance, resolutionMultiplier);
+                                squircleWText.style.opacity = '1';
+                            } else {
+                                if (updatePositionRows) hideSquircleWRow();
+                            }
+                        }
+
+                        // Update Squircle H display
+                        var squircleHText = document.getElementById('squircleHText');
+                        if (squircleHText) {
+                            if (hasSqHDistance) {
+                                if (updatePositionRows) showSquircleHRow();
+                                squircleHText.innerHTML = formatSizeChangeText('Height', squircleHDistance, resolutionMultiplier);
+                                squircleHText.style.opacity = '1';
+                            } else {
+                                if (updatePositionRows) hideSquircleHRow();
+                            }
+                        }
+
                         console.log('Updated duration to:', durationMs + 'ms /', durationFrames + 'f');
                         console.log('X Distance:', hasXDistance ? scaledXDistance + 'px @1x (raw: ' + xDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
                         console.log('Y Distance:', hasYDistance ? scaledYDistance + 'px @1x (raw: ' + yDistance + 'px @' + resolutionMultiplier + 'x)' : 'N/A');
@@ -1712,6 +1816,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (updatePositionRows) {
                     hidePositionRow('x');
                     hidePositionRow('y');
+                    hideWRow(); hideHRow(); hideSquircleWRow(); hideSquircleHRow();
                 }
 
                 console.log('Unexpected result:', result);
@@ -2618,7 +2723,36 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
-    
+
+    // W/H size nudge button handlers
+    var wIncrementBtn = document.getElementById('wIncrementBtn');
+    var wDecrementBtn = document.getElementById('wDecrementBtn');
+    var hIncrementBtn = document.getElementById('hIncrementBtn');
+    var hDecrementBtn = document.getElementById('hDecrementBtn');
+    var squircleWIncrementBtn = document.getElementById('squircleWIncrementBtn');
+    var squircleWDecrementBtn = document.getElementById('squircleWDecrementBtn');
+    var squircleHIncrementBtn = document.getElementById('squircleHIncrementBtn');
+    var squircleHDecrementBtn = document.getElementById('squircleHDecrementBtn');
+
+    function makeSizeNudgeHandler(jsxFn, displayType, nudgeDir) {
+        return function(event) {
+            if (!csInterface) return;
+            var multiplier = event.altKey ? 10 : 1;
+            csInterface.evalScript(jsxFn + '(' + nudgeDir + ', ' + multiplier + ')', function(result) {
+                updateSizeDisplay(displayType, result);
+            });
+        };
+    }
+
+    if (wIncrementBtn) wIncrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeShapeWidth', 'w', 1));
+    if (wDecrementBtn) wDecrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeShapeWidth', 'w', -1));
+    if (hIncrementBtn) hIncrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeShapeHeight', 'h', 1));
+    if (hDecrementBtn) hDecrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeShapeHeight', 'h', -1));
+    if (squircleWIncrementBtn) squircleWIncrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeSquircleWidth', 'squircleW', 1));
+    if (squircleWDecrementBtn) squircleWDecrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeSquircleWidth', 'squircleW', -1));
+    if (squircleHIncrementBtn) squircleHIncrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeSquircleHeight', 'squircleH', 1));
+    if (squircleHDecrementBtn) squircleHDecrementBtn.addEventListener('click', makeSizeNudgeHandler('nudgeSquircleHeight', 'squircleH', -1));
+
     // Global variable to track cumulative stagger amount
     var cumulativeStaggerFrames = 0;
     
@@ -2745,7 +2879,46 @@ document.addEventListener('DOMContentLoaded', function() {
             textElement.style.opacity = '1';
         }
     }
-    
+
+    // Update W/H/SquircleW/SquircleH display after a nudge
+    // type: 'w' | 'h' | 'squircleW' | 'squircleH'
+    // result: string returned from nudgeShapeWidth/Height/nudgeSquircleWidth/Height
+    function updateSizeDisplay(type, result) {
+        var labelMap = { w: 'Width', h: 'Height', squircleW: 'Width', squircleH: 'Height' };
+        var idMap = { w: 'wDistanceText', h: 'hDistanceText', squircleW: 'squircleWText', squircleH: 'squircleHText' };
+        var label = labelMap[type] || type.toUpperCase();
+        var textEl = document.getElementById(idMap[type]);
+        if (!textEl) return;
+
+        var resolutionMultiplier = parseInt(document.getElementById('resolutionMultiplier').value) || 2;
+
+        if (result && result.indexOf('|') !== -1) {
+            var parts = result.split('|');
+            var status = parts[0];
+            if (status === 'success') {
+                var rawDelta = parseFloat(parts[1]);
+                var hasChange = parts[2] === '1';
+                if (hasChange) {
+                    if (rawDelta === -999999) {
+                        textEl.innerHTML = label + ': <span style="opacity: 0.75;">Multiple</span>';
+                    } else {
+                        var scaled = parseFloat((rawDelta / resolutionMultiplier).toFixed(2));
+                        if (scaled === 0) {
+                            textEl.innerHTML = label + ': <span style="opacity: 0.75;">0px @1x</span>';
+                        } else {
+                            var word = scaled > 0 ? 'Expands' : 'Shrinks';
+                            textEl.innerHTML = label + ': <span style="opacity: 0.75;">' + word + ' ' + Math.abs(scaled) + 'px @1x</span>';
+                        }
+                    }
+                    textEl.style.opacity = '1';
+                } else {
+                    textEl.innerHTML = label + ': <span style="opacity: 0.75;">0px @1x</span>';
+                    textEl.style.opacity = '1';
+                }
+            }
+        }
+    }
+
     // Add Device button handler
     addDeviceButton.addEventListener('click', function() {
         console.log('Add Device clicked');
@@ -2908,6 +3081,20 @@ document.addEventListener('DOMContentLoaded', function() {
             addNullButton.disabled = false;
             addNullButton.textContent = 'Fit to Squircle';
         });
+    });
+
+    // Anchor Grid handler — Set Anchor
+    document.getElementById('anchorGrid').addEventListener('click', function(e) {
+        var cell = e.target.closest('.anchor-cell');
+        if (!cell) return;
+        var alignmentValue = cell.getAttribute('data-align');
+
+        csInterface.evalScript(
+            'setAnchorFromPanel(' + alignmentValue + ')',
+            function(result) {
+                console.log('Set Anchor result:', result);
+            }
+        );
     });
 
     // Add Shimmer button handler (with dropdown for Selected/Overlay layers)
