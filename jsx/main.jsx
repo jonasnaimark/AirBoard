@@ -21681,6 +21681,38 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
 
             debugInfo.push("Layer order: Sweep > Main > Mask > Shadow");
 
+            // === CLEAR TRANSFORM ANIMATIONS FROM CHILD LAYERS ===
+            // Must happen before any setValue() calls since duplicated layers inherit keyframes
+            var clearTransformAnimations = function(layer) {
+                try {
+                    var transform = layer.property("Transform");
+                    var props = ["Position", "Scale", "Rotation", "Opacity", "Anchor Point"];
+
+                    // Clear expressions first
+                    for (var p = 0; p < props.length; p++) {
+                        var prop = transform.property(props[p]);
+                        if (prop && prop.expression !== "") {
+                            prop.expression = "";
+                        }
+                    }
+
+                    // Remove keyframes
+                    for (var p = 0; p < props.length; p++) {
+                        var prop = transform.property(props[p]);
+                        if (prop && prop.numKeys > 0) {
+                            for (var k = prop.numKeys; k >= 1; k--) {
+                                prop.removeKey(k);
+                            }
+                        }
+                    }
+                } catch(transformErr) {}
+            };
+
+            clearTransformAnimations(lightSweepLayer);
+            clearTransformAnimations(maskLayer);
+            clearTransformAnimations(shadowLayer);
+            debugInfo.push("Transform animations cleared from child layers");
+
             // === MAIN LAYER SETUP ===
             mainLayer.adjustmentLayer = true;
             debugInfo.push("Main layer: adjustment layer enabled");
@@ -21719,7 +21751,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
             // === LIGHT SWEEP LAYER SETUP ===
             lightSweepLayer.adjustmentLayer = false;
             lightSweepLayer.blendingMode = BlendingMode.SCREEN;
-            lightSweepLayer.property("Transform").property("Opacity").setValue(90);
+            lightSweepLayer.property("Transform").property("Opacity").expression = "thisLayer.parent.transform.opacity * 0.9";
             debugInfo.push("Light sweep: Screen blend mode, 90% opacity");
 
             // Set fill color to black
@@ -21902,37 +21934,6 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                 }
             }
 
-            // === CLEAR TRANSFORM ANIMATIONS BEFORE PARENTING ===
-            var clearTransformAnimations = function(layer) {
-                try {
-                    var transform = layer.property("Transform");
-                    var props = ["Position", "Scale", "Rotation", "Opacity", "Anchor Point"];
-
-                    // Clear expressions first
-                    for (var p = 0; p < props.length; p++) {
-                        var prop = transform.property(props[p]);
-                        if (prop && prop.expression !== "") {
-                            prop.expression = "";
-                        }
-                    }
-
-                    // Remove keyframes
-                    for (var p = 0; p < props.length; p++) {
-                        var prop = transform.property(props[p]);
-                        if (prop && prop.numKeys > 0) {
-                            for (var k = prop.numKeys; k >= 1; k--) {
-                                prop.removeKey(k);
-                            }
-                        }
-                    }
-                } catch(transformErr) {}
-            };
-
-            clearTransformAnimations(lightSweepLayer);
-            clearTransformAnimations(maskLayer);
-            clearTransformAnimations(shadowLayer);
-            debugInfo.push("Transform animations cleared from child layers");
-
             // === PARENTING ===
             lightSweepLayer.parent = mainLayer;
             maskLayer.parent = mainLayer;
@@ -21997,10 +21998,25 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
 
             // Add expressions to link opacity and anchor point
             try {
+                maskLayer.property("Transform").property("Opacity").expression = "thisLayer.parent.transform.opacity";
+                shadowLayer.property("Transform").property("Opacity").expression = "thisLayer.parent.transform.opacity";
                 lightSweepLayer.property("Transform").property("Anchor Point").expression = "thisLayer.parent.anchorPoint";
                 maskLayer.property("Transform").property("Anchor Point").expression = "thisLayer.parent.anchorPoint";
                 shadowLayer.property("Transform").property("Anchor Point").expression = "thisLayer.parent.anchorPoint";
             } catch(anchorErr) {}
+
+            // Clear markers from child layers (done last to avoid AE internal state issues)
+            var layersToCleanMarkers = [lightSweepLayer, maskLayer, shadowLayer];
+            for (var ml = 0; ml < layersToCleanMarkers.length; ml++) {
+                try {
+                    var markerProp = layersToCleanMarkers[ml].property("ADBE Marker");
+                    if (markerProp) {
+                        for (var m = markerProp.numKeys; m >= 1; m--) {
+                            markerProp.removeKey(m);
+                        }
+                    }
+                } catch(markerErr) {}
+            }
 
             debugInfo.push("=== GLASS EFFECT COMPLETE ===");
 
