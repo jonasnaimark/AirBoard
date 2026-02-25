@@ -17665,7 +17665,7 @@ function applyFitToShape(mode) {
                     layer.parent &&
                     layer.parent instanceof ShapeLayer &&
                     layer.trackMatteType === TrackMatteType.NO_TRACK_MATTE &&
-                    layer.name.indexOf(" - Mask") !== -1) {
+                    (layer.name.indexOf(" - Mask") !== -1 || layer.name.indexOf(" - Glass Mask") !== -1)) {
                     hasMaskLayerInSelection = true;
                     DEBUG_JSX.log("Found mask layer: " + layer.name);
                     break;
@@ -17723,7 +17723,7 @@ function applyFitToShape(mode) {
         // Mask layer characteristics:
         // - Parented to the shape layer
         // - Is a ShapeLayer
-        // - Name contains " - Mask" (to distinguish from user-parented layers)
+        // - Name contains " - Mask" or " - Glass Mask" (to distinguish from user-parented layers)
         // Note: We don't check trackMatteType because once it's used as a matte, its type changes
         var maskLayer = null;
         for (var i = 1; i <= comp.layers.length; i++) {
@@ -17733,7 +17733,7 @@ function applyFitToShape(mode) {
             if (layer.parent === shapeLayer &&
                 layer !== shapeLayer &&
                 layer instanceof ShapeLayer &&
-                layer.name.indexOf(" - Mask") !== -1) {
+                (layer.name.indexOf(" - Mask") !== -1 || layer.name.indexOf(" - Glass Mask") !== -1)) {
                 maskLayer = layer;
                 DEBUG_JSX.log("Found existing mask layer: " + maskLayer.name);
 
@@ -21808,7 +21808,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                                      'else if (uiIndex == 9) { oy = -h; }\n' +
                                      'else if (uiIndex == 10) { ox = w; oy = -h; }\n' +
                                      'else if (uiIndex == 11) { ox = -w; oy = -h; }\n' +
-                                     '[parent.position[0] + ox, parent.position[1] + oy - h]';
+                                     'parent.toComp([ox, oy - h])';
                     ccLightSweep.property("Center").expression = centerExpr;
 
                     // Set Width expression - half of squircle width
@@ -21852,7 +21852,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                                       'else if (uiIndex == 9) { oy = -h; }\n' +
                                       'else if (uiIndex == 10) { ox = w; oy = -h; }\n' +
                                       'else if (uiIndex == 11) { ox = -w; oy = -h; }\n' +
-                                      '[parent.position[0] + ox, parent.position[1] + oy + h]';
+                                      'parent.toComp([ox, oy + h])';
                     ccLightSweep2.property("Center").expression = centerExpr2;
 
                     // Set Width expression - 40% of squircle width
