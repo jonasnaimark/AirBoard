@@ -220,7 +220,7 @@ body {
 .section-content {
     overflow: hidden;
     transition: max-height 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00), opacity 0.25s cubic-bezier(0.20, 0.00, 0.20, 1.00);
-    max-height: 350px; /* Increased to accommodate Shimmer buttons and all subsections */
+    max-height: 420px; /* Increased to accommodate anchor grid, Shimmer, and all subsections */
     opacity: 1;
 }
 
