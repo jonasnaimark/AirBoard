@@ -2932,9 +2932,12 @@ function scaleEaseForDuration(easeArray, oldDuration, newDuration) {
         var newSpeed = oldSpeed * durationRatio;
         var influence = ease.influence; // Keep influence unchanged
 
+        // AE requires influence in range 0.1-100; clamp to avoid constructor errors
+        var clampedInfluence = Math.max(0.1, Math.min(100, influence));
+
         DEBUG_JSX.log("  Dimension " + i + ": speed " + oldSpeed.toFixed(2) + " → " + newSpeed.toFixed(2) + ", influence " + influence.toFixed(2) + "% (unchanged)");
 
-        scaledEase.push(new KeyframeEase(newSpeed, influence));
+        scaledEase.push(new KeyframeEase(newSpeed, clampedInfluence));
     }
 
     return scaledEase;
@@ -5564,6 +5567,7 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTr
                     var newLastTime = firstTime + newDuration;
 
                     for (var k = 0; k < allNextKeyData.length; k++) {
+                      try {
                         var keyState = allNextKeyData[k];
                         var newIndex = keyState.index + keysAdded;
 
@@ -5599,6 +5603,9 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTr
                                 break;
                             }
                         }
+                      } catch(nextKeyErr) {
+                        DEBUG_JSX.log("❌ Exception in after-selection restore loop k=" + k + ": " + nextKeyErr.toString());
+                      }
                     }
 
                     // RESTORE SELECTED KEYFRAMES' EASE: After Effects may have modified them when we restored adjacent keyframes
@@ -11281,6 +11288,7 @@ function nudgeDelayTimelineMode(direction, frames, skipPrecomps, ignoreInOutTrac
                 // Restore next keyframes with IN ease scaled
                 DEBUG_JSX.log("🔓 Restoring " + allNextKeyData.length + " keyframes after selection");
                 for (var k = 0; k < allNextKeyData.length; k++) {
+                  try {
                     var keyState = allNextKeyData[k];
 
                     // Scale IN ease if this is the immediately next keyframe
@@ -11326,6 +11334,9 @@ function nudgeDelayTimelineMode(direction, frames, skipPrecomps, ignoreInOutTrac
                             }
                         }
                     }
+                  } catch(nextKeyErr) {
+                    DEBUG_JSX.log("❌ EXCEPTION in after-selection restore k=" + k + ": " + nextKeyErr.toString());
+                  }
                 }
 
                 // Restore selected keyframes' ease to ensure they stay correct
