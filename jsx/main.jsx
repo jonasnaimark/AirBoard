@@ -24145,139 +24145,21 @@ function handleTrimInPoint(setToMin) {
             for (var i = 0; i < selectedLayers.length; i++) {
                 try {
                     var layer = selectedLayers[i];
-                    var shiftAmount = layer.startTime; // Amount to shift content forward
-                    var originalOutPoint = layer.outPoint; // outPoint is already absolute comp time
-                    var originalTrimAmount = layer.inPoint - layer.startTime; // How much the layer was trimmed
-
-                    // Check if this is a precomp/comp layer
-                    var isPrecomp = layer.source && layer.source instanceof CompItem;
-
-                    // SKIP precomp/comp layers - too complex, not worth it for now
-                    if (isPrecomp) {
-                        DEBUG_JSX.log("SKIP PRECOMP: layer='" + layer.name + "' (precomp layers not supported for min in-point)");
-                        layersSkipped++;
-                        continue;
-                    }
 
                     // SKIP layers already at inPoint=0 (comp start) - nothing to do
-                    if (Math.abs(layer.inPoint) < 0.001) {
-                        DEBUG_JSX.log("SKIP ALREADY AT MIN: layer='" + layer.name + "' inPoint already at 0");
+                    if (Math.abs(layer.inPoint - comp.displayStartTime) < 0.001) {
+                        DEBUG_JSX.log("SKIP ALREADY AT MIN: layer='" + layer.name + "' inPoint already at comp start");
                         layersSkipped++;
                         continue;
                     }
 
-                    DEBUG_JSX.log("SHIFT TRIM IN: layer='" + layer.name + "' shiftAmount=" + (shiftAmount * 1000).toFixed(1) + "ms");
+                    DEBUG_JSX.log("TRIM IN TO MIN: layer='" + layer.name + "' inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms → " + (comp.displayStartTime * 1000).toFixed(1) + "ms");
 
-                    // This block is no longer needed since we skip precomps
-                    if (false && shiftAmount > 0.001) {
-                        var precomp = layer.source;
-                        var oldDuration = precomp.duration;
-
-                        DEBUG_JSX.log("  Processing precomp '" + precomp.name + "' (hasTimeRemap=" + hasTimeRemap + ")");
-
-                        // Step 1: Extend precomp duration FIRST (so layer outPoints aren't clamped)
-                        var newDuration = oldDuration + shiftAmount;
-                        precomp.duration = newDuration;
-                        DEBUG_JSX.log("  Extended precomp duration: " + (oldDuration * 1000).toFixed(1) + "ms → " + (newDuration * 1000).toFixed(1) + "ms");
-
-                        // Step 2: NOW shift all layers inside the precomp
-                        shiftPrecompContent(precomp, shiftAmount);
-
-                        // Step 3: Extend layers that were at the old end
-                        for (var j = 1; j <= precomp.numLayers; j++) {
-                            var layerInPrecomp = precomp.layer(j);
-                            var layerEnd = layerInPrecomp.startTime + layerInPrecomp.outPoint;
-                            // After shifting, layers that were at oldDuration are now at oldDuration + shiftAmount
-                            if (layerEnd >= newDuration - 0.001) {
-                                var newOutPointForInner = newDuration - layerInPrecomp.startTime;
-                                if (newOutPointForInner > 0) {
-                                    layerInPrecomp.outPoint = newOutPointForInner;
-                                }
-                            }
-                        }
-                    }
-
-                    // Shift keyframes ON the precomp layer itself (in main comp) so they stay at same absolute positions
-                    if (shiftAmount > 0.001) {
-                        // Helper to shift keyframes in a property group
-                        function shiftLayerKeyframes(propGroup, depth) {
-                            depth = depth || 0;
-                            if (depth > 10) return;
-                            for (var p = 1; p <= propGroup.numProperties; p++) {
-                                try {
-                                    var prop = propGroup.property(p);
-                                    if (!prop) continue;
-                                    if (prop.propertyType === PropertyType.PROPERTY) {
-                                        if (prop.canVaryOverTime && prop.numKeys > 0) {
-                                            try { if (prop.dimensionsSeparated === true) continue; } catch(e) {}
-                                            var keyframeStates = [];
-                                            for (var k = 1; k <= prop.numKeys; k++) {
-                                                var state = captureKeyframeState(prop, k);
-                                                if (state) {
-                                                    keyframeStates.push({
-                                                        oldTime: prop.keyTime(k),
-                                                        newTime: prop.keyTime(k) + shiftAmount,
-                                                        state: state
-                                                    });
-                                                }
-                                            }
-                                            for (var k = prop.numKeys; k >= 1; k--) prop.removeKey(k);
-                                            for (var k = 0; k < keyframeStates.length; k++) {
-                                                try {
-                                                    var newIndex = prop.addKey(keyframeStates[k].newTime);
-                                                    restoreKeyframeState(prop, newIndex, keyframeStates[k].state);
-                                                } catch(addErr) {}
-                                            }
-                                        }
-                                    } else if (prop.propertyType === PropertyType.INDEXED_GROUP ||
-                                               prop.propertyType === PropertyType.NAMED_GROUP) {
-                                        shiftLayerKeyframes(prop, depth + 1);
-                                    }
-                                } catch (propError) {}
-                            }
-                        }
-
-                        // Shift keyframes on all property groups
-                        try {
-                            if (layer.transform) shiftLayerKeyframes(layer.transform);
-                            if (layer.effect && layer.effect.numProperties > 0) shiftLayerKeyframes(layer.effect);
-                            if (layer.mask && layer.mask.numProperties > 0) shiftLayerKeyframes(layer.mask);
-                            if (layer.audio) shiftLayerKeyframes(layer.audio);
-                        } catch (e) {}
-
-                        // Shift layer markers
-                        if (layer.marker && layer.marker.numKeys > 0) {
-                            var markersToMove = [];
-                            for (var m = 1; m <= layer.marker.numKeys; m++) {
-                                markersToMove.push({
-                                    oldTime: layer.marker.keyTime(m),
-                                    newTime: layer.marker.keyTime(m) + shiftAmount,
-                                    value: layer.marker.keyValue(m)
-                                });
-                            }
-                            for (var m = layer.marker.numKeys; m >= 1; m--) {
-                                try { layer.marker.removeKey(m); } catch(e) {}
-                            }
-                            for (var m = 0; m < markersToMove.length; m++) {
-                                try { layer.marker.setValueAtTime(markersToMove[m].newTime, markersToMove[m].value); } catch(e) {}
-                            }
-                        }
-                    }
-
-                    // Move layer to comp start while preserving out-point position and trim amount
-                    DEBUG_JSX.log("  BEFORE: startTime=" + (layer.startTime * 1000).toFixed(1) + "ms, inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms, trimAmount=" + (originalTrimAmount * 1000).toFixed(1) + "ms");
-
-                    // Set startTime to 0 first
-                    layer.startTime = 0;
-                    DEBUG_JSX.log("  After startTime=0: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
-
-                    // Restore outPoint (it's already absolute comp time, so just restore original value)
+                    // Just set inPoint to comp start — startTime is unchanged so
+                    // keyframes and markers (which live in layer time) stay at the same comp times
+                    var originalOutPoint = layer.outPoint;
+                    layer.inPoint = comp.displayStartTime;
                     layer.outPoint = originalOutPoint;
-                    DEBUG_JSX.log("  After outPoint restore: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
-
-                    // Set inPoint to maintain original trim amount (if layer was trimmed by 50ms, keep that 50ms trim)
-                    layer.inPoint = originalTrimAmount;
-                    DEBUG_JSX.log("  After inPoint set: inPoint=" + (layer.inPoint * 1000).toFixed(1) + "ms, outPoint=" + (layer.outPoint * 1000).toFixed(1) + "ms");
 
                     layersAdjusted++;
                 } catch(e) {
