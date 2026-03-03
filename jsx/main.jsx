@@ -19222,8 +19222,44 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
     var deltaX = oldOffset[0] - newOffset[0];
     var deltaY = oldOffset[1] - newOffset[1];
 
+    // If the layer's anchor point was manually moved away from [0,0], fold that offset
+    // into the position compensation and reset it. The squircle's comp position is
+    // Position + (squircleCenter - AnchorPoint), so a non-zero anchor shifts the result
+    // unless we account for it.
+    var anchorProp = layer.property("Transform").property("Anchor Point");
+    var currentAnchor = anchorProp.value;
+    var apx = currentAnchor[0];
+    var apy = currentAnchor[1];
+    if (apx !== 0 || apy !== 0) {
+        deltaX -= apx;
+        deltaY -= apy;
+    }
+
     if (deltaX !== 0 || deltaY !== 0) {
         offsetLayerPosition(layer, deltaX, deltaY);
+    }
+
+    // Reset the anchor point to [0,0] (preserving z on 3D layers)
+    if ((apx !== 0 || apy !== 0) && !anchorProp.expressionEnabled) {
+        var resetAnchor = (currentAnchor.length === 3) ? [0, 0, currentAnchor[2]] : [0, 0];
+        offsetAnchorPointTo(anchorProp, resetAnchor);
+
+        // Any child layer whose anchor is expression-driven (e.g. the Squircle - Mask)
+        // mirrors our anchor, so it just changed from [apx,apy] to [0,0] too.
+        // Compensate each such child's Position so it stays visually in place.
+        if (comp) {
+            for (var ci = 1; ci <= comp.numLayers; ci++) {
+                var child = comp.layer(ci);
+                if (child === layer) continue;
+                if (child.parent !== layer) continue;
+                var childAnchor = child.property("Transform").property("Anchor Point");
+                if (!childAnchor.expressionEnabled) continue;
+                var childPos = child.property("Transform").property("Position");
+                if (!childPos.expressionEnabled) {
+                    offsetLayerPosition(child, -apx, -apy);
+                }
+            }
+        }
     }
 
     squircleEffect.property("Alignment").setValue(newAlignmentIndex);
@@ -19273,7 +19309,26 @@ function setAnchorMaskLayer(maskLayer, newAlignmentIndex, comp) {
     }
 
     if (parentSquircle) {
+        // Snapshot the squircle's anchor before it gets reset. The mask's anchor
+        // is expression-driven (mirrors the squircle), so resetting the squircle
+        // anchor to [0,0] will also change the mask's effective anchor — which
+        // would shift the mask visually unless we compensate its Position.
+        var sqAnchorProp = parentSquircle.property("Transform").property("Anchor Point");
+        var sqAnchor = sqAnchorProp.value;
+        var apx = sqAnchor[0];
+        var apy = sqAnchor[1];
+
         setAnchorSquircleLayer(parentSquircle, parentSquircle.effect("Squircle"), newAlignmentIndex, comp);
+
+        // If the squircle had a non-zero anchor, the mask's anchor expression just
+        // changed from [apx,apy] to [0,0]. Offset the mask's Position by [-apx,-apy]
+        // (in parent/squircle local space) to keep the mask visually in place.
+        if (apx !== 0 || apy !== 0) {
+            var maskPosProp = maskLayer.property("Transform").property("Position");
+            if (!maskPosProp.expressionEnabled) {
+                offsetLayerPosition(maskLayer, -apx, -apy);
+            }
+        }
     } else {
         setAnchorGenericLayer(maskLayer, newAlignmentIndex, comp);
     }
