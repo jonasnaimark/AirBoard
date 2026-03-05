@@ -21898,7 +21898,7 @@ function addGlassEffectFromPanel(resolutionMultiplier) {
                     ccLightSweep2.property("Direction").setValue(180);
                     ccLightSweep2.property("Sweep Intensity").setValue(0);
                     ccLightSweep2.property("Edge Intensity").setValue(200);
-                    ccLightSweep2.property("Edge Thickness").setValue(2);
+                    ccLightSweep2.property("Edge Thickness").setValue(3 * scaleFactor);
 
                     // Set Center expression - pin to bottom center of squircle in comp space
                     // Account for Alignment offset so sweep follows shape when alignment changes
