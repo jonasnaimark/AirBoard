@@ -15300,11 +15300,10 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
                 // Calculate offset to move earliest to playhead
                 var offset = playheadTime - earliestPos;
 
-                // Apply offset to all layers
+                // Apply offset to all layers (allow negative startTime for trimmed layers)
                 for (var i = 0; i < layerPositions.length; i++) {
                     var layerData = layerPositions[i];
-                    var newStartTime = layerData.layer.startTime + offset;
-                    layerData.layer.startTime = Math.max(0, newStartTime);
+                    layerData.layer.startTime = layerData.layer.startTime + offset;
                 }
 
                 app.endUndoGroup();
@@ -15314,8 +15313,7 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
                 for (var i = 0; i < layerPositions.length; i++) {
                     var layerData = layerPositions[i];
                     var offset = playheadTime - layerData.visualPosition;
-                    var newStartTime = layerData.layer.startTime + offset;
-                    layerData.layer.startTime = Math.max(0, newStartTime);
+                    layerData.layer.startTime = layerData.layer.startTime + offset;
                 }
 
                 app.endUndoGroup();
@@ -15421,6 +15419,7 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
                 // Calculate single offset to snap the absolute earliest keyframe to playhead
                 globalTimeOffset = playheadTime - globalEarliestTime;
             }
+            DEBUG_JSX.log("PHASE 1.5: globalEarliestTime=" + (globalEarliestTime !== null ? (globalEarliestTime * 1000).toFixed(1) + "ms" : "null") + ", globalTimeOffset=" + (globalTimeOffset !== null ? (globalTimeOffset * 1000).toFixed(1) + "ms" : "null"));
         }
 
         // PHASE 2: Process each property independently
@@ -15539,6 +15538,7 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
                 var keyIndex = selectedKeys[k];
                 var keyTime = prop.keyTime(keyIndex);
                 var newTime = Math.max(0, keyTime + timeOffset);
+                DEBUG_JSX.log("  KF [" + layer.name + " / " + prop.name + "] key" + keyIndex + ": " + (keyTime * 1000).toFixed(1) + "ms -> " + (newTime * 1000).toFixed(1) + "ms (offset=" + (timeOffset * 1000).toFixed(1) + "ms)");
 
                 // Collect full keyframe data
                 var keyData = {
@@ -15930,6 +15930,11 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
         }
 
         // Update layer in/out points to match snapped keyframes (BEFORE ending undo group, unless ignoreInOutTracking is true)
+        DEBUG_JSX.log("PRE-INOUT: allKeyframeDataSnap has " + allKeyframeDataSnap.length + " entries, ignoreInOutTracking=" + ignoreInOutTracking);
+        for (var dbgI = 0; dbgI < layerInOutData.length; dbgI++) {
+            var dbgD = layerInOutData[dbgI];
+            DEBUG_JSX.log("  INOUT-TRACK layer '" + dbgD.layer.name + "': trackInPoint=" + dbgD.trackInPoint + ", trackOutPoint=" + dbgD.trackOutPoint + ", originalInPoint=" + (dbgD.originalInPoint * 1000).toFixed(1) + "ms");
+        }
         if (!ignoreInOutTracking) {
             updateLayerInOutPoints(layerInOutData, allKeyframeDataSnap);
         }
@@ -19135,30 +19140,36 @@ function applySquircle(useCompSize, resolutionMultiplier) {
 // effect property) and generic layers (via direct anchor point manipulation).
 function setAnchorFromPanel(newAlignmentIndex) {
     newAlignmentIndex = parseInt(newAlignmentIndex);
+    DEBUG_JSX.clear();
+    DEBUG_JSX.log("setAnchorFromPanel(" + newAlignmentIndex + ")");
 
     app.beginUndoGroup("Set Anchor");
 
     try {
         var comp = app.project.activeItem;
         if (!comp || !(comp instanceof CompItem)) {
+            DEBUG_JSX.log("ERROR: no active comp");
             app.endUndoGroup();
-            return "error:No active composition";
+            return "error:No active composition|" + DEBUG_JSX.messages.join("|");
         }
+        DEBUG_JSX.log("comp: \"" + comp.name + "\" (" + comp.numLayers + " layers)");
 
         // Copy selected layers to array to avoid mutation during iteration
         var selectedLayers = [];
         for (var i = 0; i < comp.selectedLayers.length; i++) {
             selectedLayers.push(comp.selectedLayers[i]);
         }
+        DEBUG_JSX.log("selected: " + selectedLayers.length + " layer(s)");
 
         if (selectedLayers.length === 0) {
             app.endUndoGroup();
             alert("Please select at least one layer to update the anchor point.");
-            return "error:No layers selected";
+            return "error:No layers selected|" + DEBUG_JSX.messages.join("|");
         }
 
         for (var i = 0; i < selectedLayers.length; i++) {
             var layer = selectedLayers[i];
+            DEBUG_JSX.log("layer[" + i + "]: \"" + layer.name + "\"");
 
             var fitEffect = null;
             try { fitEffect = layer.effect("Fit to shape"); } catch(e) {}
@@ -19166,9 +19177,13 @@ function setAnchorFromPanel(newAlignmentIndex) {
             var squircleEffect = null;
             try { squircleEffect = layer.effect("Squircle"); } catch(e) {}
 
+            DEBUG_JSX.log("  fitEffect=" + (fitEffect ? "yes" : "no") + "  squircleEffect=" + (squircleEffect ? "yes" : "no"));
+
             if (fitEffect) {
+                DEBUG_JSX.log("  path: mask (Fit to shape)");
                 setAnchorMaskLayer(layer, newAlignmentIndex, comp);
             } else if (squircleEffect) {
+                DEBUG_JSX.log("  path: squircle");
                 setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp);
             } else {
                 // No effects — check if this is a mask layer via parenting or anchor expression
@@ -19194,20 +19209,23 @@ function setAnchorFromPanel(newAlignmentIndex) {
                 }
 
                 if (isMaskLayer) {
+                    DEBUG_JSX.log("  path: mask (via parent/expression)");
                     setAnchorMaskLayer(layer, newAlignmentIndex, comp);
                 } else {
+                    DEBUG_JSX.log("  path: generic");
                     setAnchorGenericLayer(layer, newAlignmentIndex, comp);
                 }
             }
         }
 
     } catch(e) {
+        DEBUG_JSX.log("EXCEPTION: " + e.toString());
         app.endUndoGroup();
-        return "error:" + e.toString();
+        return "error:" + e.toString() + "|" + DEBUG_JSX.messages.join("|");
     }
 
     app.endUndoGroup();
-    return "success";
+    return "success|" + DEBUG_JSX.messages.join("|");
 }
 
 function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) {
@@ -19216,6 +19234,8 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
     var height = squircleEffect.property("Height").value;
     var w = width / 2;
     var h = height / 2;
+
+    DEBUG_JSX.log("  squircle: oldAlign=" + oldAlignment + " newAlign=" + newAlignmentIndex + " size=" + width + "x" + height);
 
     var oldOffset = getAlignmentOffset(oldAlignment, w, h);
     var newOffset = getAlignmentOffset(newAlignmentIndex, w, h);
@@ -19231,12 +19251,56 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
     var apx = currentAnchor[0];
     var apy = currentAnchor[1];
     if (apx !== 0 || apy !== 0) {
+        DEBUG_JSX.log("  anchor=[" + apx + "," + apy + "] (non-zero, folded into delta)");
         deltaX -= apx;
         deltaY -= apy;
     }
+    DEBUG_JSX.log("  delta=[" + deltaX + "," + deltaY + "]" + (deltaX === 0 && deltaY === 0 ? " — SKIP (no pos change)" : ""));
 
     if (deltaX !== 0 || deltaY !== 0) {
         offsetLayerPosition(layer, deltaX, deltaY);
+
+        // Keep direct children in place — the squircle's position just moved to compensate
+        // for the alignment change, but parented children would otherwise follow that move.
+        if (comp) {
+            for (var ci2 = 1; ci2 <= comp.numLayers; ci2++) {
+                var childLyr = comp.layer(ci2);
+                if (childLyr === layer) continue;
+                if (childLyr.parent !== layer) continue;
+
+                // Check for a Child Rig pseudo effect first
+                var childRigEff = null;
+                try {
+                    var childEffects = childLyr.property("Effects");
+                    for (var ei = 1; ei <= childEffects.numProperties; ei++) {
+                        var testEff = childEffects.property(ei);
+                        if (testEff.matchName === "Pseudo/ChildRig" ||
+                            testEff.name === "Child Rig" ||
+                            (testEff.name && testEff.name.indexOf("Child Rig") === 0)) {
+                            childRigEff = testEff;
+                            break;
+                        }
+                    }
+                } catch(e) {}
+
+                if (childRigEff) {
+                    // Update stored parentRestPos so the expression sees no net movement
+                    try {
+                        childRigEff(26).setValue(childRigEff(26).value + deltaX);
+                        childRigEff(27).setValue(childRigEff(27).value + deltaY);
+                    } catch(e) {}
+                } else {
+                    try {
+                        var childPosProp = childLyr.property("Transform").property("Position");
+                        if (!childPosProp.expressionEnabled) {
+                            offsetLayerPosition(childLyr, -deltaX, -deltaY);
+                        }
+                    } catch(eChild) {
+                        DEBUG_JSX.log("  child \"" + childLyr.name + "\" pos offset skipped: " + eChild.toString());
+                    }
+                }
+            }
+        }
     }
 
     // Reset the anchor point to [0,0] (preserving z on 3D layers)
@@ -19339,20 +19403,29 @@ function setAnchorGenericLayer(layer, newAlignmentIndex, comp) {
     try {
         rect = layer.sourceRectAtTime(comp.time, false);
     } catch(e) {
+        DEBUG_JSX.log("  generic: sourceRectAtTime failed — " + e.toString());
         return; // Layer doesn't support sourceRectAtTime
     }
+
+    DEBUG_JSX.log("  generic: rect=[" + Math.round(rect.left) + "," + Math.round(rect.top) + " " + Math.round(rect.width) + "x" + Math.round(rect.height) + "]");
 
     var newAnchor = getAnchorFromRect(newAlignmentIndex, rect);
     var anchorProp = layer.property("Transform").property("Anchor Point");
     var oldAnchor = anchorProp.value;
 
+    DEBUG_JSX.log("  generic: oldAnchor=[" + Math.round(oldAnchor[0]) + "," + Math.round(oldAnchor[1]) + "] newAnchor=[" + Math.round(newAnchor[0]) + "," + Math.round(newAnchor[1]) + "]");
+
     var deltaX = newAnchor[0] - oldAnchor[0];
     var deltaY = newAnchor[1] - oldAnchor[1];
 
-    if (deltaX === 0 && deltaY === 0) return;
+    if (deltaX === 0 && deltaY === 0) {
+        DEBUG_JSX.log("  generic: SKIP — anchor already at target position");
+        return;
+    }
 
     offsetLayerPosition(layer, deltaX, deltaY);
     offsetAnchorPointTo(anchorProp, newAnchor);
+    DEBUG_JSX.log("  generic: applied delta=[" + Math.round(deltaX) + "," + Math.round(deltaY) + "]");
 }
 
 // Returns [ox, oy] offset from shape center for the given alignment index.
@@ -19422,20 +19495,52 @@ function offsetLayerPosition(layer, dx, dy) {
     } else {
         var posProp = transform.property("Position");
         if (!posProp.expressionEnabled) {
-            if (posProp.numKeys > 0) {
-                for (var k = 1; k <= posProp.numKeys; k++) {
-                    var v = posProp.keyValue(k);
+            // Position can be hidden when separate dimensions are active but not detected via
+            // layer.dimensionsSeparated — catch the error and fall back to X/Y Position.
+            var posSetOk = false;
+            try {
+                if (posProp.numKeys > 0) {
+                    for (var k = 1; k <= posProp.numKeys; k++) {
+                        var v = posProp.keyValue(k);
+                        var newV = (v.length === 3)
+                            ? [v[0] + dx, v[1] + dy, v[2]]
+                            : [v[0] + dx, v[1] + dy];
+                        posProp.setValueAtTime(posProp.keyTime(k), newV);
+                    }
+                } else {
+                    var v = posProp.value;
                     var newV = (v.length === 3)
                         ? [v[0] + dx, v[1] + dy, v[2]]
                         : [v[0] + dx, v[1] + dy];
-                    posProp.setValueAtTime(posProp.keyTime(k), newV);
+                    posProp.setValue(newV);
                 }
-            } else {
-                var v = posProp.value;
-                var newV = (v.length === 3)
-                    ? [v[0] + dx, v[1] + dy, v[2]]
-                    : [v[0] + dx, v[1] + dy];
-                posProp.setValue(newV);
+                posSetOk = true;
+            } catch(ePosHidden) {
+                DEBUG_JSX.log("offsetLayerPosition: Position hidden on \"" + layer.name + "\" — falling back to X/Y");
+            }
+
+            if (!posSetOk) {
+                // Fallback: separate X and Y Position (dimensions were separated)
+                var xProp = transform.property("X Position");
+                if (xProp && !xProp.expressionEnabled) {
+                    if (xProp.numKeys > 0) {
+                        for (var k = 1; k <= xProp.numKeys; k++) {
+                            xProp.setValueAtTime(xProp.keyTime(k), xProp.keyValue(k) + dx);
+                        }
+                    } else {
+                        xProp.setValue(xProp.value + dx);
+                    }
+                }
+                var yProp = transform.property("Y Position");
+                if (yProp && !yProp.expressionEnabled) {
+                    if (yProp.numKeys > 0) {
+                        for (var k = 1; k <= yProp.numKeys; k++) {
+                            yProp.setValueAtTime(yProp.keyTime(k), yProp.keyValue(k) + dy);
+                        }
+                    } else {
+                        yProp.setValue(yProp.value + dy);
+                    }
+                }
             }
         }
     }

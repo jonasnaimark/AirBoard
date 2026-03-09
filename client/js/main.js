@@ -186,6 +186,9 @@ function showDurationButtons() {
 }
 
 
+// Buffer for snap debug messages — persists even if panel wasn't open during snap
+window._snapDebugLog = window._snapDebugLog || [];
+
 // Add simple debug panel to the extension UI (DEV MODE only)
 window.addDebugPanel = () => {
     if (document.getElementById('debug-panel')) return; // Already exists
@@ -261,7 +264,19 @@ window.addDebugPanel = () => {
     `;
     
     document.body.appendChild(debugPanel);
-    
+
+    // Flush any snap debug messages that arrived before the panel was opened
+    if (window._snapDebugLog && window._snapDebugLog.length > 0) {
+        var debugLog = document.getElementById('debug-log');
+        if (debugLog) {
+            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4aff9e; font-weight: bold;">🎯 Snap to Playhead Debug (buffered):</div>';
+            for (var i = 0; i < window._snapDebugLog.length; i++) {
+                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + window._snapDebugLog[i] + '</div>';
+            }
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+    }
+
     // Redirect console.log to debug panel - FILTERED for stagger debugging
     const originalLog = console.log;
     console.log = (...args) => {
@@ -2140,16 +2155,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         debugMessages = parts.slice(2);
                     }
 
-                    // Display debug messages in panel if available
-                    if (debugMessages.length > 0) {
-                        var debugLog = document.getElementById('debug-log');
-                        if (debugLog) {
-                            debugLog.innerHTML += '<div style="margin: 4px 0; color: #4aff9e; font-weight: bold;">🎯 Snap to Playhead Debug:</div>';
-                            for (var j = 0; j < debugMessages.length; j++) {
-                                debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">AirBoard: ' + debugMessages[j] + '</div>';
-                            }
-                            debugLog.scrollTop = debugLog.scrollHeight;
+                    // Buffer messages so they show even if panel opens after snap runs
+                    window._snapDebugLog = debugMessages.filter(function(m) { return m; });
+
+                    // Write directly to panel if already open
+                    var debugLog = document.getElementById('debug-log');
+                    if (debugLog && window._snapDebugLog.length > 0) {
+                        debugLog.innerHTML += '<div style="margin: 4px 0; color: #4aff9e; font-weight: bold;">🎯 Snap to Playhead Debug:</div>';
+                        for (var j = 0; j < window._snapDebugLog.length; j++) {
+                            debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc;">' + window._snapDebugLog[j] + '</div>';
                         }
+                        debugLog.scrollTop = debugLog.scrollHeight;
                     }
 
                     if (status === 'success') {
@@ -3092,7 +3108,30 @@ document.addEventListener('DOMContentLoaded', function() {
         csInterface.evalScript(
             'setAnchorFromPanel(' + alignmentValue + ')',
             function(result) {
-                console.log('Set Anchor result:', result);
+                var parts = result ? result.split('|') : ['error:no result'];
+                var status = parts[0];
+                var debugMessages = [];
+                for (var i = 1; i < parts.length; i++) {
+                    if (parts[i] && parts[i].trim()) debugMessages.push(parts[i]);
+                }
+
+                var debugLog = document.getElementById('debug-log');
+                if (debugLog && debugMessages.length > 0) {
+                    var isError = status.indexOf('error:') === 0;
+                    var headerColor = isError ? '#e74c3c' : '#4a9eff';
+                    var label = isError ? status : 'success';
+                    debugLog.innerHTML += '<div style="margin: 4px 0 2px; color: ' + headerColor + '; font-weight: bold; font-size: 9px; user-select: text;">⚓ Set Anchor [' + label + ']:</div>';
+                    for (var j = 0; j < debugMessages.length; j++) {
+                        debugLog.innerHTML += '<div style="margin: 1px 0; font-size: 9px; color: #ccc; user-select: text; padding-left: 8px;">' + debugMessages[j] + '</div>';
+                    }
+                    debugLog.scrollTop = debugLog.scrollHeight;
+                }
+
+                if (status.indexOf('error:') === 0) {
+                    console.error('⚓ Set Anchor failed:', status.replace('error:', ''), debugMessages);
+                } else {
+                    console.log('⚓ Set Anchor:', debugMessages);
+                }
             }
         );
     });
