@@ -5518,7 +5518,11 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTr
                                 index: idx,
                                 time: prop.keyTime(idx),
                                 inEase: correctInEase,
-                                outEase: correctOutEase
+                                outEase: correctOutEase,
+                                inInterp: originalData.inInterp,
+                                outInterp: originalData.outInterp,
+                                temporalContinuous: originalData.temporalContinuous,
+                                temporalAutoBezier: originalData.temporalAutoBezier
                             });
                         } catch(e) {
                             // Ease might not be available
@@ -5618,10 +5622,17 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTr
                             if (Math.abs(prop.keyTime(i) - easeData.time) < 0.001) {
                                 try {
                                     prop.setTemporalEaseAtKey(i, easeData.inEase, easeData.outEase);
-                                    DEBUG_JSX.log("  ✓ Restored selected keyframe ease @ " + easeData.time.toFixed(3) + "s");
-                                } catch(e) {
-                                    // Might fail for some properties
+                                } catch(eEase) {
+                                    // Ease setting might fail for some properties — still restore type below
                                 }
+                                // Always restore interpolation type regardless of whether ease call succeeded
+                                if (easeData.inInterp !== undefined) {
+                                    try {
+                                        prop.setInterpolationTypeAtKey(i, easeData.inInterp, easeData.outInterp);
+                                        restoreTemporalFlagsSafely(prop, i, easeData.inInterp, easeData.outInterp, easeData.temporalContinuous, easeData.temporalAutoBezier);
+                                    } catch(eInterp) {}
+                                }
+                                DEBUG_JSX.log("  ✓ Restored selected keyframe ease @ " + easeData.time.toFixed(3) + "s");
                                 break;
                             }
                         }
@@ -5816,10 +5827,17 @@ function stretchKeyframesGrokApproachWithFrames(direction, frames, ignoreInOutTr
                         if (Math.abs(prop.keyTime(j) - easeData.time) < 0.001) {
                             try {
                                 prop.setTemporalEaseAtKey(j, easeData.inEase, easeData.outEase);
-                                DEBUG_JSX.log("     ✓ Final restored selected keyframe ease @ " + easeData.time.toFixed(3) + "s");
-                            } catch(e) {
-                                // Might fail for some properties
+                            } catch(eEase) {
+                                // Ease setting might fail for some properties — still restore type below
                             }
+                            // Always restore interpolation type regardless of whether ease call succeeded
+                            if (easeData.inInterp !== undefined) {
+                                try {
+                                    prop.setInterpolationTypeAtKey(j, easeData.inInterp, easeData.outInterp);
+                                    restoreTemporalFlagsSafely(prop, j, easeData.inInterp, easeData.outInterp, easeData.temporalContinuous, easeData.temporalAutoBezier);
+                                } catch(eInterp) {}
+                            }
+                            DEBUG_JSX.log("     ✓ Final restored selected keyframe ease @ " + easeData.time.toFixed(3) + "s");
                             break;
                         }
                     }
@@ -11369,7 +11387,14 @@ function nudgeDelayTimelineMode(direction, frames, skipPrecomps, ignoreInOutTrac
 
                     try {
                         prop.setTemporalEaseAtKey(idx, correctInEase, correctOutEase);
-                        DEBUG_JSX.log("  ✓ Restored selected keyframe ease @ " + originalData.newTime.toFixed(3) + "s");
+                    } catch(eEase) {
+                        // Ease setting might fail for some properties — still restore type below
+                    }
+                    // Always restore interpolation type regardless of whether ease call succeeded
+                    try {
+                        prop.setInterpolationTypeAtKey(idx, originalData.inInterp, originalData.outInterp);
+                        restoreTemporalFlagsSafely(prop, idx, originalData.inInterp, originalData.outInterp, originalData.temporalContinuous, originalData.temporalAutoBezier);
+                        DEBUG_JSX.log("  ✓ Restored selected keyframe interp @ " + originalData.newTime.toFixed(3) + "s");
                     } catch(e) {
                         // Might fail for some properties
                     }
@@ -14684,10 +14709,6 @@ function applySameLayerStagger(layerGroup, direction, staggerMs, frameRate, stag
         var propertyMap = {};
         var propertyEntries = [];
 
-        // Track layer in/out points BEFORE staggering
-        var singleLayerInOutData = trackLayerInOutPoints([layer]);
-        var sameLayerKeyframeData = []; // For layer in/out point tracking
-        
         for (var propIdx = 0; propIdx < layerGroup.keyframes.length; propIdx++) {
             var propData = layerGroup.keyframes[propIdx];
             var prop = propData.property;
@@ -14977,12 +14998,6 @@ function applySameLayerStagger(layerGroup, direction, staggerMs, frameRate, stag
                     var data = keyframeData[addKeyIdx];
                     var newIdx = prop.addKey(data.newTime);
 
-                    // Collect for layer in/out point tracking
-                    sameLayerKeyframeData.push({
-                        layer: layer,
-                        newTime: data.newTime
-                    });
-
                     try {
                         prop.setValueAtKey(newIdx, data.value);
                         
@@ -15060,9 +15075,6 @@ function applySameLayerStagger(layerGroup, direction, staggerMs, frameRate, stag
             effectiveStagger = propertiesWithMovement > 0 ? (direction * staggerMs) : 0;
         }
         DEBUG_JSX.log("Same-layer stagger complete. Processed " + processedProperties + " properties. Effective stagger: " + effectiveStagger + "ms");
-
-        // Update layer in/out points to match staggered keyframes
-        updateLayerInOutPoints(singleLayerInOutData, sameLayerKeyframeData);
 
         return "success|Applied stagger to " + processedProperties + " properties|" + effectiveStagger + "ms per property";
         
