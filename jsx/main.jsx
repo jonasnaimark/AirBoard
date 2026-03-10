@@ -7649,6 +7649,9 @@ function nudgeDelay(direction) {
                         // PROTECTION: Capture the next keyframe to prevent AE from modifying it
                         var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
 
+                        // PROTECTION: Capture the previous keyframe to prevent AE from modifying its bezier handles
+                        var prevKeyData = capturePreviousKeyframe(prop, propData.selectedKeys);
+
                         // Calculate the timeline offset to apply to all keyframes
                         var timelineOffset = newTimelineTime - scanEarliestTime;
 
@@ -7787,6 +7790,12 @@ function nudgeDelay(direction) {
                             restoreNextKeyframe(prop, nextKeyData, keysAdded);
                         }
 
+                        // PROTECTION: Restore the previous keyframe (no ease scaling - preserve it exactly)
+                        if (prevKeyData !== null) {
+                            var keysAdded = newSelIndices.length - keyframesToMove.length;
+                            restorePreviousKeyframe(prop, prevKeyData, keysAdded, null, null);
+                        }
+
                         // Store for later selection
                         timelinePropertyData.push({
                             property: prop,
@@ -7794,7 +7803,7 @@ function nudgeDelay(direction) {
                             propName: propData.property
                         });
                     }
-                    
+
                     // PERFORMANCE OPTIMIZATION: Skip redundant selection cycle here
                     // Selection will be handled once at the end after marker processing
                     // This eliminates double deselect/select operations that slow down large keyframe sets
@@ -8467,6 +8476,9 @@ function nudgeDelay(direction) {
                 // PROTECTION: Capture the next keyframe to prevent AE from modifying it
                 var nextKeyData = captureNextKeyframe(prop, propData.selectedKeys);
 
+                // PROTECTION: Capture the previous keyframe to prevent AE from modifying its bezier handles
+                var prevKeyData = capturePreviousKeyframe(prop, propData.selectedKeys);
+
                 // First, collect all keyframe data
                 for (var k = 0; k < propData.keyframes.length; k++) {
                     var keyframe = propData.keyframes[k];
@@ -8591,10 +8603,16 @@ function nudgeDelay(direction) {
                     restoreNextKeyframe(prop, nextKeyData, keysAdded);
                 }
 
+                // PROTECTION: Restore the previous keyframe (no ease scaling - preserve it exactly)
+                if (prevKeyData !== null) {
+                    var keysAdded = newSelIndices.length - keyframesToMove.length;
+                    restorePreviousKeyframe(prop, prevKeyData, keysAdded, null, null);
+                }
+
                 // Store new indices for later selection
                 propData.newSelIndices = newSelIndices;
             }
-            
+
             debugInfo.push("Total keyframes moved: " + movedCount);
             
             // SMART MARKER SYNCING: Split/merge spring markers when properties move independently
@@ -15504,6 +15522,9 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
                 selectedKeyTimes: selectedKeyTimes // NEW: Store all selected keyframe times
             };
 
+            // CRITICAL: Preserve the keyframe BEFORE the selected ones to prevent AE from modifying its bezier handles
+            var prevKeyData = capturePreviousKeyframe(prop, selectedKeys);
+
             // CRITICAL: Preserve the keyframe AFTER the selected ones to prevent AE from modifying it
             var nextKeyIndex = latestKeyIndex + 1;
             var nextKeyData = null;
@@ -15793,6 +15814,16 @@ function snapToPlayheadFromPanel(preserveDelays, ignoreInOutTracking) {
                                 prop.setLabelAtKey(currentNextKeyIndex, nextKeyData.label);
                             }
                         }
+                    } catch(e) {
+                        // If restoration fails, continue (not critical to main operation)
+                    }
+                }
+
+                // CRITICAL: Restore the previous keyframe (no ease scaling - preserve it exactly)
+                if (prevKeyData !== null) {
+                    try {
+                        var keysAdded = newSelIndices.length - keyframesToMove.length;
+                        restorePreviousKeyframe(prop, prevKeyData, keysAdded, null, null);
                     } catch(e) {
                         // If restoration fails, continue (not critical to main operation)
                     }
