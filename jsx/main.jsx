@@ -19450,6 +19450,22 @@ function setAnchorGenericLayer(layer, newAlignmentIndex, comp) {
         return; // Layer doesn't support sourceRectAtTime
     }
 
+    // If the layer has masks, derive bounds from the mask path instead of
+    // the full source rect (sourceRectAtTime ignores masks).
+    var maskVerts = getMaskVertices(layer, comp.time);
+    if (maskVerts.length > 0) {
+        var minX = maskVerts[0][0], maxX = maskVerts[0][0];
+        var minY = maskVerts[0][1], maxY = maskVerts[0][1];
+        for (var k = 1; k < maskVerts.length; k++) {
+            if (maskVerts[k][0] < minX) minX = maskVerts[k][0];
+            if (maskVerts[k][0] > maxX) maxX = maskVerts[k][0];
+            if (maskVerts[k][1] < minY) minY = maskVerts[k][1];
+            if (maskVerts[k][1] > maxY) maxY = maskVerts[k][1];
+        }
+        rect = { left: minX, top: minY, width: maxX - minX, height: maxY - minY };
+        DEBUG_JSX.log("  generic: mask bounds=[" + Math.round(minX) + "," + Math.round(minY) + " " + Math.round(maxX - minX) + "x" + Math.round(maxY - minY) + "]");
+    }
+
     DEBUG_JSX.log("  generic: rect=[" + Math.round(rect.left) + "," + Math.round(rect.top) + " " + Math.round(rect.width) + "x" + Math.round(rect.height) + "]");
 
     var newAnchor = getAnchorFromRect(newAlignmentIndex, rect);
