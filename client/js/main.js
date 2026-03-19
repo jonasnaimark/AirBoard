@@ -363,21 +363,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.maxHeight = ''; // reset any previously applied inline max-height
 
         if (align !== 'right') {
             menu.style.minWidth = rect.width + 'px';
         }
 
-        // Check if menu goes off bottom of viewport
+        // Check if menu goes off bottom of viewport and constrain height to fit
         requestAnimationFrame(function() {
             var menuRect = menu.getBoundingClientRect();
-            var spaceBelow = window.innerHeight - rect.bottom;
-            var spaceAbove = rect.top;
+            var MARGIN = 16;
+            var spaceBelow = window.innerHeight - rect.bottom - MARGIN;
+            var spaceAbove = rect.top - MARGIN;
 
-            // Only open above if menu is actually cut off AND there's more space above
             if (menuRect.bottom > window.innerHeight && spaceAbove > spaceBelow) {
-                // Position above trigger instead
-                menu.style.top = (rect.top - menuRect.height - 4) + 'px';
+                // More room above — flip the menu above the trigger
+                var availableAbove = Math.max(80, spaceAbove);
+                var constrainedHeight = Math.min(menuRect.height, availableAbove);
+                menu.style.maxHeight = constrainedHeight + 'px';
+                menu.style.top = (rect.top - constrainedHeight - 4) + 'px';
+            } else if (menuRect.bottom > window.innerHeight) {
+                // Not enough room above either — stay below, clamp to available space
+                menu.style.maxHeight = Math.max(80, spaceBelow) + 'px';
             }
 
             // Center dropdown horizontally over button (only if align === 'center')
@@ -524,9 +531,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Close menus on window resize or scroll
+        // Close menus on window resize or scroll (but not when scrolling inside a dropdown)
         window.addEventListener('resize', closeAllMenus);
-        window.addEventListener('scroll', closeAllMenus, true);
+        window.addEventListener('scroll', function(e) {
+            if (!e.target.closest || !e.target.closest('.custom-select-menu')) {
+                closeAllMenus();
+            }
+        }, true);
 
         // Close menus on Escape key
         document.addEventListener('keydown', function(e) {
