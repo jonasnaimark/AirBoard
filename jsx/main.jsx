@@ -8916,7 +8916,12 @@ function nudgeDelay(direction) {
 }
 
 // Helper function to move layer markers after specific time
-function moveLabelsAfterTime(comp, cutoffTime, timeOffset) {
+// movedLayerIndices: optional array of layer indices that were already moved entirely in the
+// main loop. These layers must be skipped here because their markers already moved with them.
+// Without this, layers moved just after the playhead get their markers moved twice: once
+// automatically when the layer moves, and again here because the recalculated contentStartTime
+// is now before the cutoff (the layer has already moved).
+function moveLabelsAfterTime(comp, cutoffTime, timeOffset, movedLayerIndices) {
     var movedCount = 0;
     try {
         // Process all layers in the composition
@@ -8951,9 +8956,16 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset) {
                     // Time Remap not accessible, use normal content start
                 }
                 
-                // Determine if this layer was moved entirely using content start time
-                // (not layer.startTime which doesn't account for Time Remap)
-                var layerWasMovedEntirely = (contentStartTime >= cutoffTime);
+                // Determine if this layer was moved entirely.
+                // Prefer the authoritative movedLayerIndices list from the main loop — the layer
+                // has already been repositioned by the time we run, so contentStartTime is now
+                // before the cutoff even for layers that were moved entirely.
+                var layerWasMovedEntirely;
+                if (movedLayerIndices && movedLayerIndices.indexOf(i) !== -1) {
+                    layerWasMovedEntirely = true;
+                } else {
+                    layerWasMovedEntirely = (contentStartTime >= cutoffTime);
+                }
                 
                 // Try to access the Marker property group
                 var markerProp = null;
@@ -9271,7 +9283,10 @@ function nudgeFromPlayhead(direction, frames, skipPrecomps) {
         }
         
         // Move composition labels after processing all layers
-        var movedLabels = moveLabelsAfterTime(comp, playheadTime, timeOffset);
+        // Pass movedLayerIndices so the function can correctly identify layers that were
+        // already moved entirely (their startTime has changed, so contentStartTime-based
+        // detection would incorrectly treat them as spanning layers and double-move markers)
+        var movedLabels = moveLabelsAfterTime(comp, playheadTime, timeOffset, movedLayerIndices);
         
         // Summary for debug output
         var totalItems = movedKeyframes + movedLayers + movedLabels;
