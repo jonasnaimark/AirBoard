@@ -19405,7 +19405,39 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
                     try {
                         var childPosProp = childLyr.property("Transform").property("Position");
                         if (!childPosProp.expressionEnabled) {
-                            offsetLayerPosition(childLyr, -deltaX, -deltaY);
+                            // Glass effect layers (highlight, mask, shadow) have their shape
+                            // path expression-linked to the parent squircle. When alignment
+                            // changes the squircle shape in layer space, those paths shift
+                            // automatically, exactly canceling the parent position compensation.
+                            // Counter-offsetting them would double-correct and displace them.
+                            // Detect this by checking whether the child has any expression-
+                            // driven shape path.
+                            var hasLinkedPath = false;
+                            try {
+                                var cContents = childLyr.property("Contents");
+                                if (cContents) {
+                                    for (var cgi = 1; cgi <= cContents.numProperties && !hasLinkedPath; cgi++) {
+                                        var cGrp = cContents.property(cgi);
+                                        if (cGrp && cGrp.matchName === "ADBE Vector Group") {
+                                            var cGrpContents = cGrp.property("Contents");
+                                            if (cGrpContents) {
+                                                for (var cpi = 1; cpi <= cGrpContents.numProperties && !hasLinkedPath; cpi++) {
+                                                    var cItem = cGrpContents.property(cpi);
+                                                    if (cItem && cItem.matchName === "ADBE Vector Shape - Group") {
+                                                        var cPathProp = cItem.property("Path");
+                                                        if (cPathProp && cPathProp.expressionEnabled) {
+                                                            hasLinkedPath = true;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch(eLinkCheck) {}
+                            if (!hasLinkedPath) {
+                                offsetLayerPosition(childLyr, -deltaX, -deltaY);
+                            }
                         }
                     } catch(eChild) {
                         DEBUG_JSX.log("  child \"" + childLyr.name + "\" pos offset skipped: " + eChild.toString());
