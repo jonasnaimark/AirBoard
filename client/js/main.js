@@ -817,9 +817,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Reorder sections according to saved order
-        orderArray.forEach(function(title, index) {
+        orderArray.forEach(function(title) {
             var section = sectionMap[title];
             if (section) {
+                container.appendChild(section);
+                delete sectionMap[title];
+            }
+        });
+
+        // Append any sections not present in the saved order (e.g. newly added modules)
+        // at the end, in their original DOM order
+        sections.forEach(function(section) {
+            var sectionName = section.getAttribute('data-section-name');
+            if (!sectionName) {
+                var header = section.querySelector('.section-header h2');
+                sectionName = header ? header.textContent : '';
+            }
+            if (sectionName && sectionMap[sectionName]) {
                 container.appendChild(section);
             }
         });
