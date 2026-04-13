@@ -39,13 +39,13 @@ sed -i '' 's/AirBoard Dev/AirBoard/g' temp-package/CSXS/manifest.xml
 
 
 # Update version number in manifest to match ZXP filename
-sed -i '' 's/ExtensionBundleVersion="[^"]*"/ExtensionBundleVersion="4.17.31"/g' temp-package/CSXS/manifest.xml
+sed -i '' 's/ExtensionBundleVersion="[^"]*"/ExtensionBundleVersion="4.17.32"/g' temp-package/CSXS/manifest.xml
 
 echo "✅ Production files cleaned"
 
 # Navigate to temp directory and create ZXP
 cd temp-package
-/Applications/ZXPSignCmd -sign . ../dist/AirBoard-v4.17.31.zxp ../new-cert.p12 mypassword
+/Applications/ZXPSignCmd -sign . ../dist/AirBoard-v4.17.32.zxp ../new-cert.p12 mypassword
 
 # Return to parent directory
 cd ..
@@ -54,9 +54,9 @@ cd ..
 rm -rf temp-package
 
 # Verify the file was created
-if [ -f "dist/AirBoard-v4.17.31.zxp" ]; then
-    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.17.31.zxp"
-    ls -la dist/AirBoard-v4.17.31.zxp
+if [ -f "dist/AirBoard-v4.17.32.zxp" ]; then
+    echo "✅ SUCCESS: ZXP created at dist/AirBoard-v4.17.32.zxp"
+    ls -la dist/AirBoard-v4.17.32.zxp
 else
     echo "❌ ERROR: ZXP file was not created"
 fi
