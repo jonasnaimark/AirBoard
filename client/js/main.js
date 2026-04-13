@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Loaded section order:', result);
                 } else {
                     // Apply default section order if no saved order exists
-                    var defaultOrder = 'Device Templates|Keyframe Nudger|Gestures & Components|Presets|Project Setup';
+                    var defaultOrder = 'Device Templates|Keyframe Nudger|Gestures & Components|Presets|Project Setup|Spec Exporter';
                     applySectionOrder(defaultOrder);
                     console.log('Applied default section order:', defaultOrder);
                 }
