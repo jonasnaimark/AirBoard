@@ -26006,3 +26006,539 @@ function applyChildRigExpressions(child, parentName, effectName, is3D, parentIs3
     child.transform.rotation.expression = rotExpr;
     child.transform.opacity.expression = opacityExpr;
 }
+
+
+// ─── Spec Exporter ─────────────────────────────────────────────────────────
+
+function specExporterCopyJSON(scaleIndex) {
+    try {
+        var SCALE_OPTIONS = ["1x", "2x", "3x", "4x", "5x", "6x"];
+        var PIXEL_PROPS = {
+            "Position": true, "X Position": true, "Y Position": true,
+            "Z Position": true, "Anchor Point": true, "Width": true,
+            "Height": true, "Size": true
+        };
+        var MARKER_TIME_EPSILON = 0.001;
+        var CORNER_RADIUS_PROPS = {
+            "Unified Radius": true, "Roundness": true, "Round Corners": true,
+            "Corner Radius": true, "All corners": true
+        };
+
+        var comp = app.project.activeItem;
+        if (!comp || !(comp instanceof CompItem)) return "Error: Open a composition first.";
+
+        var scaleIdx  = (scaleIndex >= 0 && scaleIndex <= 5) ? scaleIndex : 1;
+        var scale     = parseInt(SCALE_OPTIONS[scaleIdx], 10);
+        var compTs    = String((new Date()).getTime());
+
+        var layerIds = {};
+        for (var i = 1; i <= comp.numLayers; i++) {
+            layerIds[comp.layer(i).index] = "l_" + compTs + "_" + seRandomStr(8);
+        }
+
+        var compStart = comp.workAreaStart;
+        var layers = [];
+
+        for (var i = 1; i <= comp.numLayers; i++) {
+            var layer      = comp.layer(i);
+            var fts        = seGetFitToShape(layer);
+            var animations = [];
+            seCollectAnimations(layer, layer, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS);
+
+            if (animations.length > 0 || fts) {
+                var entry = {
+                    layerName:  layer.name,
+                    animations: animations,
+                    layerType:  seGetLayerType(layer),
+                    id:         layerIds[layer.index]
+                };
+                if (layer.parent) {
+                    entry.parenting = {
+                        parentId:   layerIds[layer.parent.index],
+                        parentName: layer.parent.name
+                    };
+                }
+                if (fts) {
+                    entry.isFitToShape         = true;
+                    entry.fitToShape           = fts;
+                    entry.parentingDescription = seFtsParentingDescription(fts);
+                }
+                layers.push(entry);
+            }
+        }
+
+        if (layers.length === 0) return "Error: No selected keyframe pairs found.";
+
+        var spec = {
+            compName: comp.name,
+            name:     comp.name,
+            workArea: {
+                start:    Math.round(comp.workAreaStart    * 1000),
+                duration: Math.round(comp.workAreaDuration * 1000)
+            },
+            layers: layers,
+            metadata: {
+                version:     "1.0.0",
+                timestamp:   new Date().toString(),
+                exportedBy:  "AirBoard",
+                composition: {
+                    width:             comp.width,
+                    height:            comp.height,
+                    frameRate:         comp.frameRate,
+                    appliedScale:      SCALE_OPTIONS[scaleIdx],
+                    scaleMode:         "manual",
+                    scaleSettingIndex: scaleIdx
+                }
+            }
+        };
+
+        var json = seJsonStringify(spec);
+        seWriteToClipboard(json);
+        return "ok";
+    } catch (e) {
+        return "Error: " + e.message;
+    }
+}
+
+function seCollectAnimations(layer, propGroup, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS) {
+    var n;
+    try { n = propGroup.numProperties; } catch (e) { return; }
+    for (var i = 1; i <= n; i++) {
+        var prop;
+        try { prop = propGroup.property(i); } catch (e) { continue; }
+        if (!prop) continue;
+        try {
+            if (prop.propertyType === PropertyType.PROPERTY) {
+                var sel = prop.selectedKeys;
+                if (sel && sel.length >= 2) {
+                    var entries = seExtractEntries(layer, prop, sel, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS);
+                    for (var j = 0; j < entries.length; j++) animations.push(entries[j]);
+                }
+            } else {
+                seCollectAnimations(layer, prop, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS);
+            }
+        } catch (e) {}
+    }
+}
+
+function seExtractEntries(layer, prop, selectedKeys, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS) {
+    var name    = prop.name;
+    var results = [];
+    var s       = 0;
+
+    while (s < selectedKeys.length - 1) {
+        var k1        = selectedKeys[s];
+        var startTime = prop.keyTime(k1);
+        var springData = seFindSpringDataExact(layer, startTime, prop.matchName, MARKER_TIME_EPSILON);
+        var k2, endTime, endIdx;
+
+        if (springData) {
+            endIdx = selectedKeys.length - 1;
+            for (var t = s + 1; t < selectedKeys.length - 1; t++) {
+                if (seFindSpringDataExact(layer, prop.keyTime(selectedKeys[t]), prop.matchName, MARKER_TIME_EPSILON)) {
+                    endIdx = t - 1;
+                    break;
+                }
+            }
+            k2      = selectedKeys[endIdx];
+            endTime = prop.keyTime(k2);
+            s       = endIdx;
+        } else {
+            endIdx  = s + 1;
+            k2      = selectedKeys[endIdx];
+            endTime = prop.keyTime(k2);
+            s       = endIdx;
+        }
+
+        var delay    = Math.round((startTime - compStart) * 1000);
+        var duration = Math.round((endTime - startTime)   * 1000);
+        if (duration <= 0) continue;
+
+        var rawStart = prop.keyValue(k1);
+        var rawEnd   = prop.keyValue(k2);
+        if (seIsZeroChange(rawStart, rawEnd)) continue;
+
+        var easing = springData
+            ? seBuildSpringEasing(springData, name, scale, PIXEL_PROPS)
+            : seExtractCurveEasing(prop, k1, k2);
+
+        if (rawStart instanceof Array) {
+            var applyScale = !!PIXEL_PROPS[name];
+            var svArr = [], evArr = [];
+            for (var d = 0; d < Math.min(rawStart.length, 2); d++) {
+                var sv = rawStart[d], ev = rawEnd[d];
+                if (applyScale) { sv = sv / scale; ev = ev / scale; }
+                svArr.push(sv);
+                evArr.push(ev);
+            }
+            results.push(seMakeEntry(name, delay, duration, easing, svArr, evArr, { isSpring: !!springData, fts: fts }, PIXEL_PROPS, CORNER_RADIUS_PROPS));
+        } else {
+            var sv = rawStart, ev = rawEnd;
+            if (PIXEL_PROPS[name]) { sv = sv / scale; ev = ev / scale; }
+            results.push(seMakeEntry(name, delay, duration, easing, sv, ev, { dimension: seDimFromName(name), isSpring: !!springData, fts: fts }, PIXEL_PROPS, CORNER_RADIUS_PROPS));
+        }
+    }
+    return results;
+}
+
+function seMakeEntry(propName, delay, duration, easing, startVal, endVal, opts, PIXEL_PROPS, CORNER_RADIUS_PROPS) {
+    opts = opts || {};
+    var entry = {
+        property:     propName,
+        hasKeyframes: true,
+        easing:       easing,
+        timing:       { delay: delay, duration: duration },
+        values:       seMakeValues(propName, startVal, endVal, opts.dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS),
+        movement:     null
+    };
+    if (opts.isSpring) entry.calculatedSpringDuration = duration;
+    if (opts.fts)      { entry.isFitToShape = true; entry.fitToShape = opts.fts; }
+    return entry;
+}
+
+function seMakeValues(propName, startVal, endVal, dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS) {
+    var type = seGetValueType(propName, PIXEL_PROPS, CORNER_RADIUS_PROPS);
+    if (startVal instanceof Array) {
+        var change = [];
+        for (var i = 0; i < startVal.length; i++) change.push(endVal[i] - startVal[i]);
+        var obj = {
+            startValue: startVal, endValue: endVal, change: change, type: type,
+            formatted: {
+                startValue: seFmtArrVal(propName, startVal),
+                endValue:   seFmtArrVal(propName, endVal),
+                change:     seFmtArrChange(propName, change)
+            }
+        };
+        if (propName === "Position") {
+            var xMove = change.length > 0 && Math.abs(change[0]) > 0.5;
+            var yMove = change.length > 1 && Math.abs(change[1]) > 0.5;
+            obj.animatingAxes = { x: xMove, y: yMove, both: xMove && yMove, neither: !xMove && !yMove };
+        }
+        return obj;
+    }
+    var change = endVal - startVal;
+    return {
+        startValue: startVal, endValue: endVal, change: change, type: type,
+        formatted: {
+            startValue: seFmtScalarVal(propName, startVal, dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS),
+            endValue:   seFmtScalarVal(propName, endVal,   dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS),
+            change:     seFmtScalarChange(propName, change, dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS)
+        }
+    };
+}
+
+function seGetValueType(propName, PIXEL_PROPS, CORNER_RADIUS_PROPS) {
+    if (propName === "Position" || propName === "X Position" || propName === "Y Position" || propName === "Z Position") return "position";
+    if (propName === "Opacity")  return "opacity";
+    if (propName === "Scale")    return "scale";
+    if (propName === "Width" || propName === "Height" || propName === "Size") return "dimensional";
+    if (propName.indexOf("Rotation") !== -1) return "rotation";
+    if (CORNER_RADIUS_PROPS[propName]) return "corner_radius";
+    if (PIXEL_PROPS[propName])  return "dimensional";
+    return "unknown";
+}
+
+function seDimFromName(propName) {
+    if (propName === "X Position") return "x";
+    if (propName === "Y Position") return "y";
+    if (propName === "Z Position") return "z";
+    return undefined;
+}
+
+function seFmtScalarVal(propName, val, dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS) {
+    var v = Math.round(val * 100) / 100;
+    if (propName === "Opacity") return v + "%";
+    if (propName.indexOf("Rotation") !== -1) return v + "deg";
+    if (CORNER_RADIUS_PROPS[propName]) return v + "px";
+    if (PIXEL_PROPS[propName]) {
+        if (dimension === "x") return v + "px (X)";
+        if (dimension === "y") return v + "px (Y)";
+        return v + "px";
+    }
+    return String(v);
+}
+
+function seFmtScalarChange(propName, change, dimension, PIXEL_PROPS, CORNER_RADIUS_PROPS) {
+    var sign = change >= 0 ? "+" : "";
+    var v    = Math.round(change * 100) / 100;
+    if (propName === "Opacity") return sign + v + "%";
+    if (propName.indexOf("Rotation") !== -1) return sign + v + "deg";
+    if (CORNER_RADIUS_PROPS[propName]) return sign + v + "px";
+    if (PIXEL_PROPS[propName]) {
+        if (dimension === "x") return sign + v + "px (X)";
+        if (dimension === "y") return sign + v + "px (Y)";
+        return sign + v + "px";
+    }
+    return sign + String(v);
+}
+
+function seFmtArrVal(propName, arr) {
+    var parts = [];
+    if (propName === "Scale") {
+        for (var i = 0; i < arr.length; i++) parts.push(arr[i] + "%");
+        return parts.join(", ");
+    }
+    if (propName === "Position") {
+        for (var i = 0; i < arr.length; i++) parts.push((Math.round(arr[i] * 100) / 100) + "px");
+        return "(" + parts.join(", ") + ")";
+    }
+    for (var i = 0; i < arr.length; i++) parts.push((Math.round(arr[i] * 100) / 100) + "px");
+    return parts.join(", ");
+}
+
+function seFmtArrChange(propName, change) {
+    if (propName === "Scale") {
+        var sign = change[0] >= 0 ? "+" : "";
+        return sign + change[0] + "% scale";
+    }
+    var parts = [];
+    for (var i = 0; i < change.length; i++) {
+        parts.push((change[i] >= 0 ? "+" : "") + (Math.round(change[i] * 100) / 100) + "px");
+    }
+    return parts.join(", ");
+}
+
+function seFindSpringDataExact(layer, keyTime, propMatchName, MARKER_TIME_EPSILON) {
+    try {
+        var markerProp = seGetMarkerProp(layer);
+        if (!markerProp || markerProp.numKeys === 0) return null;
+        for (var m = 1; m <= markerProp.numKeys; m++) {
+            if (Math.abs(markerProp.keyTime(m) - keyTime) > MARKER_TIME_EPSILON) continue;
+            var block = seExtractBlock(markerProp.keyValue(m).comment, propMatchName);
+            if (block) return seParseSpringBlock(block);
+        }
+    } catch (e) {}
+    return null;
+}
+
+function seGetMarkerProp(layer) {
+    for (var i = 1; i <= layer.numProperties; i++) {
+        try {
+            var p = layer.property(i);
+            if (p && p.matchName === "ADBE Marker") return p;
+        } catch (e) {}
+    }
+    return null;
+}
+
+function seExtractBlock(comment, propMatchName) {
+    var blocks = comment.split(/[=]{3,}/);
+    var needle = "| Property: " + propMatchName;
+    var suffix = "/" + propMatchName;
+    for (var i = 0; i < blocks.length; i++) {
+        var b = blocks[i];
+        if (b.indexOf(needle) !== -1) return b;
+        if (b.indexOf("| Property: ") !== -1 && b.indexOf(suffix) !== -1) return b;
+    }
+    return null;
+}
+
+function seParseSpringBlock(block) {
+    var result = { preset: null, stiffness: null, damping: null, dampingRatio: null, mass: 1, initialVelocity: null };
+    var lines  = block.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].replace(/^\s+|\s+$/g, "");
+        if (!line || line.indexOf("|") === 0 || line.indexOf("=") === 0) continue;
+        if (line.indexOf("Stiffness:") !== -1) {
+            var s  = seMatchNum(line, /Stiffness:\s*([\d.]+)/);
+            var d  = seMatchNum(line, /Damping:\s*([\d.]+)/);
+            var dr = seMatchNum(line, /Damping Ratio:\s*([\d.]+)/);
+            var ms = seMatchNum(line, /Mass:\s*([\d.]+)/);
+            if (s  !== null) result.stiffness   = s;
+            if (d  !== null) result.damping      = d;
+            if (dr !== null) result.dampingRatio = dr;
+            if (ms !== null) result.mass         = ms;
+            continue;
+        }
+        if (line.indexOf("Initial Velocity:") !== -1) {
+            var velStr = line.replace(/.*Initial Velocity:\s*/, "").replace(/^\s+|\s+$/g, "");
+            result.initialVelocity = seParseVelocity(velStr);
+            continue;
+        }
+        if (!result.preset && line.indexOf(":") === -1) result.preset = line;
+    }
+    return (result.stiffness !== null) ? result : null;
+}
+
+function seParseVelocity(str) {
+    str = str.replace(/[\[\]\s]/g, "");
+    if (str.indexOf(",") !== -1) {
+        var parts = str.split(","), out = [];
+        for (var i = 0; i < parts.length; i++) {
+            var v = parseFloat(parts[i]);
+            if (!isNaN(v)) out.push(v);
+        }
+        return out.length > 0 ? out : null;
+    }
+    var v = parseFloat(str);
+    return isNaN(v) ? null : v;
+}
+
+function seMatchNum(str, re) {
+    var m = str.match(re);
+    return m ? parseFloat(m[1]) : null;
+}
+
+function seBuildSpringEasing(springData, propName, scale, PIXEL_PROPS) {
+    var custom = {
+        stiffness:    springData.stiffness,
+        damping:      springData.damping,
+        dampingRatio: springData.dampingRatio,
+        mass:         springData.mass
+    };
+    if (springData.initialVelocity !== null && springData.initialVelocity !== undefined) {
+        var vel = springData.initialVelocity;
+        if (PIXEL_PROPS[propName] && scale !== 1) {
+            if (vel instanceof Array) {
+                var scaled = [];
+                for (var i = 0; i < vel.length; i++) scaled.push(seR3(vel[i] / scale));
+                vel = scaled;
+            } else {
+                vel = seR3(vel / scale);
+            }
+        }
+        custom.initialVelocity = vel;
+    }
+    return {
+        type:   "spring",
+        spring: { preset: springData.preset || "Custom Spring", custom: custom },
+        source: "marker"
+    };
+}
+
+function seExtractCurveEasing(prop, k1, k2) {
+    try {
+        var outType = prop.keyOutInterpolationType(k1);
+        var inType  = prop.keyInInterpolationType(k2);
+        if (outType === KeyframeInterpolationType.HOLD) return { type: "hold", source: "keyframes" };
+        if (outType === KeyframeInterpolationType.LINEAR && inType === KeyframeInterpolationType.LINEAR) return { type: "linear", source: null };
+        var outEases = prop.keyOutTemporalEase(k1);
+        var inEases  = prop.keyInTemporalEase(k2);
+        var outE     = outEases[0];
+        var inE      = inEases[0];
+        var x1 = outE.influence / 100;
+        var x2 = 1 - (inE.influence / 100);
+        var y1 = (outE.speed < 0.001) ? 0 : x1;
+        var y2 = (inE.speed  < 0.001) ? 1 : x2;
+        if (Math.abs(x1 - y1) < 0.01 && Math.abs(x2 - y2) < 0.01) return { type: "linear", source: null };
+        var bezierStr = "cubic-bezier(" + seFmt2(x1) + ", " + seFmt2(y1) + ", " + seFmt2(x2) + ", " + seFmt2(y2) + ")";
+        return { type: "cubic-bezier", cubicBezier: bezierStr, source: "keyframes" };
+    } catch (e) {
+        return { type: "linear", source: null };
+    }
+}
+
+function seGetFitToShape(layer) {
+    try {
+        var effects = layer.property("ADBE Effect Parade");
+        if (!effects || effects.numProperties === 0) return null;
+        for (var i = 1; i <= effects.numProperties; i++) {
+            var effect = effects.property(i);
+            if (!effect) continue;
+            if (effect.name.toLowerCase().replace(/\s+/g, " ") !== "fit to shape") continue;
+            return {
+                containerLayerName: layer.parent ? layer.parent.name : null,
+                alignment: effect.property(1).value,
+                scaleTo:   effect.property(2).value
+            };
+        }
+    } catch (e) {}
+    return null;
+}
+
+function seGetLayerType(layer) {
+    try {
+        if (layer instanceof TextLayer)  return "text";
+        if (layer instanceof ShapeLayer) return "shape";
+        if (layer instanceof AVLayer) {
+            if (layer.source instanceof CompItem) return "precomp";
+            return "footage";
+        }
+    } catch (e) {}
+    return "unknown";
+}
+
+function seFtsParentingDescription(fts) {
+    var FTS_SCALE_TO_TEXT  = { 1: "width", 2: "height", 3: "stretch", 4: "none" };
+    var FTS_ALIGNMENT_TEXT = {
+        1: "center", 2: "center left", 3: "center right",
+        5: "top center", 6: "top left", 7: "top right",
+        9: "bottom center", 10: "bottom left", 11: "bottom right"
+    };
+    return "Scales to fit " + (FTS_SCALE_TO_TEXT[fts.scaleTo] || "unknown") + " of " + fts.containerLayerName + " - Aligned " + (FTS_ALIGNMENT_TEXT[fts.alignment] || "unknown");
+}
+
+function seIsZeroChange(rawStart, rawEnd) {
+    if (rawStart instanceof Array) {
+        for (var i = 0; i < rawStart.length; i++) if (Math.abs(rawEnd[i] - rawStart[i]) > 0.001) return false;
+        return true;
+    }
+    return Math.abs(rawEnd - rawStart) < 0.001;
+}
+
+function seR3(val) { return Math.round(val * 1000) / 1000; }
+
+function seFmt2(val) {
+    var n   = Math.round(val * 100) / 100;
+    var str = String(n);
+    var dot = str.indexOf(".");
+    if (dot === -1) return str + ".00";
+    var decimals = str.length - dot - 1;
+    if (decimals === 1) return str + "0";
+    return str;
+}
+
+function seRandomStr(len) {
+    var chars  = "abcdefghijklmnopqrstuvwxyz0123456789";
+    var result = "";
+    for (var i = 0; i < len; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    return result;
+}
+
+function seWriteToClipboard(text) {
+    var tmp = new File(Folder.temp.fsName + "/airboard_specs_tmp.txt");
+    tmp.encoding = "UTF-8";
+    tmp.open("w");
+    tmp.write(text);
+    tmp.close();
+    var isMac = ($.os.toLowerCase().indexOf("mac") !== -1);
+    if (isMac) {
+        system.callSystem('cat "' + tmp.fsName + '" | pbcopy');
+    } else {
+        system.callSystem('type "' + tmp.fsName.replace(/\//g, "\\") + '" | clip');
+    }
+    tmp.remove();
+}
+
+function seJsonStringify(val) { return seSerialize(val, "  ", ""); }
+
+function seSerialize(val, indent, depth) {
+    if (val === null || val === undefined) return "null";
+    if (typeof val === "boolean")          return String(val);
+    if (typeof val === "number")           return isFinite(val) ? String(val) : "null";
+    if (typeof val === "string")           return '"' + seEscStr(val) + '"';
+    if (val instanceof Array) {
+        if (val.length === 0) return "[]";
+        var next  = depth + indent;
+        var items = [];
+        for (var i = 0; i < val.length; i++) items.push(next + seSerialize(val[i], indent, next));
+        return "[\n" + items.join(",\n") + "\n" + depth + "]";
+    }
+    if (typeof val === "object") {
+        var keys = [];
+        for (var k in val) { if (val.hasOwnProperty(k)) keys.push(k); }
+        if (keys.length === 0) return "{}";
+        var next  = depth + indent;
+        var pairs = [];
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            pairs.push(next + '"' + k + '": ' + seSerialize(val[k], indent, next));
+        }
+        return "{\n" + pairs.join(",\n") + "\n" + depth + "}";
+    }
+    return '"' + String(val) + '"';
+}
+
+function seEscStr(s) {
+    return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+}

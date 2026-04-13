@@ -498,6 +498,39 @@
                 </div>
             </section>
         </div>
+
+        <!-- Specs Section -->
+        <div class="section-container">
+            <section class="section">
+                <div class="section-header">
+                    <h2>Specs</h2>
+                    <div class="section-controls">
+                        <button class="section-btn move-up" title="Move Up">
+                            <div class="control-arrow up"></div>
+                        </button>
+                        <button class="section-btn move-down" title="Move Down">
+                            <div class="control-arrow down"></div>
+                        </button>
+                        <button class="accordion-toggle" data-section="specs">
+                            <div class="accordion-arrow"></div>
+                        </button>
+                    </div>
+                </div>
+                <div class="section-content" data-section="specs">
+                <div class="control-row">
+                    <select id="specsScale" class="dropdown">
+                        <option value="0">1x</option>
+                        <option value="1" selected>2x</option>
+                        <option value="2">3x</option>
+                        <option value="3">4x</option>
+                        <option value="4">5x</option>
+                        <option value="5">6x</option>
+                    </select>
+                    <button id="specsCopyJSON" class="main-button">Copy JSON</button>
+                </div>
+                </div>
+            </section>
+        </div>
     </div>
 
     <!-- Extend Comp Dialog -->

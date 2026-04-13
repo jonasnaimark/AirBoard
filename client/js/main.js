@@ -3353,6 +3353,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Specs section handler
+    var specsCopyJSONButton = document.getElementById('specsCopyJSON');
+    var specsScaleDropdown = document.getElementById('specsScale');
+
+    specsCopyJSONButton.addEventListener('click', function() {
+        var scaleIndex = parseInt(specsScaleDropdown.value, 10);
+        specsCopyJSONButton.disabled = true;
+        specsCopyJSONButton.textContent = 'Copying...';
+        csInterface.evalScript('specExporterCopyJSON(' + scaleIndex + ')', function(result) {
+            specsCopyJSONButton.disabled = false;
+            if (result && result !== 'undefined' && result.indexOf('Error:') === 0) {
+                specsCopyJSONButton.textContent = result;
+                setTimeout(function() { specsCopyJSONButton.textContent = 'Copy JSON'; }, 3000);
+            } else {
+                specsCopyJSONButton.textContent = '✓ Copied!';
+                setTimeout(function() { specsCopyJSONButton.textContent = 'Copy JSON'; }, 2000);
+            }
+        });
+    });
+
     // Add Shadow button handler
     var addShadowButton = document.getElementById('addShadow');
     var elevationDropdown = document.getElementById('elevationType');
