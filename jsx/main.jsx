@@ -8928,11 +8928,11 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset, movedLayerIndices) {
         for (var i = 1; i <= comp.numLayers; i++) {
             try {
                 var layer = comp.layer(i);
-                
+
                 // Calculate content start time the same way as in the main function
                 // to correctly handle Time Remap layers
                 var contentStartTime;
-                
+
                 if (Math.abs(layer.inPoint - layer.startTime) < 0.001) {
                     // Natural layer (not trimmed) - content starts at startTime
                     contentStartTime = layer.startTime;
@@ -8960,10 +8960,13 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset, movedLayerIndices) {
                 // Prefer the authoritative movedLayerIndices list from the main loop — the layer
                 // has already been repositioned by the time we run, so contentStartTime is now
                 // before the cutoff even for layers that were moved entirely.
-                var layerWasMovedEntirely;
-                if (movedLayerIndices && movedLayerIndices.indexOf(i) !== -1) {
-                    layerWasMovedEntirely = true;
-                } else {
+                var layerWasMovedEntirely = false;
+                if (movedLayerIndices) {
+                    for (var mi = 0; mi < movedLayerIndices.length; mi++) {
+                        if (movedLayerIndices[mi] === i) { layerWasMovedEntirely = true; break; }
+                    }
+                }
+                if (!layerWasMovedEntirely) {
                     layerWasMovedEntirely = (contentStartTime >= cutoffTime);
                 }
                 
@@ -8972,10 +8975,8 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset, movedLayerIndices) {
                 try {
                     markerProp = layer.property("ADBE Marker");
                 } catch(e) {
-                    // Some layers might not have markers
                     continue;
                 }
-                
                 if (markerProp && markerProp.numKeys > 0) {
                     // Collect markers that need to be moved
                     var markersToMove = [];
@@ -9041,7 +9042,7 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset, movedLayerIndices) {
                 // Continue processing other layers
             }
         }
-        
+
         return movedCount;
     } catch(e) {
         return 0;
