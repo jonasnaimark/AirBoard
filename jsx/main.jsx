@@ -8978,16 +8978,19 @@ function moveLabelsAfterTime(comp, cutoffTime, timeOffset, movedLayerIndices) {
                     continue;
                 }
                 if (markerProp && markerProp.numKeys > 0) {
-                    // Collect markers that need to be moved
+                    // AE automatically repositions layer markers when layer.startTime changes.
+                    // Skip layers that were moved entirely — their markers already moved with them.
+                    if (layerWasMovedEntirely) {
+                        continue;
+                    }
+
+                    // Spanning layers: explicitly move markers at/after the cutoff time.
                     var markersToMove = [];
 
                     for (var j = 1; j <= markerProp.numKeys; j++) {
                         var markerTime = markerProp.keyTime(j);
 
-                        // For layers moved entirely: move ALL markers (AE does NOT auto-move
-                        // layer markers when layer.startTime changes via scripting).
-                        // For spanning layers: only move markers at/after the cutoff time.
-                        if (layerWasMovedEntirely || markerTime >= cutoffTime) {
+                        if (markerTime >= cutoffTime) {
                             // Store marker info for later processing
                             var markerData = {
                                 oldIndex: j,
