@@ -26036,14 +26036,15 @@ function specExporterCopyJSON(scaleIndex) {
             layerIds[comp.layer(i).index] = "l_" + compTs + "_" + seRandomStr(8);
         }
 
-        var compStart = comp.workAreaStart;
-        var layers = [];
+        var compStart   = comp.workAreaStart;
+        var layers      = [];
+        var skipCounter = { noChange: 0 };
 
         for (var i = 1; i <= comp.numLayers; i++) {
             var layer      = comp.layer(i);
             var fts        = seGetFitToShape(layer);
             var animations = [];
-            seCollectAnimations(layer, layer, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS);
+            seCollectAnimations(layer, layer, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS, skipCounter);
 
             if (animations.length > 0 || fts) {
                 var entry = {
@@ -26067,7 +26068,7 @@ function specExporterCopyJSON(scaleIndex) {
             }
         }
 
-        if (layers.length === 0) return "Error: No selected keyframe pairs found.";
+        if (layers.length === 0) return skipCounter.noChange > 0 ? "Error: No change" : "Error: No selected keyframe pairs found.";
 
         var spec = {
             compName: comp.name,
@@ -26100,7 +26101,7 @@ function specExporterCopyJSON(scaleIndex) {
     }
 }
 
-function seCollectAnimations(layer, propGroup, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS) {
+function seCollectAnimations(layer, propGroup, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS, skipCounter) {
     var n;
     try { n = propGroup.numProperties; } catch (e) { return; }
     for (var i = 1; i <= n; i++) {
@@ -26111,17 +26112,17 @@ function seCollectAnimations(layer, propGroup, animations, scale, fts, compStart
             if (prop.propertyType === PropertyType.PROPERTY) {
                 var sel = prop.selectedKeys;
                 if (sel && sel.length >= 2) {
-                    var entries = seExtractEntries(layer, prop, sel, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS);
+                    var entries = seExtractEntries(layer, prop, sel, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS, skipCounter);
                     for (var j = 0; j < entries.length; j++) animations.push(entries[j]);
                 }
             } else {
-                seCollectAnimations(layer, prop, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS);
+                seCollectAnimations(layer, prop, animations, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS, skipCounter);
             }
         } catch (e) {}
     }
 }
 
-function seExtractEntries(layer, prop, selectedKeys, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS) {
+function seExtractEntries(layer, prop, selectedKeys, scale, fts, compStart, PIXEL_PROPS, MARKER_TIME_EPSILON, CORNER_RADIUS_PROPS, skipCounter) {
     var name    = prop.name;
     var results = [];
     var s       = 0;
@@ -26156,7 +26157,7 @@ function seExtractEntries(layer, prop, selectedKeys, scale, fts, compStart, PIXE
 
         var rawStart = prop.keyValue(k1);
         var rawEnd   = prop.keyValue(k2);
-        if (seIsZeroChange(rawStart, rawEnd)) continue;
+        if (seIsZeroChange(rawStart, rawEnd)) { if (skipCounter) skipCounter.noChange++; continue; }
 
         var easing = springData
             ? seBuildSpringEasing(springData, name, scale, PIXEL_PROPS)
