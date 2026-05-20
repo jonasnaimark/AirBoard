@@ -18948,6 +18948,131 @@ function applyFitToShape(mode) {
     }
 }
 
+function clearAllExpressions(propOrLayer) {
+    try {
+        if (propOrLayer.numProperties !== undefined) {
+            for (var i = 1; i <= propOrLayer.numProperties; i++) {
+                try { clearAllExpressions(propOrLayer.property(i)); } catch(e) {}
+            }
+        } else if (propOrLayer.expressionEnabled !== undefined) {
+            if (propOrLayer.expressionEnabled) {
+                propOrLayer.expressionEnabled = false;
+                propOrLayer.expression = "";
+            }
+        }
+    } catch(e) {}
+}
+
+function removeFitToShapeFromPanel() {
+    try {
+        var result = removeFitToShape();
+        return result || "success";
+    } catch(e) {
+        alert("Error removing Fit to Squircle: " + e.toString());
+        return "error|" + e.toString();
+    }
+}
+
+function removeFitToShape() {
+    var comp = app.project.activeItem;
+    if (!comp || !(comp instanceof CompItem)) {
+        alert("Please select a composition first.");
+        return "error|No composition";
+    }
+
+    var sel = comp.selectedLayers;
+    if (sel.length < 1) {
+        alert("Please select one or more layers with a Fit to shape effect.");
+        return "error|No layers selected";
+    }
+
+    // Collect layers that have "Fit to shape" effect
+    var fitLayers = [];
+    for (var i = 0; i < sel.length; i++) {
+        var layer = sel[i];
+        var effects = layer.property("Effects");
+        for (var j = 1; j <= effects.numProperties; j++) {
+            var effName = effects.property(j).name.toLowerCase().replace(/\s+/g, " ");
+            if (effName === "fit to shape" || effName === "fit to shape - v3") {
+                fitLayers.push(layer);
+                break;
+            }
+        }
+    }
+
+    if (fitLayers.length === 0) {
+        return "prompt-none";
+    }
+
+    app.beginUndoGroup("Remove Fit to Squircle");
+    try {
+        // Track which mask layers to check for deletion (keyed by layer index)
+        var maskLayersToCheck = {};
+
+        for (var k = 0; k < fitLayers.length; k++) {
+            var cl = fitLayers[k];
+
+            // Grab the mask layer before unparenting (parent is the squircle layer;
+            // mask layer is parented to that same squircle layer with " - Mask" in name)
+            var squircleLayer = cl.parent;
+            if (squircleLayer) {
+                for (var m = 1; m <= comp.numLayers; m++) {
+                    var candidate = comp.layer(m);
+                    if (candidate.parent === squircleLayer &&
+                        candidate instanceof ShapeLayer &&
+                        candidate.name.indexOf(" - Mask") !== -1) {
+                        maskLayersToCheck[candidate.index] = candidate;
+                        break;
+                    }
+                }
+            }
+
+            // Clear track matte
+            try { cl.setTrackMatte(null, TrackMatteType.NO_TRACK_MATTE); } catch(e) {}
+
+            // Unparent
+            cl.parent = null;
+
+            // Remove "Fit to shape" effect(s)
+            var efx = cl.property("Effects");
+            for (var e = efx.numProperties; e >= 1; e--) {
+                var en = efx.property(e).name.toLowerCase().replace(/\s+/g, " ");
+                if (en === "fit to shape" || en === "fit to shape - v3") {
+                    try { efx.property(e).remove(); } catch(er) {}
+                }
+            }
+
+            // Clear all expressions on the layer recursively
+            clearAllExpressions(cl);
+        }
+
+        // Delete mask layers whose squircle parent has no more content layers parented to it
+        for (var maskIdx in maskLayersToCheck) {
+            var maskLayer = maskLayersToCheck[maskIdx];
+            if (!maskLayer || !maskLayer.parent) continue;
+            var squirclePar = maskLayer.parent;
+            var remainingContent = false;
+            for (var n = 1; n <= comp.numLayers; n++) {
+                var nl = comp.layer(n);
+                if (nl !== maskLayer && nl.parent === squirclePar) {
+                    remainingContent = true;
+                    break;
+                }
+            }
+            if (!remainingContent) {
+                maskLayer.remove();
+            }
+        }
+
+        return "success|Fit to Squircle removed";
+    } catch(err) {
+        app.endUndoGroup();
+        alert("Error: " + err.toString());
+        return "error|" + err.toString();
+    }
+    app.endUndoGroup();
+}
+
 // Add nulls/guides to selected shape layer
 function addNulls(nullType) {
     var comp = app.project.activeItem;
@@ -18957,14 +19082,23 @@ function addNulls(nullType) {
     }
 
     // Handle FitToShape functionality first (these don't need the single layer validation)
-    if (nullType === "layers") {
-        // Fit to width functionality (equivalent to FitToShape "fit to width")
-        // This requires multiple layers selected (shape + content)
-        return applyFitToShape("fitWidth");
-    } else if (nullType === "layers-padding") {
-        // Fit original size functionality (equivalent to FitToShape "fit original size")
-        // This requires multiple layers selected (shape + content)
-        return applyFitToShape("fitNone");
+    if (nullType === "layers" || nullType === "layers-padding") {
+        // If any selected layer has a "Fit to shape" effect, prompt to remove instead
+        var selLayers = comp.selectedLayers;
+        for (var fi = 0; fi < selLayers.length; fi++) {
+            var efx = selLayers[fi].property("Effects");
+            for (var fj = 1; fj <= efx.numProperties; fj++) {
+                var en = efx.property(fj).name.toLowerCase().replace(/\s+/g, " ");
+                if (en === "fit to shape" || en === "fit to shape - v3") {
+                    return "prompt-remove-fit";
+                }
+            }
+        }
+        if (nullType === "layers") {
+            return applyFitToShape("fitWidth");
+        } else {
+            return applyFitToShape("fitNone");
+        }
     }
 
     // The rest of this function is only for vertex-nulls

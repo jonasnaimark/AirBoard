@@ -3118,11 +3118,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // If selected layers have Fit to shape, prompt to remove
+            if (result && result.indexOf('prompt-remove-fit') !== -1) {
+                addNullButton.disabled = false;
+                addNullButton.textContent = 'Fit to Squircle';
+                document.getElementById('removeFitOverlay').classList.add('active');
+                return;
+            }
+
             // Re-enable button
             addNullButton.disabled = false;
             addNullButton.textContent = 'Fit to Squircle';
         });
     });
+
+    // Remove Fit to Squircle dialog handlers
+    (function() {
+        var overlay = document.getElementById('removeFitOverlay');
+        document.getElementById('removeFitCancel').addEventListener('click', function() {
+            overlay.classList.remove('active');
+        });
+        document.getElementById('removeFitApply').addEventListener('click', function() {
+            overlay.classList.remove('active');
+            csInterface.evalScript('removeFitToShapeFromPanel()', function(result) {
+                console.log('Remove Fit to Squircle result:', result);
+            });
+        });
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) overlay.classList.remove('active');
+        });
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') overlay.classList.remove('active');
+        });
+    })();
 
     // Anchor Grid handler — Set Anchor
     document.getElementById('anchorGrid').addEventListener('click', function(e) {
