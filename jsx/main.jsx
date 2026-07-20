@@ -26549,12 +26549,51 @@ function seExtractCurveEasing(prop, k1, k2) {
         if (outType === KeyframeInterpolationType.LINEAR && inType === KeyframeInterpolationType.LINEAR) return { type: "linear", source: null };
         var outEases = prop.keyOutTemporalEase(k1);
         var inEases  = prop.keyInTemporalEase(k2);
-        var outE     = outEases[0];
-        var inE      = inEases[0];
+        var startVal = prop.keyValue(k1);
+        var endVal   = prop.keyValue(k2);
+        var duration = prop.keyTime(k2) - prop.keyTime(k1);
+        if (duration <= 0) return { type: "linear", source: null };
+
+        var easeIndex = 0;
+        var averageSpeed;
+        if (startVal instanceof Array && endVal instanceof Array) {
+            if (outEases.length === 1 && inEases.length === 1) {
+                // Spatial properties expose one temporal speed for the whole path.
+                var distanceSq = 0;
+                for (var d = 0; d < Math.min(startVal.length, endVal.length); d++) {
+                    var delta = endVal[d] - startVal[d];
+                    distanceSq += delta * delta;
+                }
+                averageSpeed = Math.sqrt(distanceSq) / duration;
+            } else {
+                // Component properties can expose one ease per dimension. Use the
+                // first changing dimension because Spectrum stores one curve per row.
+                averageSpeed = 0;
+                var dimensionCount = Math.min(startVal.length, endVal.length);
+                for (var d = 0; d < dimensionCount; d++) {
+                    if (Math.abs(endVal[d] - startVal[d]) > 0.000001) {
+                        easeIndex = Math.min(d, outEases.length - 1, inEases.length - 1);
+                        averageSpeed = (endVal[d] - startVal[d]) / duration;
+                        break;
+                    }
+                }
+            }
+        } else {
+            averageSpeed = (endVal - startVal) / duration;
+        }
+
+        if (!isFinite(averageSpeed) || Math.abs(averageSpeed) < 0.000001) {
+            return { type: "linear", source: null };
+        }
+
+        var outE = outEases[easeIndex];
+        var inE  = inEases[easeIndex];
+        if (!outE || !inE) return { type: "linear", source: null };
         var x1 = outE.influence / 100;
         var x2 = 1 - (inE.influence / 100);
-        var y1 = (outE.speed < 0.001) ? 0 : x1;
-        var y2 = (inE.speed  < 0.001) ? 1 : x2;
+        // CSS handle slope equals AE keyframe speed divided by segment average speed.
+        var y1 = x1 * (outE.speed / averageSpeed);
+        var y2 = 1 - ((1 - x2) * (inE.speed / averageSpeed));
         if (Math.abs(x1 - y1) < 0.01 && Math.abs(x2 - y2) < 0.01) return { type: "linear", source: null };
         var bezierStr = "cubic-bezier(" + seFmt2(x1) + ", " + seFmt2(y1) + ", " + seFmt2(x2) + ", " + seFmt2(y2) + ")";
         return { type: "cubic-bezier", cubicBezier: bezierStr, source: "keyframes" };

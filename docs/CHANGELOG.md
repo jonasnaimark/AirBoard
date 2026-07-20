@@ -5,6 +5,14 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.37] - 2026-07-20
+### Fixed
+- **Spec Exporter easing conversion**: Convert After Effects temporal speed and influence into normalized cubic-bezier control points instead of treating every nonzero keyframe speed as linear.
+- Preserve easing for scalar, decreasing-value, multidimensional, and spatial-property animations.
+
+### Associated Build
+- AirBoard-v4.17.37.zxp
+
 ## [4.17.11] - 2025-01-29 🎯 **Multi-Layer Shadow Support**
 ### ✨ New Features
 - **Multi-Layer Shadows**: Add Shadow now applies to ALL selected layers instead of just the first one
