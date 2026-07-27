@@ -5,6 +5,14 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.38] - 2026-07-27
+### Fixed
+- **Child Rig dynamic Influence**: Position Influence now accumulates the parent's visual movement frame by frame, so reducing Influence to 0 holds the child's current position instead of snapping it back to the rig's starting position.
+- Animated Influence transitions apply a proportional share of each frame's parent movement and can later resume following without catching up.
+
+### Associated Build
+- AirBoard-v4.17.38.zxp
+
 ## [4.17.37] - 2026-07-20
 ### Fixed
 - **Spec Exporter easing conversion**: Convert After Effects temporal speed and influence into normalized cubic-bezier control points instead of treating every nonzero keyframe speed as linear.
