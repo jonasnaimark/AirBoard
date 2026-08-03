@@ -5,6 +5,14 @@ All notable changes to the AirBoard After Effects Plugin will be documented here
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.39] - 2026-08-03
+### Fixed
+- **Replace Shape anchor normalization**: Replaced squircles now finish with center alignment and a layer anchor normalized to the transformed squircle group origin while preserving the artwork's visual position.
+- **Update Anchor on offset squircles**: Anchor updates now respect non-zero group position, anchor, scale, and rotation instead of assuming every squircle is centered at layer coordinate `[0,0]`.
+
+### Associated Build
+- AirBoard-v4.17.39.zxp
+
 ## [4.17.38] - 2026-07-27
 ### Fixed
 - **Child Rig dynamic Influence**: Position Influence now accumulates the parent's visual movement frame by frame, so reducing Influence to 0 holds the child's current position instead of snapping it back to the rig's starting position.

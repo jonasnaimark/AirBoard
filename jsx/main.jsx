@@ -19475,6 +19475,58 @@ function setAnchorFromPanel(newAlignmentIndex) {
     return "success|" + DEBUG_JSX.messages.join("|");
 }
 
+// Maps a point from the squircle path's group space into layer space.
+// Replaced shapes often retain a non-zero group Position, so [0,0] in the
+// generated path is not necessarily [0,0] at the layer level.
+function getSquircleGroupPointInLayer(layer, point) {
+    var contents = layer.property("Contents");
+    var shapeGroup = null;
+
+    if (contents) {
+        for (var gi = 1; gi <= contents.numProperties; gi++) {
+            var group = contents.property(gi);
+            if (!group || group.matchName !== "ADBE Vector Group") continue;
+
+            var groupContents = group.property("Contents");
+            if (!groupContents) continue;
+
+            for (var pi = 1; pi <= groupContents.numProperties; pi++) {
+                var item = groupContents.property(pi);
+                if (item && item.matchName === "ADBE Vector Shape - Group") {
+                    shapeGroup = group;
+                    break;
+                }
+            }
+            if (shapeGroup) break;
+        }
+    }
+
+    if (!shapeGroup) return [point[0], point[1]];
+
+    var transform = shapeGroup.property("Transform");
+    if (!transform) return [point[0], point[1]];
+
+    var anchor = [0, 0];
+    var position = [0, 0];
+    var scale = [100, 100];
+    var rotation = 0;
+    try { anchor = transform.property("Anchor Point").value; } catch(eAnchor) {}
+    try { position = transform.property("Position").value; } catch(ePosition) {}
+    try { scale = transform.property("Scale").value; } catch(eScale) {}
+    try { rotation = transform.property("Rotation").value; } catch(eRotation) {}
+
+    var x = (point[0] - anchor[0]) * scale[0] / 100;
+    var y = (point[1] - anchor[1]) * scale[1] / 100;
+    var radians = rotation * Math.PI / 180;
+    var cosR = Math.cos(radians);
+    var sinR = Math.sin(radians);
+
+    return [
+        position[0] + x * cosR - y * sinR,
+        position[1] + x * sinR + y * cosR
+    ];
+}
+
 function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) {
     var oldAlignment = Math.round(squircleEffect.property("Alignment").value);
     var width = squircleEffect.property("Width").value;
@@ -19486,21 +19538,26 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
 
     var oldOffset = getAlignmentOffset(oldAlignment, w, h);
     var newOffset = getAlignmentOffset(newAlignmentIndex, w, h);
-    var deltaX = oldOffset[0] - newOffset[0];
-    var deltaY = oldOffset[1] - newOffset[1];
+    var oldPoint = getSquircleGroupPointInLayer(layer, oldOffset);
+    var newPoint = getSquircleGroupPointInLayer(layer, newOffset);
+    var alignmentOrigin = getSquircleGroupPointInLayer(layer, [0, 0]);
 
-    // If the layer's anchor point was manually moved away from [0,0], fold that offset
-    // into the position compensation and reset it. The squircle's comp position is
-    // Position + (squircleCenter - AnchorPoint), so a non-zero anchor shifts the result
-    // unless we account for it.
+    // The selected alignment point lands on the path group's transformed origin.
+    // Preserve that origin instead of forcing the layer anchor to [0,0], which
+    // breaks replaced shapes whose group Position carries the original geometry offset.
     var anchorProp = layer.property("Transform").property("Anchor Point");
     var currentAnchor = anchorProp.value;
     var apx = currentAnchor[0];
     var apy = currentAnchor[1];
-    if (apx !== 0 || apy !== 0) {
-        DEBUG_JSX.log("  anchor=[" + apx + "," + apy + "] (non-zero, folded into delta)");
-        deltaX -= apx;
-        deltaY -= apy;
+    var targetAnchorX = alignmentOrigin[0];
+    var targetAnchorY = alignmentOrigin[1];
+    var anchorDeltaX = targetAnchorX - apx;
+    var anchorDeltaY = targetAnchorY - apy;
+    var deltaX = oldPoint[0] - newPoint[0] + anchorDeltaX;
+    var deltaY = oldPoint[1] - newPoint[1] + anchorDeltaY;
+
+    if (anchorDeltaX !== 0 || anchorDeltaY !== 0) {
+        DEBUG_JSX.log("  anchor=[" + apx + "," + apy + "] target=[" + targetAnchorX + "," + targetAnchorY + "]");
     }
     DEBUG_JSX.log("  delta=[" + deltaX + "," + deltaY + "]" + (deltaX === 0 && deltaY === 0 ? " — SKIP (no pos change)" : ""));
 
@@ -19582,13 +19639,15 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
         }
     }
 
-    // Reset the anchor point to [0,0] (preserving z on 3D layers)
-    if ((apx !== 0 || apy !== 0) && !anchorProp.expressionEnabled) {
-        var resetAnchor = (currentAnchor.length === 3) ? [0, 0, currentAnchor[2]] : [0, 0];
-        offsetAnchorPointTo(anchorProp, resetAnchor);
+    // Normalize the layer anchor to the squircle group's alignment origin.
+    if ((anchorDeltaX !== 0 || anchorDeltaY !== 0) && !anchorProp.expressionEnabled) {
+        var normalizedAnchor = (currentAnchor.length === 3)
+            ? [targetAnchorX, targetAnchorY, currentAnchor[2]]
+            : [targetAnchorX, targetAnchorY];
+        offsetAnchorPointTo(anchorProp, normalizedAnchor);
 
         // Any child layer whose anchor is expression-driven (e.g. the Squircle - Mask)
-        // mirrors our anchor, so it just changed from [apx,apy] to [0,0] too.
+        // mirrors our anchor, so compensate for the same anchor delta.
         // Compensate each such child's Position so it stays visually in place.
         if (comp) {
             for (var ci = 1; ci <= comp.numLayers; ci++) {
@@ -19599,7 +19658,7 @@ function setAnchorSquircleLayer(layer, squircleEffect, newAlignmentIndex, comp) 
                 if (!childAnchor.expressionEnabled) continue;
                 var childPos = child.property("Transform").property("Position");
                 if (!childPos.expressionEnabled) {
-                    offsetLayerPosition(child, -apx, -apy);
+                    offsetLayerPosition(child, anchorDeltaX, anchorDeltaY);
                 }
             }
         }
@@ -19652,10 +19711,8 @@ function setAnchorMaskLayer(maskLayer, newAlignmentIndex, comp) {
     }
 
     if (parentSquircle) {
-        // Snapshot the squircle's anchor before it gets reset. The mask's anchor
-        // is expression-driven (mirrors the squircle), so resetting the squircle
-        // anchor to [0,0] will also change the mask's effective anchor — which
-        // would shift the mask visually unless we compensate its Position.
+        // Snapshot the squircle's anchor so an expression-linked mask can receive
+        // the same compensation if normalization changes it.
         var sqAnchorProp = parentSquircle.property("Transform").property("Anchor Point");
         var sqAnchor = sqAnchorProp.value;
         var apx = sqAnchor[0];
@@ -19663,13 +19720,14 @@ function setAnchorMaskLayer(maskLayer, newAlignmentIndex, comp) {
 
         setAnchorSquircleLayer(parentSquircle, parentSquircle.effect("Squircle"), newAlignmentIndex, comp);
 
-        // If the squircle had a non-zero anchor, the mask's anchor expression just
-        // changed from [apx,apy] to [0,0]. Offset the mask's Position by [-apx,-apy]
-        // (in parent/squircle local space) to keep the mask visually in place.
-        if (apx !== 0 || apy !== 0) {
+        var normalizedSqAnchor = sqAnchorProp.value;
+        var maskAnchorDeltaX = normalizedSqAnchor[0] - apx;
+        var maskAnchorDeltaY = normalizedSqAnchor[1] - apy;
+
+        if (maskAnchorDeltaX !== 0 || maskAnchorDeltaY !== 0) {
             var maskPosProp = maskLayer.property("Transform").property("Position");
             if (!maskPosProp.expressionEnabled) {
-                offsetLayerPosition(maskLayer, -apx, -apy);
+                offsetLayerPosition(maskLayer, maskAnchorDeltaX, maskAnchorDeltaY);
             }
         }
     } else {
@@ -20127,6 +20185,16 @@ function replaceRectangle() {
             } catch (eCopy) {
                 // ignore non-critical property copy errors
             }
+        }
+
+        // Finish replacement in the same canonical state expected by Update Anchor:
+        // center alignment, with the layer anchor on the squircle group's origin.
+        // This preserves the original visual position while repairing off-center
+        // source anchors and avoids carrying malformed anchor state forward.
+        try {
+            setAnchorSquircleLayer(newLayer, squircleEffect, 1, comp);
+        } catch (eNormalizeAnchor) {
+            DEBUG_JSX.log("Replace Shape anchor normalization skipped: " + eNormalizeAnchor.toString());
         }
         
         // Copy all effects from the original layer (like Drop Shadow, Fast Box Blur, etc.)
